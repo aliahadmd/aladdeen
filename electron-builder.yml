@@ -1,0 +1,43 @@
+appId: com.fluidmd.app
+productName: FluidMD
+asar: true
+directories:
+  buildResources: build
+  output: release/${version}
+files:
+  - out/**
+  - package.json
+fileAssociations:
+  - ext:
+      - md
+      - markdown
+    name: Markdown Document
+    description: Markdown document
+    role: Editor
+mac:
+  icon: build/icon.png
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+  artifactName: ${productName}-${version}-Setup-${arch}.${ext}
+linux:
+  icon: build/icon.png
+  category: Office
+  synopsis: Offline Markdown viewer and editor
+  description: A calm, offline-first Markdown workspace.
+  mimeTypes:
+    - text/markdown
+  target:
+    - AppImage
+    - deb
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+publish: null

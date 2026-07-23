@@ -1,0 +1,12 @@
+allowBuilds:
+  electron-winstaller: true
+  esbuild: true
+  sharp: true
+peerDependencyRules:
+  allowedVersions:
+    vite: '8'
+onlyBuiltDependencies:
+  - electron
+  - electron-winstaller
+  - esbuild
+  - sharp
