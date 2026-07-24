@@ -45,9 +45,40 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
     await expect(editor).toBeVisible()
     await editor.click()
     await window.keyboard.press('ControlOrMeta+A')
-    await window.keyboard.type('# Edited offline\n\nAutosave keeps this on disk.')
+    await window.keyboard.insertText(
+      '# Edited offline\n\nAutosave keeps this on disk.\n\n## Ignored subsection\n\n# Final chapter\n\nDone.'
+    )
     await expect(window.getByRole('heading', { name: 'Edited offline' })).toBeVisible()
     await expect.poll(async () => readFile(markdownPath, 'utf8')).toContain('Autosave keeps this on disk.')
+
+    await window.getByRole('button', { name: 'Preview' }).click()
+    await window.setViewportSize({ width: 900, height: 700 })
+    const outlineTrigger = window.getByRole('button', { name: '2 level 1 headings' })
+    await expect(outlineTrigger).toBeVisible()
+    await outlineTrigger.hover()
+    const outline = window.getByRole('navigation', { name: 'Level 1 headings' })
+    await expect(outline.getByRole('button', { name: 'Edited offline' })).toBeVisible()
+    await expect(outline.getByRole('button', { name: 'Final chapter' })).toBeVisible()
+    await expect(outline.getByRole('button', { name: 'Ignored subsection' })).toHaveCount(0)
+    await expect(window).toHaveScreenshot('heading-outline-open.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    })
+    await window.evaluate(() => {
+      document.documentElement.classList.add('dark')
+      document.documentElement.dataset.theme = 'dark'
+    })
+    await expect(window).toHaveScreenshot('heading-outline-open-dark.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    })
+    await window.evaluate(() => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.dataset.theme = 'light'
+    })
+    await outline.getByRole('button', { name: 'Final chapter' }).click()
+    await expect(window.getByRole('heading', { name: 'Final chapter' })).toBeInViewport()
+    await expect(outline.getByRole('button', { name: 'Final chapter' })).toHaveAttribute('aria-current', 'location')
 
     await application.evaluate(({ dialog }, filePath) => {
       Object.defineProperty(dialog, 'showSaveDialog', {

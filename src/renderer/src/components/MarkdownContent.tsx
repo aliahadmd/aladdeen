@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type Ref } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import {
   extractMarkdownMetadata,
@@ -17,6 +17,7 @@ interface MarkdownContentProps {
   onOpenRelativeDocument?: (target: string) => void
   onOpenExternal?: (target: string) => void
   interactive?: boolean
+  articleRef?: Ref<HTMLElement>
 }
 
 function safeUrlTransform(url: string): string {
@@ -32,7 +33,8 @@ export function MarkdownContent({
   theme,
   onOpenRelativeDocument,
   onOpenExternal,
-  interactive = true
+  interactive = true,
+  articleRef
 }: MarkdownContentProps): React.JSX.Element {
   const prepared = useMemo(() => prepareMarkdownSource(content), [content])
   const metadata = useMemo(() => extractMarkdownMetadata(content), [content])
@@ -102,6 +104,7 @@ export function MarkdownContent({
 
   return (
     <article
+      ref={articleRef}
       className="markdown-body"
       aria-label={metadata?.title || fallbackTitle}
       data-document-title={metadata?.title}
