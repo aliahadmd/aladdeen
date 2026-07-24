@@ -367,7 +367,9 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
     await window.getByRole('button', { name: 'Settings' }).click()
     const settings = window.getByRole('dialog', { name: 'Settings' })
     await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible()
+    await settings.getByRole('tab', { name: 'Keyboard shortcuts' }).click()
     await expect(settings.getByRole('heading', { name: 'Keyboard shortcuts' })).toBeVisible()
+    await expect(settings.getByText('Quick open')).toBeVisible()
     await settings.getByRole('button', { name: 'Close settings' }).click()
 
     await window.getByRole('button', { name: 'Collapse sidebar' }).click()
@@ -383,6 +385,65 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
     await expect(window.getByRole('button', { name: 'Show sidebar' })).toBeVisible()
     await window.getByRole('button', { name: 'Show sidebar' }).click()
     await expect(window.locator('.sidebar')).toHaveCSS('width', '336px')
+  } finally {
+    await application.close()
+    await rm(userData, { recursive: true, force: true })
+  }
+})
+
+test('renders responsive settings navigation in light and dark themes', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-settings-'))
+  const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
+  try {
+    const window = await application.firstWindow()
+    await window.getByRole('button', { name: 'Create environment' }).click()
+    await window.getByRole('button', { name: 'Settings' }).click()
+    const settings = window.getByRole('dialog', { name: 'Settings' })
+    const categoryTabs = settings.getByRole('tablist', { name: 'Settings categories' })
+
+    await expect(settings.getByRole('tab', { name: 'Appearance' })).toHaveAttribute('aria-selected', 'true')
+    await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible()
+    await expect(settings.getByRole('heading', { name: 'Keyboard shortcuts' })).toHaveCount(0)
+
+    const viewports = [
+      { width: 1440, height: 900 },
+      { width: 900, height: 700 },
+      { width: 640, height: 480 }
+    ]
+
+    for (const theme of ['light', 'dark'] as const) {
+      await window.evaluate((nextTheme) => {
+        document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+        document.documentElement.dataset.theme = nextTheme
+      }, theme)
+
+      for (const viewport of viewports) {
+        await window.setViewportSize(viewport)
+        await expect(categoryTabs).toHaveAttribute('aria-orientation', viewport.width <= 720 ? 'horizontal' : 'vertical')
+        expect(await settings.evaluate((dialog) => {
+          const bounds = dialog.getBoundingClientRect()
+          return {
+            fitsViewport:
+              bounds.left >= 0 &&
+              bounds.top >= 0 &&
+              bounds.right <= innerWidth &&
+              bounds.bottom <= innerHeight,
+            clipsHorizontally: dialog.scrollWidth > dialog.clientWidth
+          }
+        })).toEqual({ fitsViewport: true, clipsHorizontally: false })
+        await expect(window).toHaveScreenshot(`settings-${viewport.width}-${theme}.png`, {
+          animations: 'disabled',
+          maxDiffPixelRatio: 0.01
+        })
+      }
+    }
+
+    await settings.getByRole('tab', { name: 'About' }).click()
+    await expect(settings.getByRole('heading', { name: 'About' })).toBeVisible()
+    await expect(settings.getByText(/original disk locations/i)).toBeVisible()
+    const developerEmail = settings.getByRole('button', { name: /Email: ali@aliahad\.com/i })
+    await developerEmail.scrollIntoViewIfNeeded()
+    await expect(developerEmail).toBeInViewport()
   } finally {
     await application.close()
     await rm(userData, { recursive: true, force: true })

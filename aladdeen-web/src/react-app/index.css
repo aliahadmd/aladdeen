@@ -1,0 +1,71 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+	--font-sans:
+		"Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+		"Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+	color-scheme: light;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+}
+
+:root.dark {
+	color-scheme: dark;
+}
+
+html {
+	background: white;
+	font-family: var(--font-sans);
+}
+
+html.dark {
+	background: #0a0a0a;
+}
+
+body {
+	margin: 0;
+	min-width: 320px;
+	min-height: 100vh;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a,
+summary {
+	-webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+	outline: 2px solid currentColor;
+	outline-offset: 3px;
+}
+
+::selection {
+	background: rgb(229 229 229);
+	color: rgb(23 23 23);
+}
+
+.dark ::selection {
+	background: rgb(64 64 64);
+	color: rgb(245 245 245);
+}
+
+summary::-webkit-details-marker {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		transition-duration: 0.01ms !important;
+	}
+}

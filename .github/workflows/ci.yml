@@ -23,6 +23,24 @@ jobs:
       - run: pnpm test
       - run: pnpm build
 
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aladdeen-web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: aladdeen-web/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+
   package:
     needs: validate
     strategy:

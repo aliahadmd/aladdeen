@@ -1,0 +1,54 @@
+{
+	"name": "aladdeen-web",
+	"version": "0.2.0",
+	"description": "The official landing page and R2-backed macOS downloads for Aladdeen.",
+	"private": true,
+	"packageManager": "pnpm@11.5.0",
+	"engines": {
+		"node": ">=22.22.0",
+		"pnpm": ">=11.5.0"
+	},
+	"dependencies": {
+		"@fontsource-variable/inter": "^5.2.8",
+		"@tailwindcss/vite": "^4.3.2",
+		"hono": "4.12.30",
+		"react": "19.2.7",
+		"react-dom": "19.2.7",
+		"tailwindcss": "^4.3.2"
+	},
+	"devDependencies": {
+		"@cloudflare/vite-plugin": "1.47.0",
+		"@cloudflare/vitest-pool-workers": "0.18.8",
+		"@eslint/js": "9.39.1",
+		"@testing-library/jest-dom": "^6.9.1",
+		"@testing-library/react": "^16.3.2",
+		"@types/node": "24.10.1",
+		"@types/react": "19.2.7",
+		"@types/react-dom": "19.2.3",
+		"@vitejs/plugin-react": "5.1.1",
+		"eslint": "9.39.2",
+		"eslint-plugin-react-hooks": "7.0.1",
+		"eslint-plugin-react-refresh": "0.4.24",
+		"globals": "16.5.0",
+		"jsdom": "^29.1.1",
+		"typescript": "5.9.3",
+		"typescript-eslint": "8.48.0",
+		"vite": "^7.0.0",
+		"vitest": "^4.1.10",
+		"wrangler": "4.114.0"
+	},
+	"scripts": {
+		"build": "tsc -b && vite build",
+		"cf-typegen": "wrangler types",
+		"check": "pnpm run cf-typegen && pnpm run lint && pnpm run test && pnpm run build && wrangler deploy --dry-run",
+		"deploy": "wrangler deploy",
+		"dev": "vite",
+		"lint": "eslint . --max-warnings 0",
+		"preview": "pnpm run build && vite preview",
+		"test": "pnpm run test:app && pnpm run test:worker",
+		"test:app": "vitest run --config vitest.app.config.ts",
+		"test:worker": "vitest run --config vitest.worker.config.ts",
+		"typecheck": "tsc -b"
+	},
+	"type": "module"
+}

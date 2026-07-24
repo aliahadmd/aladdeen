@@ -1,6 +1,6 @@
 {
   "name": "aladdeen",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A calm, offline-first Markdown workspace for desktop.",
   "main": "./out/main/index.js",
   "author": "Aladdeen",

@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://aladdeen.aliahad.com/sitemap.xml
