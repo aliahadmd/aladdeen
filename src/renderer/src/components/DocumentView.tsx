@@ -1,13 +1,18 @@
+import { lazy, Suspense, useDeferredValue } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { AlertCircle, CheckCircle2, CloudOff, LoaderCircle, PencilLine } from 'lucide-react'
-import { MarkdownEditor } from './MarkdownEditor'
 import { MarkdownPreview } from './MarkdownPreview'
 import { DocumentActions } from './DocumentActions'
 import { Welcome } from './Welcome'
 import { useEffectiveDarkMode } from '@renderer/hooks/use-effective-dark-mode'
 import { useMediaQuery } from '@renderer/hooks/use-media-query'
 import { cn } from '@renderer/lib/cn'
+import { COMPACT_WORKSPACE_QUERY } from '@renderer/lib/breakpoints'
 import { useAppStore } from '@renderer/store/app-store'
+
+const MarkdownEditor = lazy(() => import('./MarkdownEditor').then((module) => ({
+  default: module.MarkdownEditor
+})))
 
 export function DocumentView(): React.JSX.Element {
   const activeFileId = useAppStore((state) => state.activeFileId)
@@ -16,12 +21,27 @@ export function DocumentView(): React.JSX.Element {
   const mobilePane = useAppStore((state) => state.mobilePane)
   const setMobilePane = useAppStore((state) => state.setMobilePane)
   const dark = useEffectiveDarkMode()
-  const compact = useMediaQuery('(max-width: 959px)')
+  const compact = useMediaQuery(COMPACT_WORKSPACE_QUERY)
   const document = documents.find((candidate) => candidate.id === activeFileId)
+  const deferredContent = useDeferredValue(document?.content ?? '')
 
   if (!document) return <Welcome />
 
-  const words = document.content.trim() ? document.content.trim().split(/\s+/u).length : 0
+  const previewDocument = deferredContent === document.content
+    ? document
+    : { ...document, content: deferredContent }
+  const words = deferredContent.trim() ? deferredContent.trim().split(/\s+/u).length : 0
+  const editor = (
+    <Suspense fallback={<div className="h-full min-h-0 bg-surface" aria-label="Loading Markdown editor" />}>
+      <MarkdownEditor document={document} dark={dark} />
+    </Suspense>
+  )
+  const preview = (
+    <MarkdownPreview
+      document={previewDocument}
+      sourceNavigationReady={deferredContent === document.content}
+    />
+  )
 
   return (
     <section className={cn(
@@ -45,26 +65,26 @@ export function DocumentView(): React.JSX.Element {
           compact ? (
             <div className="h-full min-h-0 min-w-0">
               {mobilePane === 'editor' ? (
-                <MarkdownEditor document={document} dark={dark} />
+                editor
               ) : (
-                <MarkdownPreview document={document} />
+                preview
               )}
             </div>
           ) : (
             <div className="h-full min-h-0 min-w-0 max-[959px]:hidden">
               <PanelGroup direction="horizontal" autoSaveId="aladdeen-editor-split">
                 <Panel defaultSize={44} minSize={28} maxSize={70}>
-                  <MarkdownEditor document={document} dark={dark} />
+                  {editor}
                 </Panel>
-                <PanelResizeHandle className="relative w-px bg-border after:absolute after:inset-y-0 after:left-[-3px] after:z-[2] after:w-[7px] after:content-[''] data-[resize-handle-active]:bg-accent" />
+                <PanelResizeHandle className="relative w-px bg-border after:absolute after:inset-y-0 after:left-0 after:z-[2] after:w-[7px] after:content-[''] data-[resize-handle-active]:bg-accent" />
                 <Panel defaultSize={56} minSize={30}>
-                  <MarkdownPreview document={document} />
+                  {preview}
                 </Panel>
               </PanelGroup>
             </div>
           )
         ) : (
-          <MarkdownPreview document={document} />
+          preview
         )}
       </div>
 

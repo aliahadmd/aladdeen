@@ -235,6 +235,34 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
   }
 })
 
+test('flushes the latest edit before the application quits', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-close-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-close-file-'))
+  const markdownPath = join(workspace, 'close-safe.md')
+  await writeFile(markdownPath, '# Before\n', 'utf8')
+  const application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
+  let closed = false
+
+  try {
+    const window = await application.firstWindow()
+    await window.getByRole('button', { name: 'Create environment' }).click()
+    await window.getByRole('button', { name: 'Edit' }).click()
+    const editor = window.locator('.cm-content')
+    await editor.click()
+    await window.keyboard.press('ControlOrMeta+A')
+    await window.keyboard.insertText('# Saved during quit\n\nThe debounce must not lose this edit.')
+    await application.close()
+    closed = true
+    await expect.poll(async () => readFile(markdownPath, 'utf8')).toContain('Saved during quit')
+  } finally {
+    if (!closed) await application.close()
+    await Promise.all([
+      rm(userData, { recursive: true, force: true }),
+      rm(workspace, { recursive: true, force: true })
+    ])
+  }
+})
+
 test('keeps a long editor manually scrollable after preview-to-source navigation', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-scroll-profile-'))
   const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-scroll-workspace-'))
@@ -250,12 +278,52 @@ test('keeps a long editor manually scrollable after preview-to-source navigation
     const window = await application.firstWindow()
     await window.getByRole('button', { name: 'Create environment' }).click()
     await expect(window.getByRole('heading', { name: 'Long document' })).toBeVisible()
+    await window.getByRole('button', { name: 'Appearance' }).click()
+    await window.getByRole('menuitem', { name: 'Dark' }).click()
     await window.getByRole('button', { name: 'Edit' }).click()
 
     const scroller = window.locator('.editor-pane .cm-scroller')
+    await expect(window.locator('.editor-pane > .cm-theme')).toBeVisible()
     await expect.poll(() =>
       scroller.evaluate((element) => element.scrollHeight > element.clientHeight)
     ).toBe(true)
+    await expect.poll(() => scroller.evaluate((element) => {
+      const editorPane = element.closest<HTMLElement>('.editor-pane')
+      const themeWrapper = element.parentElement?.parentElement
+      return Boolean(
+        editorPane &&
+        themeWrapper &&
+        Math.abs(themeWrapper.clientHeight - editorPane.clientHeight) <= 1 &&
+        Math.abs(element.clientHeight - editorPane.clientHeight) <= 1
+      )
+    })).toBe(true)
+    await expect(scroller).toHaveCSS('overflow-y', 'auto')
+    const editorScrollbar = window.getByRole('scrollbar', { name: 'Editor scroll position' })
+    await expect(editorScrollbar).toHaveAttribute('data-scrollable', 'true')
+    await expect.poll(() => editorScrollbar.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return element.ownerDocument
+        .elementFromPoint(bounds.left + bounds.width / 2, bounds.top + 20)
+        ?.closest('[data-panel-resize-handle-enabled]') === null
+    })).toBe(true)
+
+    const editorThumb = editorScrollbar.locator('.editor-scrollbar-thumb')
+    const thumbBounds = await editorThumb.boundingBox()
+    expect(thumbBounds).not.toBeNull()
+    await scroller.evaluate((element) => { element.scrollTop = 0 })
+    await window.mouse.move(
+      thumbBounds!.x + thumbBounds!.width / 2,
+      thumbBounds!.y + thumbBounds!.height / 2
+    )
+    await window.mouse.down()
+    await window.mouse.move(
+      thumbBounds!.x + thumbBounds!.width / 2,
+      thumbBounds!.y + thumbBounds!.height / 2 + 160,
+      { steps: 8 }
+    )
+    await window.mouse.up()
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    await scroller.evaluate((element) => { element.scrollTop = 0 })
 
     await scroller.hover()
     await window.mouse.wheel(0, 800)
@@ -266,6 +334,11 @@ test('keeps a long editor manually scrollable after preview-to-source navigation
     await previewTarget.click()
     const revealedTop = await scroller.evaluate((element) => element.scrollTop)
     expect(revealedTop).toBeGreaterThan(0)
+
+    // The reveal highlight and any unrelated renderer updates must not pull the
+    // viewport back after the one-shot navigation command has been consumed.
+    await window.waitForTimeout(1_000)
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(revealedTop)
 
     await scroller.hover()
     await window.mouse.wheel(0, -700)

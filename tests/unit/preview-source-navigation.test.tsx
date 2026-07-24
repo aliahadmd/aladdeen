@@ -206,5 +206,15 @@ describe('preview-to-source navigation', () => {
         origin: 'preview'
       }
     })
+
+    const revealId = useAppStore.getState().documents[0]!.editorReveal!.id
+    act(() => useAppStore.getState().updateEditorView(fileId, 240, 12))
+    expect(useAppStore.getState().documents[0]?.editorReveal?.id).toBe(revealId)
+
+    act(() => useAppStore.getState().consumeEditorReveal(fileId, revealId + 1))
+    expect(useAppStore.getState().documents[0]?.editorReveal?.id).toBe(revealId)
+
+    act(() => useAppStore.getState().consumeEditorReveal(fileId, revealId))
+    expect(useAppStore.getState().documents[0]?.editorReveal).toBeUndefined()
   })
 })

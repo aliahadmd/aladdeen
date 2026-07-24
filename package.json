@@ -1,9 +1,14 @@
 {
   "name": "aladdeen",
-  "version": "0.2.0",
-  "description": "A calm, offline-first Markdown workspace for desktop.",
+  "version": "0.3.0",
+  "description": "A calm, offline-first Markdown workspace for Apple silicon Macs.",
   "main": "./out/main/index.js",
-  "author": "Aladdeen",
+  "author": {
+    "name": "Ali Ahad",
+    "email": "ali@aliahad.com",
+    "url": "https://aliahad.com"
+  },
+  "packageManager": "pnpm@11.5.0",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -15,11 +20,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "pnpm build && playwright test",
+    "check:release": "node scripts/check-release-metadata.mjs",
     "icons": "node scripts/generate-icon.mjs",
-    "dist": "pnpm icons && pnpm build && electron-builder",
-    "dist:mac": "pnpm icons && pnpm build && electron-builder --mac --x64 --arm64",
-    "dist:win": "pnpm icons && pnpm build && electron-builder --win --x64",
-    "dist:linux": "pnpm icons && pnpm build && electron-builder --linux --x64"
+    "dist": "pnpm dist:mac",
+    "dist:mac": "pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never"
   },
   "dependencies": {
     "chokidar": "^5.0.0",
@@ -33,13 +37,11 @@
     "rehype-katex": "^7.0.1",
     "rehype-raw": "^7.0.0",
     "rehype-sanitize": "^6.0.0",
-    "rehype-stringify": "^10.0.1",
     "remark-deflist": "^1.0.0",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "remark-parse": "^11.0.0",
-    "remark-rehype": "^11.1.2",
     "remark-smartypants": "^3.0.2",
     "smol-toml": "^1.4.2",
     "unified": "^11.0.5",
@@ -82,15 +84,14 @@
     "highlight.js": "^11.11.1",
     "jsdom": "^26.1.0",
     "lucide-react": "^0.525.0",
-    "playwright": "^1.54.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.9",
-    "sharp": "^0.34.3",
+    "sharp": "^0.35.3",
     "sonner": "^2.0.7",
-    "tailwindcss": "^4.3.0",
     "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^4.3.0",
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.38.0",
     "vite": "^8.1.0",
@@ -98,6 +99,7 @@
     "zustand": "^5.0.6"
   },
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=24.0.0",
+    "pnpm": ">=11.5.0"
   }
 }

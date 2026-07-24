@@ -4,8 +4,8 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { AtSign, Check, Command, ExternalLink, Github, Info, Mail, Palette, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
-import type { Accent } from '@shared/contracts'
 import { cn } from '@renderer/lib/cn'
+import { COMPACT_SETTINGS_QUERY } from '@renderer/lib/breakpoints'
 import {
   dialogContentClasses,
   dialogOverlayClasses
@@ -29,10 +29,8 @@ interface SettingsCategoryDefinition {
 
 interface ShortcutDefinition {
   name: string
-  mac: string
-  other: string
-  macAccessible: string
-  otherAccessible: string
+  keys: string
+  accessibleKeys: string
 }
 
 const SETTINGS_CATEGORIES: SettingsCategoryDefinition[] = [
@@ -57,12 +55,12 @@ const SETTINGS_CATEGORIES: SettingsCategoryDefinition[] = [
 ]
 
 const SHORTCUTS: ShortcutDefinition[] = [
-  { name: 'Quick open', mac: '⌘ P', other: 'Ctrl P', macAccessible: 'Command P', otherAccessible: 'Control P' },
-  { name: 'Search contents', mac: '⌘ ⇧ F', other: 'Ctrl Shift F', macAccessible: 'Command Shift F', otherAccessible: 'Control Shift F' },
-  { name: 'Open file', mac: '⌘ O', other: 'Ctrl O', macAccessible: 'Command O', otherAccessible: 'Control O' },
-  { name: 'Add project', mac: '⌘ ⇧ O', other: 'Ctrl Shift O', macAccessible: 'Command Shift O', otherAccessible: 'Control Shift O' },
-  { name: 'Edit or preview', mac: '⌘ E', other: 'Ctrl E', macAccessible: 'Command E', otherAccessible: 'Control E' },
-  { name: 'Save now', mac: '⌘ S', other: 'Ctrl S', macAccessible: 'Command S', otherAccessible: 'Control S' }
+  { name: 'Quick open', keys: '⌘ P', accessibleKeys: 'Command P' },
+  { name: 'Search contents', keys: '⌘ ⇧ F', accessibleKeys: 'Command Shift F' },
+  { name: 'Open file', keys: '⌘ O', accessibleKeys: 'Command O' },
+  { name: 'Add project', keys: '⌘ ⇧ O', accessibleKeys: 'Command Shift O' },
+  { name: 'Edit or preview', keys: '⌘ E', accessibleKeys: 'Command E' },
+  { name: 'Save now', keys: '⌘ S', accessibleKeys: 'Command S' }
 ]
 
 const DEVELOPER_LINKS = [
@@ -86,28 +84,15 @@ const DEVELOPER_LINKS = [
   }
 ] as const
 
-const ACCENT_DOT_CLASSES: Record<Accent, string> = {
-  indigo: 'bg-[#5b55e7]',
-  blue: 'bg-[#2878d4]',
-  emerald: 'bg-[#198a64]',
-  amber: 'bg-[#b46b0b]',
-  rose: 'bg-[#c74268]'
-}
-
 let lastSettingsCategory: SettingsCategory = 'appearance'
-
-function isApplePlatform(): boolean {
-  if (typeof navigator === 'undefined') return false
-  return /Mac|iPhone|iPad|iPod/i.test(`${navigator.platform} ${navigator.userAgent}`)
-}
 
 function useCompactSettingsLayout(): boolean {
   const [compact, setCompact] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 720px)').matches
+    () => typeof window !== 'undefined' && window.matchMedia(COMPACT_SETTINGS_QUERY).matches
   )
 
   useEffect(() => {
-    const media = window.matchMedia('(max-width: 720px)')
+    const media = window.matchMedia(COMPACT_SETTINGS_QUERY)
     const update = (): void => setCompact(media.matches)
     update()
     media.addEventListener('change', update)
@@ -125,7 +110,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
   const panelHeadingRef = useRef<HTMLHeadingElement>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const compact = useCompactSettingsLayout()
-  const applePlatform = isApplePlatform()
   const activeDefinition = SETTINGS_CATEGORIES.find((category) => category.id === activeCategory) ?? SETTINGS_CATEGORIES[0]!
 
   const selectCategory = (category: SettingsCategory, focusPanel = false): void => {
@@ -272,7 +256,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
                 />
               )}
               {activeCategory === 'shortcuts' && (
-                <ShortcutSettings applePlatform={applePlatform} />
+                <ShortcutSettings />
               )}
               {activeCategory === 'about' && <AboutSettings />}
             </div>
@@ -333,7 +317,10 @@ function AppearanceSettings({
               aria-label={`${option.label} accent`}
               aria-pressed={settings.accent === option.value}
             >
-              <span className={cn('grid h-6 w-6 place-items-center rounded-full border-2 border-[rgb(255_255_255/.8)] text-white shadow-[0_0_0_1px_rgb(0_0_0/.12)]', ACCENT_DOT_CLASSES[option.value])}>
+              <span
+                className="grid h-6 w-6 place-items-center rounded-full border-2 border-[rgb(255_255_255/.8)] text-white shadow-[0_0_0_1px_rgb(0_0_0/.12)]"
+                style={{ backgroundColor: `var(--accent-${option.value})` }}
+              >
                 {settings.accent === option.value && <Check size={12} />}
               </span>
               <span className="max-[430px]:sr-only">{option.label}</span>
@@ -345,27 +332,23 @@ function AppearanceSettings({
   )
 }
 
-function ShortcutSettings({ applePlatform }: { applePlatform: boolean }): React.JSX.Element {
+function ShortcutSettings(): React.JSX.Element {
   return (
     <dl className="m-0 divide-y divide-border">
-      {SHORTCUTS.map((shortcut) => {
-        const keys = applePlatform ? shortcut.mac : shortcut.other
-        const accessibleKeys = applePlatform ? shortcut.macAccessible : shortcut.otherAccessible
-        return (
+      {SHORTCUTS.map((shortcut) => (
           <div className="flex min-h-[54px] items-center justify-between gap-5 py-3" key={shortcut.name}>
             <dt className="text-[13px] font-[560] text-foreground-soft">{shortcut.name}</dt>
             <dd className="m-0 shrink-0">
               <kbd
                 className="inline-flex min-h-7 items-center rounded-md border border-border-strong bg-surface px-[9px] font-mono text-[11px] font-semibold text-foreground-soft shadow-[0_1px_0_rgb(0_0_0/.05)]"
-                aria-label={accessibleKeys}
-                title={accessibleKeys}
+                aria-label={shortcut.accessibleKeys}
+                title={shortcut.accessibleKeys}
               >
-                {keys}
+                {shortcut.keys}
               </kbd>
             </dd>
           </div>
-        )
-      })}
+      ))}
     </dl>
   )
 }
@@ -385,7 +368,7 @@ function AboutSettings(): React.JSX.Element {
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">A calm Markdown workspace</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Aladdeen is an offline-first desktop workspace for reading, editing, organizing, and exporting Markdown.
+            Aladdeen is an offline-first Markdown workspace made only for Apple silicon Macs.
           </p>
         </section>
         <section className="py-5">

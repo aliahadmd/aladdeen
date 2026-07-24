@@ -106,7 +106,15 @@ export function ProjectSettingsDialog({ project, onOpenChange }: ProjectSettings
                 </label>
               </div>
 
-              {mode === 'selected' && <ProjectScopeTree nodes={preview.tree} selected={selected} onChange={setSelected} />}
+              {mode === 'selected' && (
+                <ProjectScopeTree
+                  nodes={preview.tree}
+                  selected={selected}
+                  excludePatterns={excludePatterns.split('\n').map((line) => line.trim()).filter(Boolean)}
+                  onChange={setSelected}
+                  onExcludePatternsChange={(patterns) => setExcludePatterns(patterns.join('\n'))}
+                />
+              )}
 
               <div className="scope-advanced-grid project-organization">
                 <label><span>Project group</span><input value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="e.g. Work, Clients, Personal" /></label>

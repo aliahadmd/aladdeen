@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   IPC,
+  type CloseRequest,
   type EnvironmentEvent,
   type GlobalSearchEvent,
   type AladdeenApi,
@@ -10,6 +11,14 @@ import {
 const api: AladdeenApi = {
   app: {
     bootstrap: () => ipcRenderer.invoke(IPC.bootstrap)
+  },
+  lifecycle: {
+    onPrepareClose: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, request: CloseRequest): void => callback(request)
+      ipcRenderer.on(IPC.prepareClose, listener)
+      return () => ipcRenderer.removeListener(IPC.prepareClose, listener)
+    },
+    completeClose: (completion) => ipcRenderer.invoke(IPC.completeClose, completion)
   },
   environments: {
     create: (name) => ipcRenderer.invoke(IPC.createEnvironment, name),

@@ -38,22 +38,17 @@ describe("Aladdeen landing page", () => {
 		expect(document.querySelector("#faq")).toBeInTheDocument();
 	});
 
-	it("links both architecture downloads to versioned Worker routes", () => {
+	it("links only the Apple silicon download to its versioned Worker route", () => {
 		render(<App />);
 
 		const appleLinks = screen.getAllByRole("link", {
 			name: /Download for Apple Silicon/,
 		});
-		const intelLinks = screen.getAllByRole("link", { name: /Intel Mac/ });
-
 		expect(appleLinks[0]).toHaveAttribute(
 			"href",
 			RELEASE_ARTIFACTS.arm64.downloadPath,
 		);
-		expect(intelLinks[0]).toHaveAttribute(
-			"href",
-			RELEASE_ARTIFACTS.x64.downloadPath,
-		);
+		expect(Object.keys(RELEASE_ARTIFACTS)).toEqual(["arm64"]);
 		expect(screen.getAllByText(/Open Anyway/).length).toBeGreaterThan(0);
 		expect(
 			screen.getByText(RELEASE_ARTIFACTS.arm64.sha256, { exact: false }),

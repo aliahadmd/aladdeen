@@ -1,7 +1,10 @@
 import { env, exports } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { RELEASE_ARTIFACTS } from "../../src/shared/releases";
+import {
+	CURRENT_RELEASE,
+	RELEASE_ARTIFACTS,
+} from "../../src/shared/releases";
 
 const testBody = "aladdeen-installer";
 const arm64Url = `http://example.com${RELEASE_ARTIFACTS.arm64.downloadPath}`;
@@ -19,7 +22,6 @@ describe("Worker API", () => {
 				},
 			},
 		);
-		await env.DOWNLOADS.delete(RELEASE_ARTIFACTS.x64.r2Key);
 	});
 
 	it("returns the health payload", async () => {
@@ -30,7 +32,7 @@ describe("Worker API", () => {
 		expect(response.status).toBe(200);
 		expect(await response.json()).toEqual({
 			status: "ok",
-			release: "0.2.0",
+			release: CURRENT_RELEASE,
 		});
 	});
 
@@ -100,9 +102,8 @@ describe("Worker API", () => {
 	});
 
 	it("returns 404 when an allow-listed object is missing", async () => {
-		const response = await exports.default.fetch(
-			`http://example.com${RELEASE_ARTIFACTS.x64.downloadPath}`,
-		);
+		await env.DOWNLOADS.delete(RELEASE_ARTIFACTS.arm64.r2Key);
+		const response = await exports.default.fetch(arm64Url);
 
 		expect(response.status).toBe(404);
 		expect(await response.json()).toEqual({
@@ -115,7 +116,7 @@ describe("Worker API", () => {
 			"http://example.com/download/v9.9.9/macos/arm64",
 		);
 		const wrongArchitecture = await exports.default.fetch(
-			"http://example.com/download/v0.2.0/macos/universal",
+			`http://example.com/download/v${CURRENT_RELEASE}/macos/universal`,
 		);
 
 		expect(wrongVersion.status).toBe(404);

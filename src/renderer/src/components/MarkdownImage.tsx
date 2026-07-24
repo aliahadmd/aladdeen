@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ImageOff } from 'lucide-react'
 import { toAssetUrl } from '@shared/path'
 import type { MarkdownSourceDataAttributes } from '@shared/markdown'
@@ -28,6 +28,7 @@ export function MarkdownImage({
 
   const isRemote = !src || /^(https?:|data:|file:|\/\/)/i.test(src)
   const asset = isRemote ? null : toAssetUrl(documentId, src)
+  useEffect(() => setFailed(false), [asset])
   if (!asset || failed) {
     const message = isRemote ? 'Remote image blocked' : 'Image unavailable'
     return (

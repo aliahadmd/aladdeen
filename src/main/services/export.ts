@@ -1,6 +1,7 @@
 import { writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import {
+  app,
   BrowserWindow,
   dialog,
   type BrowserWindow as BrowserWindowType,
@@ -35,6 +36,7 @@ import {
   prepareMarkdownSource
 } from '@shared/markdown'
 import type { WorkspaceService } from './workspace'
+import { MAX_DOCUMENT_BYTES } from '@shared/limits'
 
 const mainBundleDirectory = import.meta.dirname
 
@@ -54,10 +56,12 @@ export class ExportService {
   ) {}
 
   async exportDocument(request: ExportRequest): Promise<SaveCopyResult> {
+    this.assertContentSize(request.content)
     return request.format === 'pdf' ? this.exportPdf(request) : this.exportDocx(request)
   }
 
   async saveCopy(fileId: string, content: string): Promise<SaveCopyResult> {
+    this.assertContentSize(content)
     const sourcePath = this.workspace.getTrackedFilePath(fileId)
     const suggestedName = basename(sourcePath, extname(sourcePath)) + '-copy.md'
     const result = await this.showSaveDialog({
@@ -71,6 +75,12 @@ export class ExportService {
       await writeFile(result.filePath!, content, 'utf8')
     })
     return { path: result.filePath }
+  }
+
+  private assertContentSize(content: string): void {
+    if (Buffer.byteLength(content, 'utf8') > MAX_DOCUMENT_BYTES) {
+      throw new DesktopError('INVALID_FILE', 'This document is larger than Aladdeen’s 20 MiB limit.')
+    }
   }
 
   private async exportPdf(request: ExportRequest): Promise<SaveCopyResult> {
@@ -98,7 +108,7 @@ export class ExportService {
     printWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
 
     try {
-      if (process.env.ELECTRON_RENDERER_URL) {
+      if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
         const rendererUrl = process.env.ELECTRON_RENDERER_URL.endsWith('/')
           ? process.env.ELECTRON_RENDERER_URL
           : `${process.env.ELECTRON_RENDERER_URL}/`

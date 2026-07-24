@@ -1,6 +1,6 @@
 # Aladdeen Web
 
-The official landing page and private R2-backed macOS download service for Aladdeen.
+The official landing page and private R2-backed Apple silicon Mac download service for Aladdeen.
 
 ## Stack
 

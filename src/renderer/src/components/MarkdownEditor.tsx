@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MutableRefObject,
+  type PointerEvent as ReactPointerEvent
+} from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
@@ -53,9 +60,59 @@ function applyEditorReveal(
   flashRevealedLine(view, from, timer, frame)
 }
 
+function syncScrollRail(
+  view: EditorView,
+  rail: HTMLDivElement,
+  thumb: HTMLDivElement
+): void {
+  const maximum = Math.max(0, view.scrollDOM.scrollHeight - view.scrollDOM.clientHeight)
+  const railHeight = rail.clientHeight
+  const thumbHeight = maximum === 0
+    ? railHeight
+    : Math.max(36, railHeight * view.scrollDOM.clientHeight / view.scrollDOM.scrollHeight)
+  const available = Math.max(0, railHeight - thumbHeight)
+  const top = maximum === 0 ? 0 : view.scrollDOM.scrollTop / maximum * available
+  rail.dataset.scrollable = String(maximum > 0)
+  rail.setAttribute('aria-valuemin', '0')
+  rail.setAttribute('aria-valuemax', String(Math.round(maximum)))
+  rail.setAttribute('aria-valuenow', String(Math.round(view.scrollDOM.scrollTop)))
+  thumb.style.height = `${thumbHeight}px`
+  thumb.style.transform = `translateY(${top}px)`
+}
+
+function installEditorScrolling(
+  view: EditorView,
+  rail: HTMLDivElement,
+  thumb: HTMLDivElement
+): () => void {
+  let syncFrame: number | undefined
+
+  const scheduleSync = (): void => {
+    if (syncFrame !== undefined) return
+    syncFrame = window.requestAnimationFrame(() => {
+      syncFrame = undefined
+      syncScrollRail(view, rail, thumb)
+    })
+  }
+
+  view.scrollDOM.addEventListener('scroll', scheduleSync, { passive: true })
+  const resizeObserver = new ResizeObserver(scheduleSync)
+  resizeObserver.observe(view.scrollDOM)
+  resizeObserver.observe(view.contentDOM)
+  resizeObserver.observe(rail)
+  scheduleSync()
+  return () => {
+    view.scrollDOM.removeEventListener('scroll', scheduleSync)
+    resizeObserver.disconnect()
+    if (syncFrame !== undefined) window.cancelAnimationFrame(syncFrame)
+  }
+}
+
 export function MarkdownEditor({ document, dark }: { document: OpenDocument; dark: boolean }): React.JSX.Element {
   const updateContent = useAppStore((state) => state.updateContent)
   const updateEditorView = useAppStore((state) => state.updateEditorView)
+  const getEditorView = useAppStore((state) => state.getEditorView)
+  const consumeEditorReveal = useAppStore((state) => state.consumeEditorReveal)
   const extensions = useMemo(
     () => [markdown({ base: markdownLanguage, codeLanguages: languages }), EditorView.lineWrapping],
     []
@@ -63,19 +120,41 @@ export function MarkdownEditor({ document, dark }: { document: OpenDocument; dar
   const editor = useRef<EditorView | null>(null)
   const revealTimer = useRef<number | undefined>(undefined)
   const revealFrame = useRef<number | undefined>(undefined)
+  const scrollRail = useRef<HTMLDivElement | null>(null)
+  const scrollThumb = useRef<HTMLDivElement | null>(null)
+  const scrollCleanup = useRef<(() => void) | undefined>(undefined)
+  const scrollDragOffset = useRef(0)
+  const appliedRevealId = useRef<number | undefined>(undefined)
   const editorReveal = document.editorReveal
 
   useEffect(() => {
     const reveal = editorReveal
     const view = editor.current
-    if (!reveal || !view) return
+    if (!reveal || !view || appliedRevealId.current === reveal.id) return
+    appliedRevealId.current = reveal.id
     applyEditorReveal(view, reveal, revealTimer, revealFrame)
-  }, [editorReveal])
+    consumeEditorReveal(document.id, reveal.id)
+  }, [consumeEditorReveal, document.id, editorReveal])
+
+  useEffect(() => {
+    const view = editor.current
+    const rail = scrollRail.current
+    const thumb = scrollThumb.current
+    if (!view || !rail || !thumb) return
+    scrollCleanup.current?.()
+    const cleanup = installEditorScrolling(view, rail, thumb)
+    scrollCleanup.current = cleanup
+    return () => {
+      cleanup()
+      if (scrollCleanup.current === cleanup) scrollCleanup.current = undefined
+    }
+  }, [document.id])
 
   useEffect(
     () => () => {
       if (revealTimer.current) window.clearTimeout(revealTimer.current)
       if (revealFrame.current) window.cancelAnimationFrame(revealFrame.current)
+      scrollCleanup.current?.()
       editor.current?.dom.querySelector('.source-reveal-flash')?.classList.remove('source-reveal-flash')
     },
     []
@@ -86,8 +165,62 @@ export function MarkdownEditor({ document, dark }: { document: OpenDocument; dar
     updateEditorView(document.id, update.view.scrollDOM.scrollTop, update.state.selection.main.head)
   }
 
+  const scrollFromPointer = (clientY: number): void => {
+    const view = editor.current
+    const rail = scrollRail.current
+    const thumb = scrollThumb.current
+    if (!view || !rail || !thumb) return
+    const maximum = Math.max(0, view.scrollDOM.scrollHeight - view.scrollDOM.clientHeight)
+    const available = Math.max(0, rail.clientHeight - thumb.clientHeight)
+    if (maximum === 0 || available === 0) return
+    const top = Math.min(
+      available,
+      Math.max(0, clientY - rail.getBoundingClientRect().top - scrollDragOffset.current)
+    )
+    view.scrollDOM.scrollTop = top / available * maximum
+  }
+
+  const handleScrollPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const rail = scrollRail.current
+    const thumb = scrollThumb.current
+    if (!rail || !thumb || rail.dataset.scrollable !== 'true') return
+    event.preventDefault()
+    scrollDragOffset.current = event.target === thumb
+      ? event.clientY - thumb.getBoundingClientRect().top
+      : thumb.clientHeight / 2
+    event.currentTarget.setPointerCapture(event.pointerId)
+    scrollFromPointer(event.clientY)
+  }
+
+  const handleScrollPointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+    event.preventDefault()
+    scrollFromPointer(event.clientY)
+  }
+
+  const handleScrollPointerEnd = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  const handleScrollKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const view = editor.current
+    if (!view) return
+    let next: number | undefined
+    if (event.key === 'ArrowUp') next = view.scrollDOM.scrollTop - 44
+    if (event.key === 'ArrowDown') next = view.scrollDOM.scrollTop + 44
+    if (event.key === 'PageUp') next = view.scrollDOM.scrollTop - view.scrollDOM.clientHeight * 0.9
+    if (event.key === 'PageDown') next = view.scrollDOM.scrollTop + view.scrollDOM.clientHeight * 0.9
+    if (event.key === 'Home') next = 0
+    if (event.key === 'End') next = view.scrollDOM.scrollHeight
+    if (next === undefined) return
+    event.preventDefault()
+    view.scrollDOM.scrollTop = next
+  }
+
   return (
-    <div className="editor-pane h-full min-h-0 min-w-0 overflow-hidden bg-surface" aria-label={`Editing ${document.name}`}>
+    <div className="editor-pane relative h-full min-h-0 min-w-0 overflow-hidden bg-surface" aria-label={`Editing ${document.name}`}>
       <CodeMirror
         key={document.id}
         value={document.content}
@@ -108,18 +241,46 @@ export function MarkdownEditor({ document, dark }: { document: OpenDocument; dar
         onUpdate={onUpdate}
         onCreateEditor={(view) => {
           editor.current = view
+          const rail = scrollRail.current
+          const thumb = scrollThumb.current
+          if (rail && thumb) {
+            scrollCleanup.current?.()
+            scrollCleanup.current = installEditorScrolling(view, rail, thumb)
+          }
           requestAnimationFrame(() => {
             if (document.editorReveal) {
-              applyEditorReveal(view, document.editorReveal, revealTimer, revealFrame)
+              const reveal = document.editorReveal
+              if (appliedRevealId.current !== reveal.id) {
+                appliedRevealId.current = reveal.id
+                applyEditorReveal(view, reveal, revealTimer, revealFrame)
+                consumeEditorReveal(document.id, reveal.id)
+              }
             } else {
-              view.scrollDOM.scrollTop = document.editorScrollTop
+              const viewport = getEditorView(document.id)
+              view.scrollDOM.scrollTop = viewport?.scrollTop ?? document.editorScrollTop
             }
-            if (!document.editorReveal && document.editorSelection <= view.state.doc.length) {
-              view.dispatch({ selection: { anchor: document.editorSelection }, scrollIntoView: false })
+            const selection = getEditorView(document.id)?.selection ?? document.editorSelection
+            if (!document.editorReveal && selection <= view.state.doc.length) {
+              view.dispatch({ selection: { anchor: selection }, scrollIntoView: false })
             }
           })
         }}
       />
+      <div
+        ref={scrollRail}
+        className="editor-scrollbar"
+        role="scrollbar"
+        aria-label="Editor scroll position"
+        aria-orientation="vertical"
+        tabIndex={0}
+        onKeyDown={handleScrollKeyDown}
+        onPointerDown={handleScrollPointerDown}
+        onPointerMove={handleScrollPointerMove}
+        onPointerUp={handleScrollPointerEnd}
+        onPointerCancel={handleScrollPointerEnd}
+      >
+        <div ref={scrollThumb} className="editor-scrollbar-thumb" />
+      </div>
     </div>
   )
 }

@@ -6,10 +6,18 @@ import { centeredEmptyClasses } from '@renderer/lib/ui-styles'
 interface ProjectScopeTreeProps {
   nodes: ProjectScopeNode[]
   selected: Set<string>
+  excludePatterns?: string[]
   onChange(selected: Set<string>): void
+  onExcludePatternsChange?(patterns: string[]): void
 }
 
-export function ProjectScopeTree({ nodes, selected, onChange }: ProjectScopeTreeProps): React.JSX.Element {
+export function ProjectScopeTree({
+  nodes,
+  selected,
+  excludePatterns = [],
+  onChange,
+  onExcludePatternsChange
+}: ProjectScopeTreeProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const visibleNodes = useMemo(() => filterNodes(nodes, query.trim().toLocaleLowerCase()), [nodes, query])
@@ -19,14 +27,22 @@ export function ProjectScopeTree({ nodes, selected, onChange }: ProjectScopeTree
     setCollapsed(new Set(collectDirectoryPaths(nodes)))
   }, [nodes])
 
-  const toggle = (path: string): void => {
+  const toggle = (node: ProjectScopeNode): void => {
+    const path = node.path
     const next = new Set(selected)
     const ancestor = [...next].find((candidate) => path.startsWith(`${candidate}/`))
+    const exclusion = exclusionPattern(node)
+    const isExcluded = excludePatterns.includes(exclusion)
+    if (isExcluded) {
+      onExcludePatternsChange?.(excludePatterns.filter((pattern) => pattern !== exclusion))
+      return
+    }
     if (next.has(path)) {
       next.delete(path)
       for (const candidate of next) if (candidate.startsWith(`${path}/`)) next.delete(candidate)
     } else if (ancestor) {
-      next.delete(ancestor)
+      onExcludePatternsChange?.([...excludePatterns, exclusion])
+      return
     } else {
       for (const candidate of next) if (candidate.startsWith(`${path}/`)) next.delete(candidate)
       next.add(path)
@@ -47,7 +63,9 @@ export function ProjectScopeTree({ nodes, selected, onChange }: ProjectScopeTree
   const renderNodes = (items: ProjectScopeNode[], depth: number): React.ReactNode => items.map((node) => {
     const exact = selected.has(node.path)
     const inherited = [...selected].some((path) => node.path.startsWith(`${path}/`))
-    const partial = !exact && !inherited && [...selected].some((path) => path.startsWith(`${node.path}/`))
+    const excluded = excludePatterns.includes(exclusionPattern(node))
+    const checked = (exact || inherited) && !excluded
+    const partial = !checked && !excluded && [...selected].some((path) => path.startsWith(`${node.path}/`))
     const isCollapsed = collapsed.has(node.path) && !query
     return (
       <div key={node.path} className="scope-tree-item">
@@ -71,11 +89,11 @@ export function ProjectScopeTree({ nodes, selected, onChange }: ProjectScopeTree
             className="scope-checkbox"
             type="button"
             role="checkbox"
-            aria-checked={exact || inherited ? true : partial ? 'mixed' : false}
-            aria-label={`${exact || inherited ? 'Exclude' : 'Include'} ${node.name}`}
-            onClick={() => toggle(node.path)}
+            aria-checked={checked ? true : partial ? 'mixed' : false}
+            aria-label={`${checked ? 'Exclude' : 'Include'} ${node.name}`}
+            onClick={() => toggle(node)}
           >
-            {exact || inherited ? <Check size={11} /> : partial ? <Minus size={11} /> : null}
+            {checked ? <Check size={11} /> : partial ? <Minus size={11} /> : null}
           </button>
           {node.kind === 'directory' ? <Folder size={14} /> : <FileText size={14} />}
           <span className="scope-node-name">{node.name}</span>
@@ -103,6 +121,10 @@ export function ProjectScopeTree({ nodes, selected, onChange }: ProjectScopeTree
       </div>
     </div>
   )
+}
+
+function exclusionPattern(node: ProjectScopeNode): string {
+  return node.kind === 'directory' ? `${node.path}/**` : node.path
 }
 
 function filterNodes(nodes: ProjectScopeNode[], query: string): ProjectScopeNode[] {

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
@@ -73,7 +74,12 @@ type FormKind = 'environment' | 'rename-environment' | 'project' | 'file' | 'fol
 export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
   const activeFileId = useAppStore((state) => state.activeFileId)
-  const documents = useAppStore((state) => state.documents)
+  const activeDocument = useAppStore(useShallow((state) => {
+    const document = state.documents.find((candidate) => candidate.id === state.activeFileId)
+    return document
+      ? { id: document.id, name: document.name, location: document.location, fullPath: document.fullPath }
+      : null
+  }))
   const settings = useAppStore((state) => state.settings)
   const selectedProjectId = useAppStore((state) => state.selectedProjectId)
   const selectedFolderPath = useAppStore((state) => state.selectedFolderPath)
@@ -112,31 +118,49 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const [trashTrackedTarget, setTrashTrackedTarget] = useState<TrackedFileSummary | null>(null)
   const [deleteEnvironmentOpen, setDeleteEnvironmentOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const activeDocument = documents.find((document) => document.id === activeFileId)
   const ThemeIcon = settings.theme === 'dark' ? Moon : settings.theme === 'light' ? Sun : SwatchBook
+  const environmentId = environment?.environment.id
+  const expansionSignature = environment?.projects
+    .map((project) => `${project.id}:${project.expandedPaths.join(',')}:${project.indexedAt ?? 0}`)
+    .join('|') ?? ''
+  const environmentRef = useRef(environment)
+  environmentRef.current = environment
 
   useEffect(() => {
-    if (!environment) return
-    let cancelled = false
-    const openProjects = environment.projects.filter((project) => project.expandedPaths.includes('') && !project.archived)
-    setExpandedProjects(new Set(openProjects.map((project) => project.id)))
-    setExpandedFolders(Object.fromEntries(environment.projects.map((project) => [project.id, new Set(project.expandedPaths.filter(Boolean))])))
+    setExpandedProjects(new Set())
+    setExpandedFolders({})
     setTreePages({})
+    setLoadingTreeKeys(new Set())
+  }, [environmentId])
+
+  useEffect(() => {
+    const currentEnvironment = environmentRef.current
+    if (!currentEnvironment) return
+    let cancelled = false
+    const openProjects = currentEnvironment.projects.filter((project) => project.expandedPaths.includes('') && !project.archived)
+    setExpandedProjects(new Set(openProjects.map((project) => project.id)))
+    setExpandedFolders(Object.fromEntries(currentEnvironment.projects.map((project) => [project.id, new Set(project.expandedPaths.filter(Boolean))])))
     const requests = openProjects.flatMap((project) =>
       project.expandedPaths.map((path) => window.aladdeen.projects.listChildren(project.id, path))
     )
     void Promise.all(requests).then((results) => {
       if (cancelled) return
-      setTreePages(Object.fromEntries(results.flatMap((result) => result.ok ? [[treeKey(result.value.projectId, result.value.parentPath), result.value]] : [])))
+      setTreePages((current) => ({
+        ...current,
+        ...Object.fromEntries(results.flatMap((result) =>
+          result.ok ? [[treeKey(result.value.projectId, result.value.parentPath), result.value]] : []
+        ))
+      }))
     })
     return () => { cancelled = true }
-  }, [environment])
+  }, [environmentId, expansionSignature])
 
   useEffect(() => {
     if (!environment || !query.trim()) {
       setSearchResults([])
       return
     }
+    setSearchResults([])
     let cancelled = false
     const timer = setTimeout(() => {
       void window.aladdeen.projects.search(query, 80).then((result) => {
@@ -180,6 +204,12 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
     const files = (environment?.files ?? []).filter((file) => !query || `${file.name} ${file.location} ${file.fullPath}`.toLocaleLowerCase().includes(needle))
     return showAll || query ? files : files.slice(0, 8)
   }, [environment?.files, query, showAll])
+  const trackedFilesByProjectPath = useMemo(
+    () => new Map((environment?.files ?? []).flatMap((file) =>
+      file.projectId && file.relativePath ? [[`${file.projectId}\0${file.relativePath}`, file] as const] : []
+    )),
+    [environment?.files]
+  )
 
   const toggleProject = (projectId: string): void => {
     const opening = !expandedProjects.has(projectId)
@@ -303,7 +333,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
                 node={node}
                 depth={0}
                 activeFileId={activeFileId}
-                trackedFiles={environment?.files ?? []}
+                trackedFilesByProjectPath={trackedFilesByProjectPath}
                 expanded={expandedFolders[project.id] ?? new Set()}
                 pages={treePages}
                 loadingKeys={loadingTreeKeys}
@@ -578,14 +608,14 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
 }
 
 function ProjectTreeItem({
-  projectId, node, depth, activeFileId, trackedFiles, expanded, pages, loadingKeys, onToggle, onOpen, onSelectFolder,
+  projectId, node, depth, activeFileId, trackedFilesByProjectPath, expanded, pages, loadingKeys, onToggle, onOpen, onSelectFolder,
   onRename, onTrash, onCreate, onLoadMore
 }: {
   projectId: string
   node: WorkspaceTreeNode
   depth: number
   activeFileId: string | null
-  trackedFiles: TrackedFileSummary[]
+  trackedFilesByProjectPath: ReadonlyMap<string, TrackedFileSummary>
   expanded: Set<string>
   pages: Record<string, ProjectTreePage>
   loadingKeys: Set<string>
@@ -600,7 +630,7 @@ function ProjectTreeItem({
   const isExpanded = expanded.has(node.path)
   const page = pages[treeKey(projectId, node.path)]
   const loading = loadingKeys.has(treeKey(projectId, node.path))
-  const tracked = node.kind === 'file' ? trackedFiles.find((file) => file.projectId === projectId && file.relativePath === node.path) : undefined
+  const tracked = node.kind === 'file' ? trackedFilesByProjectPath.get(`${projectId}\0${node.path}`) : undefined
   return (
     <div role="treeitem" aria-expanded={node.kind === 'directory' ? isExpanded : undefined}>
       <div className={environmentTreeRowClasses(tracked?.id === activeFileId)} style={{ '--tree-depth': depth } as React.CSSProperties}>
@@ -638,7 +668,7 @@ function ProjectTreeItem({
               node={child}
               depth={depth + 1}
               activeFileId={activeFileId}
-              trackedFiles={trackedFiles}
+              trackedFilesByProjectPath={trackedFilesByProjectPath}
               expanded={expanded}
               pages={pages}
               loadingKeys={loadingKeys}

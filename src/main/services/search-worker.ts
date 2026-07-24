@@ -1,6 +1,6 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import { parentPort } from 'node:worker_threads'
-import { readFile, realpath, stat } from 'node:fs/promises'
+import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { decodeMarkdown } from './file-format'
 import { searchMarkdownSource } from './search-engine'
 import type { GlobalSearchMatch } from '@shared/contracts'
@@ -117,7 +117,10 @@ async function readCandidate(candidate: SearchWorkerCandidate): Promise<string |
   }
 
   try {
+    const pathStats = await lstat(candidate.path)
+    if (pathStats.isSymbolicLink()) return null
     const canonical = await realpath(candidate.path)
+    if (canonical !== candidate.path) return null
     const relation = relative(candidate.authorityRoot, canonical)
     const allowed = candidate.standalone
       ? relation === ''
@@ -125,7 +128,9 @@ async function readCandidate(candidate: SearchWorkerCandidate): Promise<string |
     if (!allowed) return null
     const fileStats = await stat(canonical)
     if (!fileStats.isFile() || fileStats.size > SEARCH_FILE_SIZE_LIMIT) return null
-    return decodeMarkdown(await readFile(canonical)).content
+    const buffer = await readFile(canonical)
+    if (buffer.byteLength > SEARCH_FILE_SIZE_LIMIT) return null
+    return decodeMarkdown(buffer).content
   } catch {
     return null
   }

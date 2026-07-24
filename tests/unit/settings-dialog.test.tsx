@@ -30,7 +30,7 @@ describe('settings dialog', () => {
         system: { openExternal }
       } as unknown as AladdeenApi
     })
-    useAppStore.setState({ settings: defaultSettings })
+    useAppStore.setState({ settings: defaultSettings, persistedSettings: defaultSettings })
   })
 
   afterEach(() => {
@@ -59,6 +59,21 @@ describe('settings dialog', () => {
     })
   })
 
+  it('restores the last persisted appearance when a settings write fails', async () => {
+    update.mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'PERMISSION_DENIED', message: 'Settings are read-only.' }
+    })
+    render(<SettingsDialog open onOpenChange={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dark' }))
+    await waitFor(() => {
+      expect(useAppStore.getState().settings).toEqual(defaultSettings)
+      expect(screen.getByRole('button', { name: 'System' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'Dark' })).toHaveAttribute('aria-pressed', 'false')
+    })
+  })
+
   it('switches panels and uses manual keyboard activation with heading focus', async () => {
     const view = render(<SettingsDialog open onOpenChange={vi.fn()} />)
 
@@ -81,7 +96,7 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'About' }))
     expect(screen.getByRole('heading', { name: 'About' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Aladdeen' })).toBeVisible()
-    expect(screen.getByText('Version 0.2.0')).toBeVisible()
+    expect(screen.getByText('Version 0.3.0')).toBeVisible()
     expect(screen.getByText(/original disk locations/i)).toBeVisible()
     expect(screen.queryByText('Quick open')).not.toBeInTheDocument()
 

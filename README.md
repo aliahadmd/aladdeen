@@ -4,7 +4,7 @@
 
 # Aladdeen
 
-Aladdeen is a responsive, offline-first Markdown viewer and editor for macOS, Windows, and Linux. It keeps ordinary `.md` files on disk, gives them a clean live preview, and exports finished documents to PDF or DOCX without a network connection.
+Aladdeen is a responsive, offline-first Markdown viewer and editor made only for Apple silicon Macs (M1 or newer). It keeps ordinary `.md` files on disk, gives them a clean live preview, and exports finished documents to PDF or DOCX without a network connection.
 
 ## Features
 
@@ -42,23 +42,21 @@ pnpm build
 
 ```bash
 pnpm dist:mac
-pnpm dist:win
-pnpm dist:linux
 ```
 
-macOS builds are ad-hoc signed so the Electron bundle is internally valid without
+Aladdeen produces arm64 DMG and ZIP artifacts only. Builds are ad-hoc signed so the Electron bundle is internally valid without
 requiring a paid Apple Developer account. They are not notarized, so macOS requires
 the user to approve the first launch in System Settings → Privacy & Security. The
-GitHub Actions workflow builds each target on its native runner. Auto-update and
+GitHub Actions workflow builds on a native Apple silicon runner. Auto-update and
 publishing are intentionally not configured.
 
 ## Keyboard shortcuts
 
-- `Cmd/Ctrl+O`: open a Markdown file
-- `Cmd/Ctrl+Shift+O`: add an existing folder project
-- `Cmd/Ctrl+P`: search every indexed project file
-- `Cmd/Ctrl+Shift+F`: search Markdown contents in the active environment
-- `Cmd/Ctrl+S`: flush autosave now
-- `Cmd/Ctrl+E`: toggle editing
+- `Cmd+O`: open a Markdown file
+- `Cmd+Shift+O`: add an existing folder project
+- `Cmd+P`: search every indexed project file
+- `Cmd+Shift+F`: search Markdown contents in the active environment
+- `Cmd+S`: flush autosave now
+- `Cmd+E`: toggle editing
 
 Environment, project-index, and recent-file metadata is stored in SQLite; Markdown content is never imported into the database. Aladdeen does not provide cloud sync, remote image fetching, plugins, or WYSIWYG editing. Your Markdown remains portable and under your control.

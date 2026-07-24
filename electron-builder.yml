@@ -24,28 +24,12 @@ mac:
   notarize: false
   artifactName: ${productName}-${version}-${arch}-mac.${ext}
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch:
+        - arm64
+    - target: zip
+      arch:
+        - arm64
 dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
-win:
-  icon: build/icon.png
-  target:
-    - nsis
-  artifactName: ${productName}-${version}-Setup-${arch}.${ext}
-linux:
-  icon: build/icon.png
-  category: Office
-  synopsis: Offline Markdown viewer and editor
-  description: A calm, offline-first Markdown workspace.
-  mimeTypes:
-    - text/markdown
-  target:
-    - AppImage
-    - deb
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-  createDesktopShortcut: true
-  createStartMenuShortcut: true
 publish: null

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
-import { access, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import chokidar, { type FSWatcher } from 'chokidar'
 import writeFileAtomic from 'write-file-atomic'
 import { DesktopError } from '@main/errors'
@@ -28,6 +28,7 @@ import type {
   WorkspaceTreeNode
 } from '@shared/contracts'
 import { toPosixPath } from '@shared/path'
+import { MAX_DOCUMENT_BYTES } from '@shared/limits'
 import { decodeMarkdown, encodeMarkdown, sha256 } from './file-format'
 import { isPathInside, resolveExistingPath, resolveNewPath, resolveSyntacticPath } from './path-guard'
 
@@ -41,7 +42,7 @@ const IMAGE_MIME_TYPES: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.avif': 'image/avif'
 }
-const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.hg', '.svn', 'node_modules'])
+const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.hg', '.svn', '.cache', 'node_modules', 'dist', 'build', 'out'])
 const MAX_SCOPE_PREVIEW_FILES = 50_000
 const PROJECT_TREE_PAGE_SIZE = 250
 
@@ -64,10 +65,6 @@ export function validateEntryName(input: string): string {
   if (!name || name === '.' || name === '..' || /[\\/:*?"<>|\0]/.test(name)) {
     throw new DesktopError('INVALID_PATH', 'Use a simple file or folder name without path separators.')
   }
-  const base = name.split('.')[0]?.toUpperCase()
-  if (base && /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(base)) {
-    throw new DesktopError('INVALID_PATH', 'That name is reserved by Windows.')
-  }
   return name
 }
 
@@ -78,6 +75,7 @@ export class WorkspaceService {
   private readonly suppressedWrites = new Map<string, number>()
   private readonly projectCandidates = new Map<string, ProjectCandidate>()
   private readonly reindexTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private activationQueue: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly database: AppDatabase,
@@ -89,6 +87,12 @@ export class WorkspaceService {
   }
 
   async activateEnvironment(environmentId: string): Promise<EnvironmentSnapshot> {
+    const activation = this.activationQueue.then(() => this.activateEnvironmentNow(environmentId))
+    this.activationQueue = activation.then(() => undefined, () => undefined)
+    return activation
+  }
+
+  private async activateEnvironmentNow(environmentId: string): Promise<EnvironmentSnapshot> {
     const environment = this.database.getEnvironment(environmentId)
     if (!environment) throw new DesktopError('NOT_FOUND', 'That environment no longer exists.')
     await this.stopWatchers()
@@ -268,10 +272,9 @@ export class WorkspaceService {
 
   listProjectChildren(projectId: string, parentPath: string, cursor = 0): ProjectTreePage {
     const project = this.requireProject(projectId)
-    const entries = directChildren(this.database.listProjectIndex(project.id), parentPath)
-    const page = entries.slice(cursor, cursor + PROJECT_TREE_PAGE_SIZE)
-    const nextCursor = cursor + page.length < entries.length ? cursor + page.length : undefined
-    return { projectId, parentPath, entries: page, total: entries.length, nextCursor }
+    const result = this.database.listProjectChildren(project.id, toPosixPath(parentPath), cursor, PROJECT_TREE_PAGE_SIZE)
+    const nextCursor = cursor + result.entries.length < result.total ? cursor + result.entries.length : undefined
+    return { projectId, parentPath, entries: result.entries, total: result.total, nextCursor }
   }
 
   searchProjectFiles(query: string, limit = 60): IndexedFileSummary[] {
@@ -332,12 +335,15 @@ export class WorkspaceService {
 
   async openAbsoluteDocument(filePath: string): Promise<DocumentSnapshot> {
     const environmentId = this.requireEnvironment()
+    const originalStats = await lstat(filePath)
+    if (originalStats.isSymbolicLink()) throw new DesktopError('INVALID_PATH', 'Symbolic-link documents are not available.')
     const canonical = await realpath(filePath)
     const fileStats = await stat(canonical)
     if (!fileStats.isFile() || !isMarkdown(canonical)) throw new DesktopError('INVALID_FILE', 'Aladdeen opens .md and .markdown files.')
+    this.assertDocumentSize(fileStats.size)
     const project = this.findContainingProject(canonical)
     const tracked = this.database.upsertTrackedFile(environmentId, canonical, project?.id)
-    if (!project) await this.restartStandaloneWatcher()
+    await this.restartStandaloneWatcher()
     return this.readTracked(tracked)
   }
 
@@ -373,25 +379,43 @@ export class WorkspaceService {
   async saveDocument(request: SaveDocumentRequest): Promise<FileRevision> {
     const tracked = this.requireTrackedFile(request.fileId)
     if (tracked.environmentId !== this.requireEnvironment()) throw new DesktopError('PERMISSION_DENIED', 'That file is not in this environment.')
-    const currentBuffer = await readFile(tracked.path).catch((error: NodeJS.ErrnoException) => {
+    const safePath = await this.resolveTrackedDocumentPath(tracked).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') {
         this.database.setTrackedFileMissing(tracked.id, true)
         throw new DesktopError('NOT_FOUND', 'This file was deleted outside Aladdeen. Save a copy to recover your changes.')
       }
       throw error
     })
+    const nextBuffer = encodeMarkdown(request.content, request.expectedRevision.lineEnding, request.expectedRevision.hasBom)
+    this.assertDocumentSize(nextBuffer.byteLength)
+    const currentStats = await stat(safePath)
+    this.assertDocumentSize(currentStats.size)
+    const currentBuffer = await readFile(safePath)
+    this.assertDocumentSize(currentBuffer.byteLength)
     if (!request.force && sha256(currentBuffer) !== request.expectedRevision.sha256) {
       throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
     }
-    const nextBuffer = encodeMarkdown(request.content, request.expectedRevision.lineEnding, request.expectedRevision.hasBom)
-    this.suppressedWrites.set(tracked.path, Date.now() + 2_000)
-    await writeFileAtomic(tracked.path, nextBuffer, { fsync: true })
-    const nextStats = await stat(tracked.path)
+    await this.resolveTrackedDocumentPath(tracked)
+    if (!request.force) {
+      const latestBuffer = await readFile(safePath)
+      this.assertDocumentSize(latestBuffer.byteLength)
+      if (sha256(latestBuffer) !== request.expectedRevision.sha256) {
+        throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
+      }
+    }
+    this.suppressInternalWrite(safePath)
+    try {
+      await writeFileAtomic(safePath, nextBuffer, { fsync: true })
+    } catch (error) {
+      this.suppressedWrites.delete(safePath)
+      throw error
+    }
+    const nextStats = await stat(safePath)
     this.database.setTrackedFileMissing(tracked.id, false)
     return this.createRevision(nextStats.mtimeMs, nextBuffer, request.expectedRevision.lineEnding, request.expectedRevision.hasBom)
   }
 
-  async createEntry(request: Omit<CreateEntryRequest, 'kind'>): Promise<DocumentSnapshot> {
+  async createEntry(request: CreateEntryRequest): Promise<DocumentSnapshot> {
     const project = this.requireProject(request.projectId)
     let name = validateEntryName(request.name)
     if (!isMarkdown(name)) name += '.md'
@@ -411,7 +435,7 @@ export class WorkspaceService {
     return this.openAbsoluteDocument(target)
   }
 
-  async createFolder(request: Omit<CreateEntryRequest, 'kind'>): Promise<EnvironmentSnapshot> {
+  async createFolder(request: CreateEntryRequest): Promise<EnvironmentSnapshot> {
     const project = this.requireProject(request.projectId)
     const target = await resolveNewPath(project.path, request.parentPath, validateEntryName(request.name))
     await mkdir(target)
@@ -432,17 +456,44 @@ export class WorkspaceService {
       if (error instanceof DesktopError) throw error
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    this.suppressedWrites.set(source, Date.now() + 2_000)
-    this.suppressedWrites.set(target, Date.now() + 2_000)
-    await rename(source, target)
-    const affected: TrackedFileRecord[] = []
-    for (const file of this.database.listTrackedFiles(this.requireEnvironment())) {
-      if (!isPathInside(source, file.path)) continue
-      const nextPath = resolve(target, relative(source, file.path))
-      this.database.updateTrackedFile(file.id, nextPath, project.id)
-      const updated = this.database.getTrackedFile(file.id)
-      if (updated) affected.push(updated)
+    const environmentId = this.requireEnvironment()
+    const changes = this.database.listTrackedFiles(environmentId)
+      .filter((file) => isPathInside(source, file.path))
+      .map((file) => ({ file, nextPath: resolve(target, relative(source, file.path)) }))
+    const movingIds = new Set(changes.map(({ file }) => file.id))
+    for (const change of changes) {
+      const collision = this.database.findTrackedFile(environmentId, change.nextPath)
+      if (collision && !movingIds.has(collision.id)) {
+        throw new DesktopError('ALREADY_EXISTS', 'That destination belongs to another tracked file.')
+      }
     }
+    const suppressedPaths = [
+      source,
+      target,
+      ...changes.flatMap(({ file, nextPath }) => [file.path, nextPath])
+    ]
+    for (const path of suppressedPaths) this.suppressInternalWrite(path)
+    try {
+      await rename(source, target)
+    } catch (error) {
+      for (const path of suppressedPaths) this.suppressedWrites.delete(path)
+      throw error
+    }
+    try {
+      this.database.updateTrackedFiles(changes.map(({ file, nextPath }) => ({
+        id: file.id,
+        path: nextPath,
+        projectId: project.id
+      })))
+    } catch (error) {
+      await rename(target, source).catch(() => undefined)
+      throw error
+    }
+    const affected = changes.flatMap(({ file }) => {
+      const updated = this.database.getTrackedFile(file.id)
+      return updated ? [updated] : []
+    })
+    await this.restartStandaloneWatcher()
     const projects = this.database.listProjects(this.requireEnvironment())
     return {
       projectId: project.id,
@@ -469,6 +520,10 @@ export class WorkspaceService {
 
   getTrackedFilePath(fileId: string): string {
     return this.requireTrackedFile(fileId).path
+  }
+
+  async resolveTrackedFilePath(fileId: string): Promise<string> {
+    return this.resolveTrackedDocumentPath(this.requireTrackedFile(fileId))
   }
 
   markTrackedFileMissing(fileId: string): void {
@@ -501,12 +556,12 @@ export class WorkspaceService {
     const tracked = this.requireTrackedFile(fileId)
     if (tracked.environmentId !== this.requireEnvironment()) throw new DesktopError('PERMISSION_DENIED', 'That asset is not available.')
     if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) throw new DesktopError('INVALID_PATH', 'That image path is not local.')
+    const documentPath = await this.resolveTrackedDocumentPath(tracked)
     const project = tracked.projectId ? this.database.getProject(tracked.projectId) : null
-    const authorityRoot = project?.path ?? dirname(tracked.path)
-    const candidate = resolve(dirname(tracked.path), target.split(/[?#]/)[0] ?? '')
+    const authorityRoot = project?.path ?? dirname(documentPath)
+    const candidate = resolve(dirname(documentPath), target.split(/[?#]/)[0] ?? '')
     if (!isPathInside(authorityRoot, candidate)) throw new DesktopError('INVALID_PATH', 'That image points outside the allowed folder.')
-    const canonical = await realpath(candidate)
-    if (!isPathInside(authorityRoot, canonical)) throw new DesktopError('INVALID_PATH', 'That image symlink leaves the allowed folder.')
+    const canonical = await resolveExistingPath(authorityRoot, toPosixPath(relative(authorityRoot, candidate)))
     const mimeType = IMAGE_MIME_TYPES[extname(canonical).toLowerCase()]
     if (!mimeType) throw new DesktopError('INVALID_FILE', 'That asset type is not supported.')
     const fileStats = await stat(canonical)
@@ -548,9 +603,12 @@ export class WorkspaceService {
   }
 
   private async readTracked(tracked: TrackedFileRecord): Promise<DocumentSnapshot> {
-    const buffer = await readFile(tracked.path)
-    const fileStats = await stat(tracked.path)
-    if (!fileStats.isFile() || !isMarkdown(tracked.path)) throw new DesktopError('INVALID_FILE', 'Aladdeen opens .md and .markdown files.')
+    const safePath = await this.resolveTrackedDocumentPath(tracked)
+    const fileStats = await stat(safePath)
+    this.assertDocumentSize(fileStats.size)
+    const buffer = await readFile(safePath)
+    this.assertDocumentSize(buffer.byteLength)
+    if (!fileStats.isFile() || !isMarkdown(safePath)) throw new DesktopError('INVALID_FILE', 'Aladdeen opens .md and .markdown files.')
     const decoded = decodeMarkdown(buffer)
     this.database.setTrackedFileMissing(tracked.id, false)
     const summary = this.trackedFileSummary({ ...tracked, missing: false })
@@ -571,13 +629,44 @@ export class WorkspaceService {
     return { mtimeMs, size: buffer.length, sha256: sha256(buffer), lineEnding, hasBom }
   }
 
+  private async resolveTrackedDocumentPath(tracked: TrackedFileRecord): Promise<string> {
+    const targetStats = await lstat(tracked.path)
+    if (targetStats.isSymbolicLink()) throw new DesktopError('INVALID_PATH', 'Symbolic-link documents are not available.')
+    const canonical = await realpath(tracked.path)
+    if (canonical !== tracked.path) {
+      throw new DesktopError('INVALID_PATH', 'The document path changed through a symbolic link.')
+    }
+    const project = tracked.projectId ? this.database.getProject(tracked.projectId) : null
+    if (project) {
+      const canonicalRoot = await realpath(project.path)
+      if (canonicalRoot !== project.path || !isPathInside(canonicalRoot, canonical)) {
+        throw new DesktopError('PERMISSION_DENIED', 'The document is no longer inside its registered project.')
+      }
+    }
+    return canonical
+  }
+
+  private assertDocumentSize(size: number): void {
+    if (size > MAX_DOCUMENT_BYTES) {
+      throw new DesktopError('INVALID_FILE', 'This Markdown file is larger than Aladdeen’s 20 MiB document limit.')
+    }
+  }
+
+  private suppressInternalWrite(path: string): void {
+    const until = Date.now() + 2_000
+    this.suppressedWrites.set(path, until)
+    const timer = setTimeout(() => {
+      if ((this.suppressedWrites.get(path) ?? 0) <= Date.now()) this.suppressedWrites.delete(path)
+    }, 2_100)
+    timer.unref?.()
+  }
+
   private async projectSummary(project: ProjectRecord): Promise<ProjectSummary> {
     return {
       id: project.id,
       environmentId: project.environmentId,
       name: project.name,
       displayPath: abbreviatePath(project.path),
-      tree: [],
       expandedPaths: this.database.getProjectExpandedPaths(project.id),
       scopeMode: project.scopeMode,
       includePaths: project.includePaths,
@@ -613,7 +702,7 @@ export class WorkspaceService {
 
     while (directories.length > 0) {
       const directory = directories.pop()!
-      const entries = await readdir(directory.fullPath, { withFileTypes: true }).catch(() => [])
+      const entries = await readdir(directory.fullPath, { withFileTypes: true })
       for (const entry of entries) {
         if (entry.isSymbolicLink()) continue
         const childRelative = directory.relativePath
@@ -621,13 +710,13 @@ export class WorkspaceService {
           : entry.name
         const fullPath = resolveSyntacticPath(rootPath, childRelative)
         if (entry.isDirectory()) {
-          if (IGNORED_DIRECTORY_NAMES.has(entry.name) || entry.name.startsWith('.')) continue
+          if (IGNORED_DIRECTORY_NAMES.has(entry.name)) continue
           directories.push({ fullPath, relativePath: childRelative })
           continue
         }
         if (!entry.isFile() || !isMarkdown(entry.name)) continue
-        const fileStats = await stat(fullPath).catch(() => null)
-        if (!fileStats?.isFile()) continue
+        const fileStats = await stat(fullPath)
+        if (!fileStats.isFile()) continue
         files.push({
           projectId: '',
           relativePath: childRelative,
@@ -693,7 +782,7 @@ export class WorkspaceService {
       awaitWriteFinish: { stabilityThreshold: 180, pollInterval: 40 },
       ignored: (path, pathStats) => {
         const relation = relative(project.path, path)
-        if (relation && relation.split(sep).some((part) => IGNORED_DIRECTORY_NAMES.has(part) || part.startsWith('.'))) return true
+        if (relation && relation.split(sep).some((part) => IGNORED_DIRECTORY_NAMES.has(part))) return true
         if (!relation || !pathStats) return false
         const normalized = toPosixPath(relation)
         if (pathStats.isDirectory()) return normalizePatterns(project.excludePatterns).some((pattern) => matchesGlob(`${normalized}/`, pattern))
@@ -708,31 +797,41 @@ export class WorkspaceService {
     await this.standaloneWatcher?.close()
     this.standaloneWatcher = null
     if (!this.environmentId) return
-    const standalone = this.database.listTrackedFiles(this.environmentId).filter((file) => !file.projectId)
-    if (standalone.length === 0) return
-    const watcher = chokidar.watch(standalone.map((file) => file.path), {
+    const exactFiles = this.database.listTrackedFiles(this.environmentId).filter((file) => {
+      if (!file.projectId) return true
+      const project = this.database.getProject(file.projectId)
+      if (!project || project.archived || !isPathInside(project.path, file.path)) return true
+      return !isIncludedByScope(toPosixPath(relative(project.path, file.path)), project)
+    })
+    if (exactFiles.length === 0) return
+    const watchedEnvironmentId = this.environmentId
+    const watcher = chokidar.watch(exactFiles.map((file) => file.path), {
       ignoreInitial: true,
       followSymlinks: false,
       awaitWriteFinish: { stabilityThreshold: 180, pollInterval: 40 }
     })
     watcher.on('all', (eventName, fullPath) => {
-      const file = this.database.listTrackedFiles(this.requireEnvironment()).find((candidate) => candidate.path === fullPath)
+      if (!watchedEnvironmentId || this.environmentId !== watchedEnvironmentId) return
+      const file = this.database.listTrackedFiles(watchedEnvironmentId).find((candidate) => candidate.path === fullPath)
       if (!file) return
       if (this.consumeSuppressed(fullPath)) return
-      const type: EnvironmentEvent['type'] = eventName.startsWith('unlink') ? 'removed' : 'changed'
+      const type: EnvironmentEvent['type'] =
+        eventName.startsWith('unlink') ? 'removed' : eventName === 'add' ? 'added' : 'changed'
       if (type === 'removed') this.database.setTrackedFileMissing(file.id, true)
+      else this.database.setTrackedFileMissing(file.id, false)
       this.onEvent({ type, fileId: file.id, isDirectory: false })
     })
     this.standaloneWatcher = watcher
   }
 
   private handleProjectEvent(project: ProjectRecord, eventName: string, fullPath: string): void {
-    if (!isPathInside(project.path, fullPath) || this.consumeSuppressed(fullPath)) return
+    if (project.environmentId !== this.environmentId || !isPathInside(project.path, fullPath) || this.consumeSuppressed(fullPath)) return
     const isDirectory = eventName === 'addDir' || eventName === 'unlinkDir'
     if (!isDirectory && !isMarkdown(fullPath)) return
     const file = this.database.listTrackedFiles(project.environmentId).find((candidate) => candidate.path === fullPath)
     const type: EnvironmentEvent['type'] = eventName === 'change' ? 'changed' : eventName.startsWith('unlink') ? 'removed' : 'added'
     if (file && type === 'removed') this.database.setTrackedFileMissing(file.id, true)
+    if (file && type === 'added') this.database.setTrackedFileMissing(file.id, false)
     this.onEvent({ type, projectId: project.id, fileId: file?.id, relativePath: toPosixPath(relative(project.path, fullPath)), isDirectory })
     if (type !== 'changed' || isDirectory) this.scheduleProjectReindex(project)
   }
@@ -752,8 +851,9 @@ export class WorkspaceService {
   private consumeSuppressed(fullPath: string): boolean {
     const until = this.suppressedWrites.get(fullPath)
     if (!until) return false
+    if (until > Date.now()) return true
     this.suppressedWrites.delete(fullPath)
-    return until > Date.now()
+    return false
   }
 
   private async stopWatchers(): Promise<void> {
@@ -813,34 +913,6 @@ function filterIndexedFiles(
   project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns'>
 ): ProjectIndexFileRecord[] {
   return files.filter((file) => isIncludedByScope(file.relativePath, project))
-}
-
-function directChildren(files: ProjectIndexFileRecord[], parentPath: string): WorkspaceTreeNode[] {
-  const normalizedParent = toPosixPath(parentPath).replace(/^\/|\/$/g, '')
-  const prefix = normalizedParent ? `${normalizedParent}/` : ''
-  const directories = new Map<string, WorkspaceTreeNode>()
-  const entries: WorkspaceTreeNode[] = []
-  for (const file of files) {
-    if (!file.relativePath.startsWith(prefix)) continue
-    const remaining = file.relativePath.slice(prefix.length)
-    if (!remaining) continue
-    const slash = remaining.indexOf('/')
-    if (slash === -1) {
-      entries.push({ id: file.relativePath, name: file.name, path: file.relativePath, kind: 'file' })
-      continue
-    }
-    const name = remaining.slice(0, slash)
-    const path = prefix ? `${normalizedParent}/${name}` : name
-    const existing = directories.get(path)
-    if (existing) {
-      existing.descendantCount = (existing.descendantCount ?? 0) + 1
-    } else {
-      const node: WorkspaceTreeNode = { id: path, name, path, kind: 'directory', descendantCount: 1 }
-      directories.set(path, node)
-      entries.push(node)
-    }
-  }
-  return entries.sort(compareTreeNodes)
 }
 
 function buildScopeTree(files: ProjectIndexFileRecord[]): ProjectScopeNode[] {

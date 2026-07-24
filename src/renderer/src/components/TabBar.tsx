@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { FileText, X } from 'lucide-react'
 import {
   documentTabClasses,
@@ -14,6 +15,7 @@ export function TabBar(): React.JSX.Element | null {
   const setActiveFileId = useAppStore((state) => state.setActiveFileId)
   const closeDocument = useAppStore((state) => state.closeDocument)
   const reorderDocument = useAppStore((state) => state.reorderDocument)
+  const tabs = useRef(new Map<string, HTMLButtonElement>())
 
   if (documents.length === 0) return null
 
@@ -22,11 +24,10 @@ export function TabBar(): React.JSX.Element | null {
       {documents.map((document) => {
         const active = activeFileId === document.id
         return (
-          <button
+          <div
             key={document.id}
+            role="presentation"
             className={documentTabClasses(active)}
-            role="tab"
-            aria-selected={active}
             draggable
             onDragStart={(event) => {
               event.dataTransfer.effectAllowed = 'move'
@@ -38,33 +39,51 @@ export function TabBar(): React.JSX.Element | null {
               const source = event.dataTransfer.getData('text/aladdeen-tab')
               if (source) reorderDocument(source, document.id)
             }}
-            onClick={() => setActiveFileId(document.id)}
             title={document.fullPath}
           >
-            <FileText size={14} />
-            <span className={tabNameClasses}>{document.name}</span>
-            <span className={tabStateClasses(document.status)} aria-label={document.status}>
-              {isDocumentDirty(document) ? '•' : ''}
-            </span>
-            <span
+            <button
+              type="button"
+              role="tab"
+              aria-selected={active}
+              tabIndex={active ? 0 : -1}
+              ref={(element) => {
+                if (element) tabs.current.set(document.id, element)
+                else tabs.current.delete(document.id)
+              }}
+              className="col-span-3 grid h-full min-w-0 grid-cols-subgrid items-center gap-[6px] border-0 bg-transparent p-0 text-inherit"
+              onClick={() => setActiveFileId(document.id)}
+              onKeyDown={(event) => {
+                const index = documents.findIndex((candidate) => candidate.id === document.id)
+                let targetIndex: number | undefined
+                if (event.key === 'ArrowLeft') targetIndex = Math.max(0, index - 1)
+                if (event.key === 'ArrowRight') targetIndex = Math.min(documents.length - 1, index + 1)
+                if (event.key === 'Home') targetIndex = 0
+                if (event.key === 'End') targetIndex = documents.length - 1
+                const target = targetIndex === undefined ? undefined : documents[targetIndex]
+                if (!target) return
+                event.preventDefault()
+                setActiveFileId(target.id)
+                tabs.current.get(target.id)?.focus()
+              }}
+            >
+              <FileText size={14} />
+              <span className={tabNameClasses}>{document.name}</span>
+              <span className={tabStateClasses(document.status)} aria-label={document.status}>
+                {isDocumentDirty(document) ? '•' : ''}
+              </span>
+            </button>
+            <button
+              type="button"
               className={tabCloseClasses(active)}
-              role="button"
-              tabIndex={0}
               aria-label={`Close ${document.name}`}
               onClick={(event) => {
                 event.stopPropagation()
                 void closeDocument(document.id)
               }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.stopPropagation()
-                  void closeDocument(document.id)
-                }
-              }}
             >
               <X size={13} />
-            </span>
-          </button>
+            </button>
+          </div>
         )
       })}
     </div>

@@ -41,6 +41,11 @@
   --text-soft: #61616e;
   --text-muted: #92929e;
   --accent: #5b55e7;
+  --accent-indigo: #5b55e7;
+  --accent-blue: #2878d4;
+  --accent-emerald: #198a64;
+  --accent-amber: #b46b0b;
+  --accent-rose: #c74268;
   --accent-soft: #ebeafd;
   --accent-muted: #cbc8fa;
   --accent-contrast: #ffffff;
@@ -110,6 +115,10 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
+}
+
+.preview-scroll {
+  scrollbar-gutter: stable;
 }
 
 body {
@@ -939,6 +948,7 @@ body.is-resizing-sidebar * {
 /* CodeMirror vendor internals and source-reveal effects stay selector-based. */
 .editor-pane .cm-theme-light,
 .editor-pane .cm-theme-dark,
+.editor-pane .cm-theme,
 .editor-pane .cm-editor {
   height: 100%;
 }
@@ -950,9 +960,61 @@ body.is-resizing-sidebar * {
 }
 
 .editor-pane .cm-scroller {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
   padding: 18px 0 40px;
+  touch-action: pan-x pan-y;
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   line-height: 1.65;
+}
+
+.editor-pane .cm-scroller::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.editor-scrollbar {
+  position: absolute;
+  z-index: 12;
+  top: 5px;
+  right: 2px;
+  bottom: 5px;
+  width: 10px;
+  border-radius: 999px;
+  opacity: 0;
+  outline: 0;
+  touch-action: none;
+  transition: opacity 120ms ease;
+}
+
+.editor-scrollbar[data-scrollable='true'] {
+  opacity: .58;
+}
+
+.editor-scrollbar[data-scrollable='true']:hover,
+.editor-scrollbar[data-scrollable='true']:focus-visible {
+  opacity: 1;
+}
+
+.editor-scrollbar:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.editor-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  width: 6px;
+  min-height: 36px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  cursor: default;
+  will-change: transform;
+}
+
+.editor-scrollbar:hover .editor-scrollbar-thumb {
+  background: var(--text-muted);
 }
 
 .editor-pane .cm-content {

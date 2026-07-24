@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AladdeenApi, OpenDocument } from '@shared/contracts'
 import { MarkdownPreview } from '@renderer/components/MarkdownPreview'
+import { MarkdownImage } from '@renderer/components/MarkdownImage'
 
 const document: OpenDocument = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -36,5 +37,17 @@ describe('Markdown preview', () => {
     )
     expect(screen.getByText('Remote')).toBeInTheDocument()
     expect(container.querySelector('script')).toBeNull()
+  })
+
+  it('clears a local-image failure when the document or source changes', () => {
+    const view = render(<MarkdownImage documentId="first-document" src="./missing.png" alt="First" />)
+    fireEvent.error(screen.getByAltText('First'))
+    expect(screen.getByRole('img', { name: 'Image unavailable: First' })).toBeInTheDocument()
+
+    view.rerender(<MarkdownImage documentId="second-document" src="./available.png" alt="Second" />)
+    expect(screen.getByAltText('Second')).toHaveAttribute(
+      'src',
+      'aladdeen-asset://document/second-document?path=.%2Favailable.png'
+    )
   })
 })

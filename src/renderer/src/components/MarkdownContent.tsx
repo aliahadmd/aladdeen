@@ -127,7 +127,7 @@ export function MarkdownContent({
       img({ src, alt, title, width, height, node: _node, ...props }) {
         return (
           <MarkdownImage
-            key={typeof src === 'string' ? src : 'blocked-image'}
+            key={`${documentId}:${typeof src === 'string' ? src : 'blocked-image'}`}
             documentId={documentId}
             src={typeof src === 'string' ? src : undefined}
             alt={alt ?? ''}

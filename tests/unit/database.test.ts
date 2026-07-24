@@ -34,6 +34,13 @@ describe('application metadata database', () => {
       name: 'hello.md',
       mtimeMs: 100,
       size: 12
+    }, {
+      projectId: project.id,
+      relativePath: 'guides/start.md',
+      parentPath: 'guides',
+      name: 'start.md',
+      mtimeMs: 101,
+      size: 14
     }])
     database.updateProject(project.id, {
       scopeMode: 'selected',
@@ -62,7 +69,29 @@ describe('application metadata database', () => {
       groupName: 'Writing',
       pinned: true
     })
-    expect(database.listProjectIndex(project.id).map((entry) => entry.relativePath)).toEqual(['hello.md'])
+    expect(database.listProjectIndex(project.id).map((entry) => entry.relativePath)).toEqual(['guides/start.md', 'hello.md'])
+    expect(database.listProjectChildren(project.id, '', 0, 1)).toEqual({
+      total: 2,
+      entries: [{
+        id: 'guides',
+        path: 'guides',
+        name: 'guides',
+        kind: 'directory',
+        descendantCount: 1
+      }]
+    })
+    expect(database.listProjectChildren(project.id, 'guides', 0, 10).entries[0]).toMatchObject({
+      path: 'guides/start.md',
+      kind: 'file'
+    })
+    const lastValidIndexTime = database.getProject(project.id)?.indexedAt
+    database.setProjectIndexStatus(project.id, 'indexing')
+    database.setProjectIndexStatus(project.id, 'error')
+    expect(database.getProject(project.id)).toMatchObject({
+      indexStatus: 'error',
+      indexedAt: lastValidIndexTime
+    })
+    expect(database.listProjectIndex(project.id)).toHaveLength(2)
     expect(database.searchProjectIndex(environment.id, 'hello', 10)[0]?.projectName).toBe('notes')
     expect(database.listTrackedFiles(environment.id)[0]?.id).toBe(file.id)
     expect(database.getProjectExpandedPaths(project.id)).toEqual(['guides'])
@@ -78,6 +107,43 @@ describe('application metadata database', () => {
     expect(() => database.createEnvironment('writing')).toThrow(/already exists/i)
     database.close()
   })
+
+  it('paginates direct SQL children without loading a 50,000-file index', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-large-'))
+    created.push(directory)
+    const database = new AppDatabase(directory)
+    const environment = database.createEnvironment('Large library')
+    const project = database.addProject(environment.id, '/library', 'library')
+    database.replaceProjectIndex(project.id, Array.from({ length: 50_000 }, (_, index) => {
+      const folder = `section-${String(Math.floor(index / 500)).padStart(3, '0')}`
+      const name = `document-${String(index).padStart(5, '0')}.md`
+      return {
+        projectId: project.id,
+        relativePath: `${folder}/${name}`,
+        parentPath: folder,
+        name,
+        mtimeMs: index,
+        size: 100
+      }
+    }))
+
+    const roots = database.listProjectChildren(project.id, '', 20, 10)
+    expect(roots.total).toBe(100)
+    expect(roots.entries).toHaveLength(10)
+    expect(roots.entries[0]).toMatchObject({
+      path: 'section-020',
+      kind: 'directory',
+      descendantCount: 500
+    })
+    const files = database.listProjectChildren(project.id, 'section-020', 125, 25)
+    expect(files.total).toBe(500)
+    expect(files.entries).toHaveLength(25)
+    expect(files.entries[0]).toMatchObject({
+      path: 'section-020/document-10125.md',
+      kind: 'file'
+    })
+    database.close()
+  }, 15_000)
 
   it('imports legacy workspace metadata into a Personal environment', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))

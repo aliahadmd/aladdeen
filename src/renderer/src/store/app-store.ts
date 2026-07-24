@@ -20,13 +20,20 @@ import type {
 import { findNearestLiteralMatch, matchesLiteral } from '@shared/search'
 
 type MobilePane = 'editor' | 'preview'
+type BootStatus = 'booting' | 'ready' | 'error'
+
+interface EditorViewport {
+  scrollTop: number
+  selection: number
+}
 
 interface AppState {
-  initialized: boolean
+  bootStatus: BootStatus
   environment: EnvironmentSnapshot | null
   documents: OpenDocument[]
   activeFileId: string | null
   settings: AppSettings
+  persistedSettings: AppSettings
   editing: boolean
   mobilePane: MobilePane
   sidebarOpen: boolean
@@ -37,6 +44,8 @@ interface AppState {
   selectedProjectId: string | null
   selectedFolderPath: string
   initialize(): Promise<void>
+  flushDocuments(): Promise<boolean>
+  saveDirtyCopies(): Promise<boolean>
   createEnvironment(name: string): Promise<boolean>
   renameEnvironment(name: string): Promise<boolean>
   removeEnvironment(): Promise<boolean>
@@ -64,6 +73,10 @@ interface AppState {
   setActiveFileId(fileId: string): void
   updateContent(fileId: string, content: string): void
   updateEditorView(fileId: string, scrollTop: number, selection: number): void
+  getEditorView(fileId: string): EditorViewport | undefined
+  consumeEditorReveal(fileId: string, revealId: number): void
+  updatePreviewScroll(fileId: string, scrollTop: number): void
+  getPreviewScroll(fileId: string): number
   saveDocument(fileId: string, force?: boolean): Promise<boolean>
   closeDocument(fileId: string, discard?: boolean): Promise<void>
   reorderDocument(fromId: string, toId: string): void
@@ -85,7 +98,22 @@ interface AppState {
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const saveOperations = new Map<string, Promise<boolean>>()
+const editorViewports = new Map<string, EditorViewport>()
+const previewScrollPositions = new Map<string, number>()
 let editorRevealId = 0
+let initializePromise: Promise<void> | null = null
+let environmentRequestId = 0
+let settingsRequestId = 0
+let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settings.update>>> = Promise.resolve({
+  ok: true,
+  value: {
+    theme: 'system',
+    accent: 'indigo',
+    sidebarWidth: 320,
+    sidebarCollapsed: false
+  }
+})
 
 function withoutCancelled(error: { code: string; message: string }): void {
   if (error.code !== 'CANCELLED') toast.error(error.message)
@@ -113,7 +141,7 @@ function mergeTrackedMetadata(documents: OpenDocument[], snapshot: EnvironmentSn
       fullPath: file.fullPath,
       projectId: file.projectId,
       relativePath: file.relativePath,
-      deleted: file.missing || document.deleted
+      deleted: file.missing
     }
   })
 }
@@ -134,6 +162,47 @@ export const useAppStore = create<AppState>((set, get) => {
     return true
   }
 
+  const saveDocumentNow = async (fileId: string, force = false): Promise<boolean> => {
+    const timer = saveTimers.get(fileId)
+    if (timer) clearTimeout(timer)
+    saveTimers.delete(fileId)
+    const document = get().documents.find((candidate) => candidate.id === fileId)
+    if (!document || (document.content === document.savedContent && !force)) return true
+    if (document.deleted && !force) {
+      set((state) => ({ documents: state.documents.map((item) => item.id === fileId
+        ? { ...item, status: 'error', error: 'This file was deleted outside Aladdeen.' }
+        : item) }))
+      return false
+    }
+    const snapshotContent = document.content
+    set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'saving' } : item) }))
+    const result = await window.aladdeen.document.save({ fileId, content: snapshotContent, expectedRevision: document.revision, force })
+    if (!result.ok) {
+      if (result.error.code === 'CONFLICT') {
+        set((state) => ({
+          conflictFileId: fileId,
+          documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'conflict', error: result.error.message } : item)
+        }))
+      } else {
+        set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'error', error: result.error.message } : item) }))
+        toast.error(result.error.message)
+      }
+      return false
+    }
+    const latest = get().documents.find((candidate) => candidate.id === fileId)
+    const hasNewerEdits = latest?.content !== snapshotContent
+    set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? {
+      ...item,
+      revision: result.value,
+      savedContent: snapshotContent,
+      status: hasNewerEdits ? 'editing' : 'saved',
+      error: undefined,
+      deleted: false
+    } : item) }))
+    if (hasNewerEdits) saveTimers.set(fileId, setTimeout(() => void get().saveDocument(fileId), 500))
+    return true
+  }
+
   const ingestDocument = async (snapshot: DocumentSnapshot): Promise<void> => {
     const existing = get().documents.find((document) => document.id === snapshot.id)
     if (existing) {
@@ -150,11 +219,17 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   return {
-    initialized: false,
+    bootStatus: 'booting',
     environment: null,
     documents: [],
     activeFileId: null,
     settings: {
+      theme: 'system',
+      accent: 'indigo',
+      sidebarWidth: 320,
+      sidebarCollapsed: false
+    },
+    persistedSettings: {
       theme: 'system',
       accent: 'indigo',
       sidebarWidth: 320,
@@ -170,19 +245,48 @@ export const useAppStore = create<AppState>((set, get) => {
     selectedFolderPath: '',
 
     async initialize() {
-      const result = await window.aladdeen.app.bootstrap()
-      if (!result.ok) {
-        toast.error(result.error.message)
-        set({ initialized: true })
-        return
-      }
-      set({
-        settings: result.value.settings,
-        pendingOpenRequest: result.value.pendingOpenRequest,
-        initialized: true
+      if (initializePromise) return initializePromise
+      initializePromise = (async () => {
+        set({ bootStatus: 'booting' })
+        const result = await window.aladdeen.app.bootstrap()
+        if (!result.ok) {
+          toast.error(result.error.message)
+          set({ bootStatus: 'error' })
+          return
+        }
+        set({
+          settings: result.value.settings,
+          persistedSettings: result.value.settings,
+          pendingOpenRequest: result.value.pendingOpenRequest
+        })
+        if (result.value.environment) await get().loadEnvironment(result.value.environment)
+        if (result.value.environment && result.value.pendingOpenRequest) {
+          await get().acceptSystemOpenFile(result.value.pendingOpenRequest)
+        }
+        set({ bootStatus: 'ready' })
+      })().finally(() => {
+        initializePromise = null
       })
-      if (result.value.environment) await get().loadEnvironment(result.value.environment)
-      if (result.value.environment && result.value.pendingOpenRequest) await get().acceptSystemOpenFile(result.value.pendingOpenRequest)
+      return initializePromise
+    },
+
+    async flushDocuments() {
+      return flushDocuments()
+    },
+
+    async saveDirtyCopies() {
+      const dirty = get().documents.filter(isDocumentDirty)
+      for (const document of dirty) {
+        const result = await window.aladdeen.document.saveCopy(document.id, document.content)
+        if (!result.ok) {
+          withoutCancelled(result.error)
+          return false
+        }
+      }
+      if (dirty.length > 0) {
+        toast.success(dirty.length === 1 ? 'A copy of your edits was saved.' : 'Copies of your edits were saved.')
+      }
+      return true
     },
 
     async createEnvironment(name) {
@@ -242,19 +346,25 @@ export const useAppStore = create<AppState>((set, get) => {
       if (environmentId === get().environment?.environment.id) return
       if (!(await flushDocuments())) return
       await persistOpenState()
+      const requestId = ++environmentRequestId
       const result = await window.aladdeen.environments.switch(environmentId)
       if (!result.ok) return withoutCancelled(result.error)
+      if (requestId !== environmentRequestId) return
       await get().loadEnvironment(result.value)
     },
 
     async loadEnvironment(snapshot) {
+      const requestId = ++environmentRequestId
       saveTimers.forEach((timer) => clearTimeout(timer))
       saveTimers.clear()
-      const documents: OpenDocument[] = []
-      for (const fileId of snapshot.openFileIds) {
-        const opened = await window.aladdeen.document.open({ kind: 'tracked', fileId })
-        if (opened.ok) documents.push(openDocumentFromSnapshot(opened.value))
-      }
+      saveOperations.clear()
+      editorViewports.clear()
+      previewScrollPositions.clear()
+      const opened = await mapWithConcurrency(snapshot.openFileIds, 4, async (fileId) =>
+        window.aladdeen.document.open({ kind: 'tracked', fileId })
+      )
+      if (requestId !== environmentRequestId) return
+      const documents = opened.flatMap((result) => result.ok ? [openDocumentFromSnapshot(result.value)] : [])
       const preferred = snapshot.activeFileId && documents.some((document) => document.id === snapshot.activeFileId)
         ? snapshot.activeFileId
         : documents.at(-1)?.id ?? null
@@ -271,10 +381,15 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async refreshEnvironment() {
-      if (!get().environment) return
+      const environmentId = get().environment?.environment.id
+      if (!environmentId) return
       const result = await window.aladdeen.environments.refresh()
-      if (result.ok) set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value) }))
-      else if (result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
+      if (!result.ok) {
+        if (result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
+        return
+      }
+      if (result.value.environment.id !== get().environment?.environment.id) return
+      set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value) }))
     },
 
     async createProject(name) {
@@ -485,57 +600,45 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     updateEditorView(fileId, scrollTop, selection) {
+      editorViewports.set(fileId, { scrollTop, selection })
+    },
+
+    getEditorView(fileId) {
+      return editorViewports.get(fileId)
+    },
+
+    consumeEditorReveal(fileId, revealId) {
+      if (!get().documents.some((document) =>
+        document.id === fileId && document.editorReveal?.id === revealId
+      )) return
       set((state) => ({
-        documents: state.documents.map((document) => document.id === fileId
-          ? {
-              ...document,
-              editorScrollTop: scrollTop,
-              editorSelection: selection,
-              editorReveal: undefined
-            }
-          : document)
+        documents: state.documents.map((document) =>
+          document.id === fileId && document.editorReveal?.id === revealId
+            ? { ...document, editorReveal: undefined }
+            : document
+        )
       }))
     },
 
+    updatePreviewScroll(fileId, scrollTop) {
+      previewScrollPositions.set(fileId, scrollTop)
+    },
+
+    getPreviewScroll(fileId) {
+      return previewScrollPositions.get(fileId) ?? 0
+    },
+
     async saveDocument(fileId, force = false) {
-      const timer = saveTimers.get(fileId)
-      if (timer) clearTimeout(timer)
-      saveTimers.delete(fileId)
-      const document = get().documents.find((candidate) => candidate.id === fileId)
-      if (!document || (document.content === document.savedContent && !force)) return true
-      if (document.deleted && !force) {
-        set((state) => ({ documents: state.documents.map((item) => item.id === fileId
-          ? { ...item, status: 'error', error: 'This file was deleted outside Aladdeen.' }
-          : item) }))
-        return false
+      const previous = saveOperations.get(fileId) ?? Promise.resolve(true)
+      const operation = previous
+        .catch(() => false)
+        .then(() => saveDocumentNow(fileId, force))
+      saveOperations.set(fileId, operation)
+      try {
+        return await operation
+      } finally {
+        if (saveOperations.get(fileId) === operation) saveOperations.delete(fileId)
       }
-      const snapshotContent = document.content
-      set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'saving' } : item) }))
-      const result = await window.aladdeen.document.save({ fileId, content: snapshotContent, expectedRevision: document.revision, force })
-      if (!result.ok) {
-        if (result.error.code === 'CONFLICT') {
-          set((state) => ({
-            conflictFileId: fileId,
-            documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'conflict', error: result.error.message } : item)
-          }))
-        } else {
-          set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'error', error: result.error.message } : item) }))
-          toast.error(result.error.message)
-        }
-        return false
-      }
-      const latest = get().documents.find((candidate) => candidate.id === fileId)
-      const hasNewerEdits = latest?.content !== snapshotContent
-      set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? {
-        ...item,
-        revision: result.value,
-        savedContent: snapshotContent,
-        status: hasNewerEdits ? 'editing' : 'saved',
-        error: undefined,
-        deleted: false
-      } : item) }))
-      if (hasNewerEdits) saveTimers.set(fileId, setTimeout(() => void get().saveDocument(fileId), 500))
-      return true
     },
 
     async closeDocument(fileId, discard = false) {
@@ -616,7 +719,7 @@ export const useAppStore = create<AppState>((set, get) => {
         await get().refreshEnvironment()
         return
       }
-      if (!document || event.type !== 'changed') return
+      if (!document || (event.type !== 'changed' && event.type !== 'added')) return
       if (isDocumentDirty(document) || document.status === 'saving') {
         set((state) => ({
           conflictFileId: event.fileId ?? null,
@@ -627,7 +730,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const result = await window.aladdeen.document.read(event.fileId)
       if (!result.ok) return
       set((state) => ({ documents: state.documents.map((item) => item.id === event.fileId
-        ? { ...item, ...result.value, savedContent: result.value.content, status: 'saved', error: undefined }
+        ? { ...item, ...result.value, savedContent: result.value.content, status: 'saved', deleted: false, error: undefined }
         : item) }))
       toast.info(`${document.name} was updated from disk.`)
     },
@@ -685,10 +788,23 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async updateSettings(next) {
-      const settings = { ...get().settings, ...next }
+      const previous = get().settings
+      const settings = { ...previous, ...next }
+      const requestId = ++settingsRequestId
       set({ settings })
-      const result = await window.aladdeen.settings.update(settings)
-      if (!result.ok) toast.error(result.error.message)
+      settingsWriteQueue = settingsWriteQueue.then(
+        () => window.aladdeen.settings.update(settings),
+        () => window.aladdeen.settings.update(settings)
+      )
+      const result = await settingsWriteQueue
+      if (result.ok) set({ persistedSettings: result.value })
+      if (requestId !== settingsRequestId) return
+      if (!result.ok) {
+        set({ settings: get().persistedSettings })
+        toast.error(result.error.message)
+        return
+      }
+      set({ settings: result.value })
     },
 
     setSelectedLocation(projectId, folderPath = '') {
@@ -742,3 +858,21 @@ export const accentOptions: Array<{ value: Accent; label: string }> = [
   { value: 'amber', label: 'Amber' },
   { value: 'rose', label: 'Rose' }
 ]
+
+async function mapWithConcurrency<T, R>(
+  values: T[],
+  concurrency: number,
+  operation: (value: T) => Promise<R>
+): Promise<R[]> {
+  const results = new Array<R>(values.length)
+  let cursor = 0
+  const workers = Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+    while (cursor < values.length) {
+      const index = cursor
+      cursor += 1
+      results[index] = await operation(values[index]!)
+    }
+  })
+  await Promise.all(workers)
+  return results
+}

@@ -1,4 +1,19 @@
 import { z } from 'zod'
+import { MAX_DOCUMENT_BYTES, MAX_SEARCH_DOCUMENT_BYTES } from './limits'
+
+const searchBufferSchema = z.string()
+  .max(MAX_SEARCH_DOCUMENT_BYTES)
+  .refine(
+    (content) => Buffer.byteLength(content, 'utf8') <= MAX_SEARCH_DOCUMENT_BYTES,
+    'Search buffer exceeds the 10 MiB limit.'
+  )
+
+export const documentContentSchema = z.string()
+  .max(MAX_DOCUMENT_BYTES)
+  .refine(
+    (content) => Buffer.byteLength(content, 'utf8') <= MAX_DOCUMENT_BYTES,
+    'Document exceeds the 20 MiB limit.'
+  )
 
 export const idSchema = z.string().uuid()
 
@@ -36,11 +51,14 @@ export const globalSearchRequestSchema = z.object({
   scope: globalSearchScopeSchema,
   bufferOverrides: z.array(z.object({
     fileId: idSchema,
-    content: z.string().max(10 * 1024 * 1024)
+    content: searchBufferSchema
   })).max(100)
 }).superRefine((value, context) => {
-  const totalCharacters = value.bufferOverrides.reduce((total, override) => total + override.content.length, 0)
-  if (totalCharacters > 64 * 1024 * 1024) {
+  const totalBytes = value.bufferOverrides.reduce(
+    (total, override) => total + Buffer.byteLength(override.content, 'utf8'),
+    0
+  )
+  if (totalBytes > 64 * 1024 * 1024) {
     context.addIssue({
       code: 'custom',
       path: ['bufferOverrides'],
@@ -51,7 +69,7 @@ export const globalSearchRequestSchema = z.object({
 
 export const saveDocumentSchema = z.object({
   fileId: idSchema,
-  content: z.string().max(20_000_000),
+  content: documentContentSchema,
   expectedRevision: fileRevisionSchema,
   force: z.boolean().optional()
 })
@@ -112,7 +130,7 @@ export const settingsSchema = z.object({
 export const exportRequestSchema = z.object({
   fileId: idSchema,
   title: z.string().trim().min(1).max(255),
-  content: z.string().max(20_000_000),
+  content: documentContentSchema,
   format: z.enum(['pdf', 'docx'])
 })
 

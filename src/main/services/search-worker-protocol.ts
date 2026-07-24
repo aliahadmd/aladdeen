@@ -3,8 +3,9 @@ import type {
   GlobalSearchMatch,
   GlobalSearchSummary
 } from '@shared/contracts'
+import { MAX_SEARCH_DOCUMENT_BYTES } from '@shared/limits'
 
-export const SEARCH_FILE_SIZE_LIMIT = 10 * 1024 * 1024
+export const SEARCH_FILE_SIZE_LIMIT = MAX_SEARCH_DOCUMENT_BYTES
 export const SEARCH_MATCH_LIMIT = 500
 export const SEARCH_MATCHES_PER_FILE_LIMIT = 50
 

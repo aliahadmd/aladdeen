@@ -96,11 +96,17 @@ export function MermaidDiagram({
   theme,
   sourceAttributes
 }: MermaidDiagramProps): React.JSX.Element {
-  const [result, setResult] = useState<MermaidResult>({})
+  const cacheKey = `${theme}\0${source}`
+  const [result, setResult] = useState<MermaidResult>(() => diagramCache.get(cacheKey) ?? {})
 
   useEffect(() => {
     let cancelled = false
-    setResult({})
+    const cached = diagramCache.get(cacheKey)
+    if (cached) {
+      setResult(cached)
+      return
+    }
+    setResult((current) => current.svg ? current : {})
     const timer = window.setTimeout(() => {
       void renderMermaid(source, theme).then((next) => {
         if (!cancelled) setResult(next)
@@ -110,7 +116,7 @@ export function MermaidDiagram({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [source, theme])
+  }, [cacheKey, source, theme])
 
   if (result.error) {
     return (

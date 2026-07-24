@@ -1,4 +1,4 @@
-import { realpath, stat } from 'node:fs/promises'
+import { lstat, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { DesktopError } from '@main/errors'
 
@@ -20,8 +20,12 @@ export function resolveSyntacticPath(root: string, relativePath: string): string
 
 export async function resolveExistingPath(root: string, relativePath: string): Promise<string> {
   const candidate = resolveSyntacticPath(root, relativePath)
+  const candidateStats = await lstat(candidate)
+  if (candidateStats.isSymbolicLink()) {
+    throw new DesktopError('INVALID_PATH', 'Symbolic links are not available in this workspace.')
+  }
   const canonical = await realpath(candidate)
-  if (!isPathInside(root, canonical)) {
+  if (canonical !== candidate || !isPathInside(root, canonical)) {
     throw new DesktopError('INVALID_PATH', 'Symbolic links outside the workspace are not available.')
   }
   return canonical

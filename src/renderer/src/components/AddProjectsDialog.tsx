@@ -156,7 +156,11 @@ export function AddProjectsDialog(): React.JSX.Element {
                     <ProjectScopeTree
                       nodes={active.tree}
                       selected={draft.selected}
+                      excludePatterns={parsePatterns(draft.excludePatterns)}
                       onChange={(selected) => updateDraft(active.token, { selected })}
+                      onExcludePatternsChange={(patterns) => updateDraft(active.token, {
+                        excludePatterns: patterns.join('\n')
+                      })}
                     />
                   )}
 
@@ -185,4 +189,8 @@ export function AddProjectsDialog(): React.JSX.Element {
       </Dialog.Portal>
     </Dialog.Root>
   )
+}
+
+function parsePatterns(value: string): string[] {
+  return value.split('\n').map((line) => line.trim()).filter(Boolean)
 }

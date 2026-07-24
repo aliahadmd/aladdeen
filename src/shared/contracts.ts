@@ -43,8 +43,6 @@ export interface ProjectSummary {
   environmentId: string
   name: string
   displayPath: string
-  /** Root entries only. Deeper entries are loaded with projects.listChildren. */
-  tree: WorkspaceTreeNode[]
   expandedPaths: string[]
   scopeMode: ProjectScopeMode
   includePaths: string[]
@@ -267,6 +265,18 @@ export interface OpenFileRequest {
   name: string
 }
 
+export type CloseReason = 'window-close' | 'quit' | 'reload'
+
+export interface CloseRequest {
+  id: string
+  reason: CloseReason
+}
+
+export interface CloseCompletion {
+  requestId: string
+  outcome: 'ready' | 'blocked' | 'cancelled'
+}
+
 export interface SaveDocumentRequest {
   fileId: string
   content: string
@@ -278,7 +288,6 @@ export interface CreateEntryRequest {
   projectId: string
   parentPath: string
   name: string
-  kind: 'file' | 'directory'
 }
 
 export interface RenameEntryRequest {
@@ -313,6 +322,10 @@ export interface SaveCopyResult {
 export interface AladdeenApi {
   app: {
     bootstrap(): Promise<Result<BootstrapData>>
+  }
+  lifecycle: {
+    onPrepareClose(callback: (request: CloseRequest) => void): () => void
+    completeClose(completion: CloseCompletion): Promise<Result<void>>
   }
   environments: {
     create(name: string): Promise<Result<EnvironmentSnapshot>>
@@ -352,8 +365,8 @@ export interface AladdeenApi {
     onOpenFileRequest(callback: (request: OpenFileRequest) => void): () => void
   }
   files: {
-    create(request?: Omit<CreateEntryRequest, 'kind'>): Promise<Result<DocumentSnapshot>>
-    createFolder(request: Omit<CreateEntryRequest, 'kind'>): Promise<Result<EnvironmentSnapshot>>
+    create(request?: CreateEntryRequest): Promise<Result<DocumentSnapshot>>
+    createFolder(request: CreateEntryRequest): Promise<Result<EnvironmentSnapshot>>
     rename(request: RenameEntryRequest): Promise<Result<RenameEntryResult>>
     trash(projectId: string, path: string): Promise<Result<void>>
     revealProjectEntry(projectId: string, path: string): Promise<Result<void>>
@@ -376,6 +389,8 @@ export interface AladdeenApi {
 
 export const IPC = {
   bootstrap: 'app:bootstrap',
+  prepareClose: 'app:prepare-close',
+  completeClose: 'app:complete-close',
   createEnvironment: 'environments:create',
   renameEnvironment: 'environments:rename',
   removeEnvironment: 'environments:remove',

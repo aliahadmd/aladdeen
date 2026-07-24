@@ -4,6 +4,7 @@ import { access } from 'node:fs/promises'
 import {
   app,
   BrowserWindow,
+  dialog,
   Menu,
   nativeTheme,
   protocol,
@@ -15,7 +16,7 @@ import { ExportService } from '@main/services/export'
 import { GlobalSearchService } from '@main/services/global-search'
 import { WorkspaceService } from '@main/services/workspace'
 import { registerIpc } from '@main/ipc'
-import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
+import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 
 const mainBundleDirectory = import.meta.dirname
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
@@ -34,6 +35,16 @@ let globalSearch: GlobalSearchService | null = null
 let pendingSystemFile: string | null = null
 let pendingOpenRequest: OpenFileRequest | undefined
 let quitting = false
+let allowWindowClose = false
+let allowApplicationQuit = false
+let servicesClosed = false
+let pendingClose: {
+  id: string
+  reason: CloseReason
+  action: 'close' | 'quit' | 'reload'
+  timeout?: NodeJS.Timeout
+  blocked: boolean
+} | null = null
 const systemOpenTokens = new Map<string, { path: string; expiresAt: number }>()
 
 function extractMarkdownPath(argv: string[]): string | null {
@@ -61,9 +72,7 @@ app.on('open-file', (event, filePath) => {
 })
 
 app.whenReady().then(async () => {
-  const previousApplicationDirectory = process.platform === 'linux'
-    ? ['fl', 'uid', 'md'].join('')
-    : ['Fl', 'uid', 'MD'].join('')
+  const previousApplicationDirectory = ['Fl', 'uid', 'MD'].join('')
   const previousUserDataPath = app.commandLine.hasSwitch('user-data-dir')
     ? undefined
     : join(app.getPath('appData'), previousApplicationDirectory)
@@ -87,7 +96,8 @@ app.whenReady().then(async () => {
     search: globalSearch,
     getWindow: () => mainWindow,
     getPendingOpenRequest: () => pendingOpenRequest,
-    acceptSystemOpenFile
+    acceptSystemOpenFile,
+    completeClose
   })
   registerAssetProtocol(workspace)
   configureSessionSecurity()
@@ -109,7 +119,7 @@ function createWindow(): void {
     minWidth: 640,
     minHeight: 480,
     show: false,
-    backgroundColor: '#f7f7f9',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#18181b' : '#f7f7f9',
     title: 'Aladdeen',
     webPreferences: {
       preload: join(mainBundleDirectory, '../preload/index.cjs'),
@@ -126,7 +136,7 @@ function createWindow(): void {
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())
   mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
 
-  if (process.env.ELECTRON_RENDERER_URL) {
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
   } else {
     void mainWindow.loadFile(join(mainBundleDirectory, '../renderer/index.html'))
@@ -145,6 +155,14 @@ function createWindow(): void {
   mainWindow.on('move', rememberBounds)
   mainWindow.on('maximize', rememberBounds)
   mainWindow.on('unmaximize', rememberBounds)
+  mainWindow.on('close', (event) => {
+    if (allowWindowClose) return
+    event.preventDefault()
+    requestClose('window-close', 'close')
+  })
+  mainWindow.on('unresponsive', () => {
+    if (pendingClose?.blocked) void handleCloseTimeout(pendingClose.id)
+  })
   mainWindow.on('closed', () => {
     globalSearch?.cancelActive(false)
     mainWindow = null
@@ -202,30 +220,25 @@ async function acceptSystemOpenFile(token: string): Promise<DocumentSnapshot> {
 }
 
 function installMenu(): void {
-  const isMac = process.platform === 'darwin'
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac
-      ? [
-          {
-            label: app.name,
-            submenu: [
-              { role: 'about' as const },
-              { type: 'separator' as const },
-              { role: 'hide' as const },
-              { role: 'hideOthers' as const },
-              { role: 'unhide' as const },
-              { type: 'separator' as const },
-              { role: 'quit' as const }
-            ]
-          }
-        ]
-      : []),
+    {
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    },
     {
       label: 'Edit',
       submenu: [
         {
           label: 'Search Environment…',
-          accelerator: 'CmdOrCtrl+Shift+F',
+          accelerator: 'Command+Shift+F',
           click: () => {
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send(IPC.globalSearchOpenRequest)
@@ -245,10 +258,18 @@ function installMenu(): void {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
+        ...(!app.isPackaged
+          ? [
+              {
+                label: 'Reload',
+                accelerator: 'Command+R',
+                click: (): void => requestClose('reload', 'reload')
+              },
+              { role: 'forceReload' as const },
+              { role: 'toggleDevTools' as const },
+              { type: 'separator' as const }
+            ]
+          : []),
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -262,16 +283,107 @@ function installMenu(): void {
 }
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  if (BrowserWindow.getAllWindows().length === 0) {
+    allowWindowClose = false
+    createWindow()
+  }
 })
 
-app.on('before-quit', () => {
-  quitting = true
-  globalSearch?.close()
-  void workspace?.close()
-  database?.close()
+app.on('before-quit', (event) => {
+  if (allowApplicationQuit) return
+  event.preventDefault()
+  requestClose('quit', 'quit')
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin' || quitting) app.quit()
+  if (quitting) app.quit()
 })
+
+function requestClose(reason: CloseReason, action: 'close' | 'quit' | 'reload'): void {
+  if (pendingClose) {
+    if (action === 'quit') pendingClose.action = 'quit'
+    if (pendingClose.blocked && mainWindow && !mainWindow.isDestroyed()) {
+      const requestId = pendingClose.id
+      pendingClose.blocked = false
+      pendingClose.timeout = setTimeout(() => void handleCloseTimeout(requestId), 15_000)
+      mainWindow.webContents.send(IPC.prepareClose, { id: requestId, reason: pendingClose.reason })
+    }
+    return
+  }
+  const window = mainWindow
+  if (!window || window.isDestroyed()) {
+    if (action === 'quit') void finishQuit()
+    return
+  }
+  const id = randomUUID()
+  const timeout = setTimeout(() => void handleCloseTimeout(id), 15_000)
+  pendingClose = { id, reason, action, timeout, blocked: false }
+  window.webContents.send(IPC.prepareClose, { id, reason })
+}
+
+function completeClose(requestId: string, outcome: 'ready' | 'blocked' | 'cancelled'): void {
+  const request = pendingClose
+  if (!request || request.id !== requestId) return
+  if (request.timeout) clearTimeout(request.timeout)
+  if (outcome === 'blocked') {
+    request.timeout = undefined
+    request.blocked = true
+    mainWindow?.show()
+    mainWindow?.focus()
+    return
+  }
+  pendingClose = null
+  if (outcome === 'cancelled') {
+    mainWindow?.show()
+    mainWindow?.focus()
+    return
+  }
+  performCloseAction(request.action)
+}
+
+async function handleCloseTimeout(requestId: string): Promise<void> {
+  const request = pendingClose
+  const window = mainWindow
+  if (!request || request.id !== requestId || !window || window.isDestroyed()) return
+  const result = await dialog.showMessageBox(window, {
+    type: 'warning',
+    title: 'Aladdeen could not confirm your saves',
+    message: 'Aladdeen did not receive a save confirmation from the document window.',
+    detail: 'Keep the application open to protect your edits, or discard unsaved changes and continue closing.',
+    buttons: ['Keep Open', request.action === 'quit' ? 'Quit and Discard' : 'Close and Discard'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  })
+  if (!pendingClose || pendingClose.id !== requestId) return
+  if (pendingClose.timeout) clearTimeout(pendingClose.timeout)
+  pendingClose = null
+  if (result.response === 1) performCloseAction(request.action)
+}
+
+function performCloseAction(action: 'close' | 'quit' | 'reload'): void {
+  if (action === 'reload') {
+    mainWindow?.webContents.reload()
+    return
+  }
+  if (action === 'quit') {
+    void finishQuit()
+    return
+  }
+  allowWindowClose = true
+  mainWindow?.close()
+}
+
+async function finishQuit(): Promise<void> {
+  if (allowApplicationQuit) return
+  allowApplicationQuit = true
+  allowWindowClose = true
+  quitting = true
+  if (!servicesClosed) {
+    servicesClosed = true
+    globalSearch?.close()
+    await workspace?.close()
+    database?.close()
+  }
+  app.quit()
+}

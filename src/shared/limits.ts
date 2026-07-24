@@ -1,0 +1,2 @@
+export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024
+export const MAX_SEARCH_DOCUMENT_BYTES = 10 * 1024 * 1024

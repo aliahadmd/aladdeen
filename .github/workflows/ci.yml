@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '23 4 * * 1'
 
 jobs:
   validate:
@@ -18,6 +20,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
+      - run: pnpm check:release
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm test
@@ -39,21 +43,11 @@ jobs:
           cache: pnpm
           cache-dependency-path: aladdeen-web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level high
       - run: pnpm check
 
-  package:
-    needs: validate
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            command: dist:mac
-          - os: windows-latest
-            command: dist:win
-          - os: ubuntu-latest
-            command: dist:linux
-    runs-on: ${{ matrix.os }}
+  e2e:
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -64,11 +58,29 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm ${{ matrix.command }}
+      - run: pnpm test:e2e
+
+  package:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+    needs:
+      - validate
+      - web
+      - e2e
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.5.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dist:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      - name: Verify ad-hoc macOS signatures
-        if: runner.os == 'macOS'
+      - name: Verify ad-hoc signatures
         shell: bash
         run: |
           set -euo pipefail
@@ -77,6 +89,6 @@ jobs:
           done < <(find release -type d -name 'Aladdeen.app' -print0)
       - uses: actions/upload-artifact@v4
         with:
-          name: aladdeen-${{ matrix.os }}
+          name: aladdeen-macos-arm64
           path: release/**
           if-no-files-found: error

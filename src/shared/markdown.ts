@@ -14,8 +14,6 @@ import { unified, type PluggableList, type Plugin } from 'unified'
 import { visit } from 'unist-util-visit'
 import { parse as parseYaml } from 'yaml'
 
-export type MarkdownRenderTarget = 'preview' | 'pdf' | 'docx'
-
 export interface MarkdownMetadata {
   title?: string
   author?: string

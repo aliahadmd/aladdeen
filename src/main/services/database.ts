@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { DesktopError } from '@main/errors'
-import type { AppSettings, EnvironmentSummary } from '@shared/contracts'
+import type { AppSettings, EnvironmentSummary, WorkspaceTreeNode } from '@shared/contracts'
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -190,6 +190,47 @@ export class AppDatabase {
         COMMIT;
       `)
     }
+
+    if (row.user_version < 4) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE project_index_directories (
+          project_id TEXT NOT NULL REFERENCES environment_projects(id) ON DELETE CASCADE,
+          relative_path TEXT NOT NULL,
+          parent_path TEXT NOT NULL,
+          name TEXT NOT NULL,
+          descendant_count INTEGER NOT NULL,
+          PRIMARY KEY(project_id, relative_path)
+        ) STRICT;
+        CREATE INDEX project_index_directory_parent
+          ON project_index_directories(
+            project_id,
+            parent_path,
+            name COLLATE NOCASE,
+            relative_path COLLATE NOCASE
+          );
+        CREATE INDEX project_index_file_parent_page
+          ON project_index_files(
+            project_id,
+            parent_path,
+            name COLLATE NOCASE,
+            relative_path COLLATE NOCASE
+          );
+      `)
+      try {
+        for (const project of this.listProjectsForDirectoryBackfill()) {
+          this.insertProjectDirectories(project.id, this.listProjectIndex(project.id))
+        }
+        this.db.exec('PRAGMA user_version = 4; COMMIT;')
+      } catch (error) {
+        this.db.exec('ROLLBACK;')
+        throw error
+      }
+    }
+  }
+
+  private listProjectsForDirectoryBackfill(): Array<{ id: string }> {
+    return this.db.prepare('SELECT id FROM environment_projects').all() as Array<{ id: string }>
   }
 
   private importLegacyWorkspaceHistory(): void {
@@ -257,11 +298,18 @@ export class AppDatabase {
   }
 
   setSettings(settings: AppSettings): AppSettings {
-    this.setSetting('theme', settings.theme)
-    this.setSetting('accent', settings.accent)
-    this.setSetting('sidebar_width', String(settings.sidebarWidth))
-    this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
-    return settings
+    this.db.exec('BEGIN')
+    try {
+      this.setSetting('theme', settings.theme)
+      this.setSetting('accent', settings.accent)
+      this.setSetting('sidebar_width', String(settings.sidebarWidth))
+      this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
+      this.db.exec('COMMIT')
+      return settings
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   private setSetting(key: string, value: string): void {
@@ -390,7 +438,7 @@ export class AppDatabase {
   ): ProjectRecord {
     const result = this.db
       .prepare(`UPDATE environment_projects SET scope_mode = ?, include_paths = ?, exclude_patterns = ?,
-        group_name = ?, pinned = ?, archived = ?, index_status = ?, indexed_at = NULL
+        group_name = ?, pinned = ?, archived = ?, index_status = ?
         WHERE id = ?`)
       .run(
         options.scopeMode,
@@ -412,21 +460,24 @@ export class AppDatabase {
     fileCount?: number,
     indexedAt?: number
   ): void {
-    const count = fileCount ?? this.getProject(id)?.fileCount ?? 0
+    const current = this.getProject(id)
+    const count = fileCount ?? current?.fileCount ?? 0
     this.db
       .prepare('UPDATE environment_projects SET index_status = ?, file_count = ?, indexed_at = ? WHERE id = ?')
-      .run(status, count, indexedAt ?? null, id)
+      .run(status, count, indexedAt ?? current?.indexedAt ?? null, id)
   }
 
   replaceProjectIndex(projectId: string, files: ProjectIndexFileRecord[]): void {
     this.db.exec('BEGIN')
     try {
       this.db.prepare('DELETE FROM project_index_files WHERE project_id = ?').run(projectId)
+      this.db.prepare('DELETE FROM project_index_directories WHERE project_id = ?').run(projectId)
       const insert = this.db.prepare(`INSERT INTO project_index_files
         (project_id, relative_path, parent_path, name, mtime_ms, size) VALUES (?, ?, ?, ?, ?, ?)`)
       for (const file of files) {
         insert.run(projectId, file.relativePath, file.parentPath, file.name, file.mtimeMs, file.size)
       }
+      this.insertProjectDirectories(projectId, files)
       this.db
         .prepare("UPDATE environment_projects SET file_count = ?, index_status = 'ready', indexed_at = ? WHERE id = ?")
         .run(files.length, Date.now(), projectId)
@@ -434,6 +485,80 @@ export class AppDatabase {
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
+    }
+  }
+
+  private insertProjectDirectories(projectId: string, files: ProjectIndexFileRecord[]): void {
+    const directories = new Map<string, { parentPath: string; name: string; descendantCount: number }>()
+    for (const file of files) {
+      const parts = file.relativePath.split('/')
+      let parentPath = ''
+      for (const name of parts.slice(0, -1)) {
+        const relativePath = parentPath ? `${parentPath}/${name}` : name
+        const existing = directories.get(relativePath)
+        if (existing) existing.descendantCount += 1
+        else directories.set(relativePath, { parentPath, name, descendantCount: 1 })
+        parentPath = relativePath
+      }
+    }
+    const insert = this.db.prepare(`INSERT INTO project_index_directories
+      (project_id, relative_path, parent_path, name, descendant_count) VALUES (?, ?, ?, ?, ?)`)
+    for (const [relativePath, directory] of directories) {
+      insert.run(projectId, relativePath, directory.parentPath, directory.name, directory.descendantCount)
+    }
+  }
+
+  listProjectChildren(
+    projectId: string,
+    parentPath: string,
+    cursor: number,
+    limit: number
+  ): { entries: WorkspaceTreeNode[]; total: number } {
+    const directoryCount = this.db.prepare(
+      'SELECT COUNT(*) AS count FROM project_index_directories WHERE project_id = ? AND parent_path = ?'
+    ).get(projectId, parentPath) as { count: number }
+    const fileCount = this.db.prepare(
+      'SELECT COUNT(*) AS count FROM project_index_files WHERE project_id = ? AND parent_path = ?'
+    ).get(projectId, parentPath) as { count: number }
+    type ChildRow = {
+      relative_path: string
+      name: string
+      kind: 'file' | 'directory'
+      descendant_count: number | null
+    }
+    const rows: ChildRow[] = []
+    let remaining = limit
+    if (cursor < directoryCount.count && remaining > 0) {
+      const directories = this.db.prepare(`
+        SELECT relative_path, name, 'directory' AS kind, descendant_count
+        FROM project_index_directories
+        WHERE project_id = ? AND parent_path = ?
+        ORDER BY name COLLATE NOCASE, relative_path COLLATE NOCASE
+        LIMIT ? OFFSET ?
+      `).all(projectId, parentPath, remaining, cursor) as ChildRow[]
+      rows.push(...directories)
+      remaining -= directories.length
+    }
+    if (remaining > 0) {
+      const fileOffset = Math.max(0, cursor - directoryCount.count)
+      const files = this.db.prepare(`
+        SELECT relative_path, name, 'file' AS kind, NULL AS descendant_count
+        FROM project_index_files
+        WHERE project_id = ? AND parent_path = ?
+        ORDER BY name COLLATE NOCASE, relative_path COLLATE NOCASE
+        LIMIT ? OFFSET ?
+      `).all(projectId, parentPath, remaining, fileOffset) as ChildRow[]
+      rows.push(...files)
+    }
+    return {
+      total: directoryCount.count + fileCount.count,
+      entries: rows.map((row) => ({
+        id: row.relative_path,
+        path: row.relative_path,
+        name: row.name,
+        kind: row.kind,
+        descendantCount: row.descendant_count ?? undefined
+      }))
     }
   }
 
@@ -561,6 +686,24 @@ export class AppDatabase {
       .prepare('UPDATE environment_files SET path = ?, project_id = ?, missing = 0, last_opened_at = ? WHERE id = ?')
       .run(path, projectId ?? null, Date.now(), id)
     if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That file is no longer tracked.')
+  }
+
+  updateTrackedFiles(changes: Array<{ id: string; path: string; projectId?: string }>): void {
+    this.db.exec('BEGIN')
+    try {
+      const update = this.db.prepare(
+        'UPDATE environment_files SET path = ?, project_id = ?, missing = 0, last_opened_at = ? WHERE id = ?'
+      )
+      const now = Date.now()
+      for (const change of changes) {
+        const result = update.run(change.path, change.projectId ?? null, now, change.id)
+        if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'A tracked file no longer exists.')
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   setTrackedFileMissing(id: string, missing: boolean): void {

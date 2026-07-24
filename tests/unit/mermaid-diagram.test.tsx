@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownContent } from '@renderer/components/MarkdownContent'
 
@@ -29,6 +29,7 @@ describe('Mermaid diagrams', () => {
   })
 
   afterEach(() => {
+    cleanup()
     vi.restoreAllMocks()
   })
 
@@ -65,6 +66,19 @@ describe('Mermaid diagrams', () => {
 
     await waitFor(() => expect(screen.getByText(/Mermaid diagram unavailable/)).toBeInTheDocument())
     expect(screen.getByText('not a diagram')).toBeInTheDocument()
+  })
+
+  it('uses cached output immediately when a diagram remounts', async () => {
+    mermaidMocks.render.mockResolvedValue({ svg: '<svg><text>Cached diagram</text></svg>' })
+    const source = 'flowchart LR\nCachedA --> CachedB'
+    const first = diagram(source)
+    await waitFor(() => expect(first.container.querySelector('.mermaid-svg text')).toHaveTextContent('Cached diagram'))
+    first.unmount()
+
+    diagram(source)
+    expect(screen.queryByText('Rendering Mermaid diagram…')).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Mermaid diagram' })).toBeInTheDocument()
+    expect(mermaidMocks.render).toHaveBeenCalledTimes(1)
   })
 
   it('falls back after the fiftieth diagram', () => {

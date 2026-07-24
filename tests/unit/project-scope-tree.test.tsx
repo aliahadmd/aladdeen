@@ -38,4 +38,22 @@ describe('project scope tree', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select results' }))
     expect([...onChange.mock.calls[0]![0] as Set<string>]).toEqual(['docs/guide.md', 'docs/reference.md'])
   })
+
+  it('adds an exact exclusion without dropping an inherited folder selection', () => {
+    const onChange = vi.fn()
+    const onExcludePatternsChange = vi.fn()
+    render(
+      <ProjectScopeTree
+        nodes={nodes}
+        selected={new Set(['docs'])}
+        excludePatterns={[]}
+        onChange={onChange}
+        onExcludePatternsChange={onExcludePatternsChange}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Expand docs' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Exclude guide.md' }))
+    expect(onChange).not.toHaveBeenCalled()
+    expect(onExcludePatternsChange).toHaveBeenCalledWith(['docs/guide.md'])
+  })
 })

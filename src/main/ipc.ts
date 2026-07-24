@@ -9,6 +9,7 @@ import type { WorkspaceService } from '@main/services/workspace'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import {
   createEntrySchema,
+  documentContentSchema,
   documentTargetSchema,
   environmentNameSchema,
   environmentStateSchema,
@@ -32,6 +33,7 @@ interface IpcDependencies {
   getWindow: () => BrowserWindow | null
   getPendingOpenRequest: () => OpenFileRequest | undefined
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
+  completeClose: (requestId: string, outcome: 'ready' | 'blocked' | 'cancelled') => void
 }
 
 function parse<T>(schema: ZodType<T>, input: unknown): T {
@@ -56,7 +58,8 @@ export function registerIpc({
   search,
   getWindow,
   getPendingOpenRequest,
-  acceptSystemOpenFile
+  acceptSystemOpenFile,
+  completeClose
 }: IpcDependencies): void {
   const handle = <T>(channel: string, operation: (event: IpcMainInvokeEvent, input: unknown) => Promise<T>): void => {
     ipcMain.handle(channel, (event, input) => asResult(async () => {
@@ -74,6 +77,13 @@ export function registerIpc({
       environment: active ? await workspace.activateEnvironment(active.id) : null,
       pendingOpenRequest: getPendingOpenRequest()
     }
+  })
+  handle(IPC.completeClose, async (_event, input) => {
+    const completion = parse(z.object({
+      requestId: idSchema,
+      outcome: z.enum(['ready', 'blocked', 'cancelled'])
+    }), input)
+    completeClose(completion.requestId, completion.outcome)
   })
 
   handle(IPC.createEnvironment, async (_event, input) => {
@@ -181,7 +191,7 @@ export function registerIpc({
   handle(IPC.acceptSystemOpenFile, async (_event, input) => acceptSystemOpenFile(parse(idSchema, input)))
   handle(IPC.saveDocument, async (_event, input) => workspace.saveDocument(parse(saveDocumentSchema, input)))
   handle(IPC.saveCopy, async (_event, input) => {
-    const request = parse(z.object({ fileId: idSchema, content: z.string().max(20_000_000) }), input)
+    const request = parse(z.object({ fileId: idSchema, content: documentContentSchema }), input)
     return exports.saveCopy(request.fileId, request.content)
   })
 
@@ -208,10 +218,12 @@ export function registerIpc({
     const request = parse(z.object({ projectId: idSchema, path: relativePathSchema }), input)
     shell.showItemInFolder(await workspace.getProjectEntryPath(request.projectId, request.path))
   })
-  handle(IPC.revealTrackedFile, async (_event, input) => shell.showItemInFolder(workspace.getTrackedFilePath(parse(idSchema, input))))
+  handle(IPC.revealTrackedFile, async (_event, input) => {
+    shell.showItemInFolder(await workspace.resolveTrackedFilePath(parse(idSchema, input)))
+  })
   handle(IPC.trashTrackedFile, async (_event, input) => {
     const fileId = parse(idSchema, input)
-    await shell.trashItem(workspace.getTrackedFilePath(fileId))
+    await shell.trashItem(await workspace.resolveTrackedFilePath(fileId))
     workspace.markTrackedFileMissing(fileId)
   })
   handle(IPC.removeTrackedFile, async (_event, input) => workspace.removeTrackedFile(parse(idSchema, input)))

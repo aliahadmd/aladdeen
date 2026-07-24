@@ -1,9 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
-import { Toaster } from 'sonner'
+import { toast, Toaster } from 'sonner'
+import type { CloseRequest } from '@shared/contracts'
 import { AddProjectsDialog } from './components/AddProjectsDialog'
 import { BrandMark } from './components/BrandMark'
+import { CloseRecoveryDialog } from './components/CloseRecoveryDialog'
 import { ConflictDialog } from './components/ConflictDialog'
 import { DocumentView } from './components/DocumentView'
 import { GlobalSearchDialog } from './components/GlobalSearchDialog'
@@ -13,6 +15,7 @@ import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { useEffectiveDarkMode } from './hooks/use-effective-dark-mode'
 import { cn } from './lib/cn'
+import { COMPACT_WORKSPACE_QUERY } from './lib/breakpoints'
 import { useAppStore } from './store/app-store'
 
 const SIDEBAR_MIN_WIDTH = 248
@@ -24,8 +27,10 @@ function clampSidebarWidth(width: number): number {
 }
 
 export default function App(): React.JSX.Element {
-  const initialized = useAppStore((state) => state.initialized)
+  const bootStatus = useAppStore((state) => state.bootStatus)
   const initialize = useAppStore((state) => state.initialize)
+  const flushDocuments = useAppStore((state) => state.flushDocuments)
+  const saveDirtyCopies = useAppStore((state) => state.saveDirtyCopies)
   const environment = useAppStore((state) => state.environment)
   const acceptSystemOpenFile = useAppStore((state) => state.acceptSystemOpenFile)
   const handleEnvironmentEvent = useAppStore((state) => state.handleEnvironmentEvent)
@@ -43,6 +48,7 @@ export default function App(): React.JSX.Element {
   const dark = useEffectiveDarkMode()
   const sidebarWidthRef = useRef(settings.sidebarWidth)
   const resizeState = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
+  const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null)
 
   useEffect(() => {
     void initialize()
@@ -53,6 +59,42 @@ export default function App(): React.JSX.Element {
       offOpenFileRequest()
     }
   }, [acceptSystemOpenFile, handleEnvironmentEvent, initialize])
+
+  useEffect(() => window.aladdeen.lifecycle.onPrepareClose((request) => {
+    void flushDocuments().then(async (saved) => {
+      if (!saved) {
+        toast.error('Aladdeen kept the window open because one or more documents could not be saved.')
+        setCloseRequest(request)
+      } else {
+        setCloseRequest(null)
+      }
+      await window.aladdeen.lifecycle.completeClose({
+        requestId: request.id,
+        outcome: saved ? 'ready' : 'blocked'
+      })
+    })
+  }), [flushDocuments])
+
+  const completeRecovery = async (outcome: 'ready' | 'blocked' | 'cancelled'): Promise<void> => {
+    if (!closeRequest) return
+    const requestId = closeRequest.id
+    if (outcome !== 'blocked') setCloseRequest(null)
+    await window.aladdeen.lifecycle.completeClose({ requestId, outcome })
+  }
+
+  const retryClose = async (): Promise<void> => {
+    const saved = await flushDocuments()
+    if (!saved) {
+      toast.error('The documents still could not be saved. Your edits remain open.')
+      await completeRecovery('blocked')
+      return
+    }
+    await completeRecovery('ready')
+  }
+
+  const saveCopiesAndClose = async (): Promise<void> => {
+    if (await saveDirtyCopies()) await completeRecovery('ready')
+  }
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -109,14 +151,24 @@ export default function App(): React.JSX.Element {
     }
   }, [openDroppedFile])
 
-  if (!initialized) {
+  if (bootStatus !== 'ready') {
     return (
       <div className="flex h-full items-center justify-center gap-[13px] bg-background text-foreground-muted">
         <BrandMark
           className="block h-[38px] w-[38px] shrink-0 drop-shadow-[0_3px_7px_rgb(0_0_0/.16)]"
           title="Aladdeen"
         />
-        <LoaderCircle className="spinner" size={18} />
+        {bootStatus === 'booting' ? (
+          <LoaderCircle className="spinner" size={18} />
+        ) : (
+          <button
+            type="button"
+            className="rounded-md border border-border bg-surface px-3 py-2 text-[12px] text-foreground hover:bg-surface-hover"
+            onClick={() => void initialize()}
+          >
+            Retry startup
+          </button>
+        )}
       </div>
     )
   }
@@ -173,7 +225,7 @@ export default function App(): React.JSX.Element {
   }
 
   const openSidebar = (): void => {
-    if (window.matchMedia('(max-width: 959px)').matches) setSidebarOpen(true)
+    if (window.matchMedia(COMPACT_WORKSPACE_QUERY).matches) setSidebarOpen(true)
     else void updateSettings({ sidebarCollapsed: false })
   }
 
@@ -229,7 +281,14 @@ export default function App(): React.JSX.Element {
       <AddProjectsDialog />
       <QuickOpenDialog />
       <GlobalSearchDialog />
-      <ConflictDialog />
+      {!closeRequest && <ConflictDialog />}
+      <CloseRecoveryDialog
+        request={closeRequest}
+        onRetry={retryClose}
+        onSaveCopy={saveCopiesAndClose}
+        onDiscard={() => completeRecovery('ready')}
+        onCancel={() => completeRecovery('cancelled')}
+      />
       <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'app-toast' }} />
     </div>
   )

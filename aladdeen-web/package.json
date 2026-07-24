@@ -1,7 +1,7 @@
 {
 	"name": "aladdeen-web",
-	"version": "0.2.0",
-	"description": "The official landing page and R2-backed macOS downloads for Aladdeen.",
+	"version": "0.3.0",
+	"description": "The official landing page and R2-backed Apple silicon Mac download for Aladdeen.",
 	"private": true,
 	"packageManager": "pnpm@11.5.0",
 	"engines": {

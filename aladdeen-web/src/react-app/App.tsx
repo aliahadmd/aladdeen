@@ -57,7 +57,7 @@ const faqItems = [
 	{
 		question: "Which platforms can I download today?",
 		answer:
-			"This v0.2.0 public preview is available for Apple Silicon and Intel Macs. Windows and Linux installers are not part of this release.",
+			`Aladdeen v${CURRENT_RELEASE} is made only for Apple silicon Macs with an M1 or newer chip.`,
 	},
 	{
 		question: "Why does macOS show a warning?",
@@ -317,20 +317,17 @@ function App() {
 				<section className="mx-auto w-full max-w-5xl px-6 pb-12 pt-20 md:pb-20 md:pt-28">
 					<div className="max-w-3xl">
 						<p className="text-sm text-neutral-400 dark:text-neutral-400">
-							Aladdeen for macOS · Preview {CURRENT_RELEASE}
+							Aladdeen for Apple silicon · Preview {CURRENT_RELEASE}
 						</p>
 						<h1 className="mt-5 max-w-2xl text-4xl font-bold tracking-[-0.035em] text-balance text-neutral-950 dark:text-neutral-50 md:text-6xl md:leading-[1.03]">
 							All your Markdown, one calm place.
 						</h1>
 						<p className="mt-6 max-w-xl text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							A responsive, offline-first workspace for reading, editing, finding, and exporting the files you already own.
+							Made only for Apple silicon Macs. A responsive, offline-first workspace for reading, editing, finding, and exporting the files you already own.
 						</p>
 						<div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
 								Download for Apple Silicon
-							</DownloadLink>
-							<DownloadLink artifact={RELEASE_ARTIFACTS.x64}>
-								Intel Mac
 							</DownloadLink>
 						</div>
 						<p className="mt-4 text-xs text-neutral-400 dark:text-neutral-400">
@@ -428,10 +425,10 @@ function App() {
 					<div className="max-w-2xl">
 						<p className="text-sm text-neutral-400 dark:text-neutral-400">Download</p>
 						<h2 className="mt-5 text-2xl font-bold tracking-tight text-neutral-950 dark:text-neutral-100 md:text-[28px]">
-							Choose the Mac you have.
+							Built for the Mac you have.
 						</h2>
 						<p className="mt-4 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Version {CURRENT_RELEASE} is a free preview. Both installers are delivered from a private Cloudflare R2 bucket through this site. They are ad-hoc signed for bundle integrity but are not Apple notarized.
+							Version {CURRENT_RELEASE} is a free Apple silicon preview for M1 and newer Macs. The installer is delivered from a private Cloudflare R2 bucket through this site. It is ad-hoc signed for bundle integrity but is not Apple notarized.
 						</p>
 					</div>
 
@@ -512,7 +509,6 @@ function App() {
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
 								Download for Apple Silicon
 							</DownloadLink>
-							<DownloadLink artifact={RELEASE_ARTIFACTS.x64}>Intel Mac</DownloadLink>
 						</div>
 					</div>
 				</section>
