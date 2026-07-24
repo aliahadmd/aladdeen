@@ -46,7 +46,11 @@ pnpm dist:win
 pnpm dist:linux
 ```
 
-Platform builds are unsigned by default. The GitHub Actions workflow builds each target on its native runner. Auto-update and publishing are intentionally not configured.
+macOS builds are ad-hoc signed so the Electron bundle is internally valid without
+requiring a paid Apple Developer account. They are not notarized, so macOS requires
+the user to approve the first launch in System Settings → Privacy & Security. The
+GitHub Actions workflow builds each target on its native runner. Auto-update and
+publishing are intentionally not configured.
 
 ## Keyboard shortcuts
 

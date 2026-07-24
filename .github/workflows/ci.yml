@@ -49,6 +49,14 @@ jobs:
       - run: pnpm ${{ matrix.command }}
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify ad-hoc macOS signatures
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+          done < <(find release -type d -name 'Aladdeen.app' -print0)
       - uses: actions/upload-artifact@v4
         with:
           name: aladdeen-${{ matrix.os }}

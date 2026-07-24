@@ -17,6 +17,11 @@ fileAssociations:
 mac:
   icon: build/icon.png
   category: public.app-category.productivity
+  # Keep the bundle internally consistent without requiring a paid Apple
+  # Developer certificate. Gatekeeper will still require explicit user approval.
+  identity: "-"
+  hardenedRuntime: false
+  notarize: false
   artifactName: ${productName}-${version}-${arch}-mac.${ext}
   target:
     - dmg
