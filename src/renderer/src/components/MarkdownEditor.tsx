@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
@@ -14,6 +14,18 @@ export function MarkdownEditor({ document, dark }: { document: OpenDocument; dar
     () => [markdown({ base: markdownLanguage, codeLanguages: languages }), EditorView.lineWrapping],
     []
   )
+  const editor = useRef<EditorView | null>(null)
+  const editorReveal = document.editorReveal
+
+  useEffect(() => {
+    const reveal = editorReveal
+    const view = editor.current
+    if (!reveal || !view) return
+    const from = Math.min(reveal.from, view.state.doc.length)
+    const to = Math.min(Math.max(reveal.to, from), view.state.doc.length)
+    view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true })
+    view.focus()
+  }, [editorReveal])
 
   const onUpdate = (update: ViewUpdate): void => {
     if (!update.selectionSet && !update.viewportChanged) return
@@ -41,9 +53,17 @@ export function MarkdownEditor({ document, dark }: { document: OpenDocument; dar
         onChange={(value) => updateContent(document.id, value)}
         onUpdate={onUpdate}
         onCreateEditor={(view) => {
+          editor.current = view
           requestAnimationFrame(() => {
-            view.scrollDOM.scrollTop = document.editorScrollTop
-            if (document.editorSelection <= view.state.doc.length) {
+            if (document.editorReveal) {
+              const from = Math.min(document.editorReveal.from, view.state.doc.length)
+              const to = Math.min(Math.max(document.editorReveal.to, from), view.state.doc.length)
+              view.dispatch({ selection: { anchor: from, head: to }, scrollIntoView: true })
+              view.focus()
+            } else {
+              view.scrollDOM.scrollTop = document.editorScrollTop
+            }
+            if (!document.editorReveal && document.editorSelection <= view.state.doc.length) {
               view.dispatch({ selection: { anchor: document.editorSelection }, scrollIntoView: false })
             }
           })

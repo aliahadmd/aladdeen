@@ -4,6 +4,7 @@ import { z, type ZodType } from 'zod'
 import { asResult, DesktopError } from '@main/errors'
 import type { AppDatabase } from '@main/services/database'
 import type { ExportService } from '@main/services/export'
+import type { GlobalSearchService } from '@main/services/global-search'
 import type { WorkspaceService } from '@main/services/workspace'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import {
@@ -13,6 +14,7 @@ import {
   environmentStateSchema,
   exportRequestSchema,
   externalUrlSchema,
+  globalSearchRequestSchema,
   idSchema,
   projectImportSelectionSchema,
   relativePathSchema,
@@ -26,6 +28,7 @@ interface IpcDependencies {
   database: AppDatabase
   workspace: WorkspaceService
   exports: ExportService
+  search: GlobalSearchService
   getWindow: () => BrowserWindow | null
   getPendingOpenRequest: () => OpenFileRequest | undefined
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
@@ -50,6 +53,7 @@ export function registerIpc({
   database,
   workspace,
   exports,
+  search,
   getWindow,
   getPendingOpenRequest,
   acceptSystemOpenFile
@@ -73,6 +77,7 @@ export function registerIpc({
   })
 
   handle(IPC.createEnvironment, async (_event, input) => {
+    search.cancelActive()
     const environment = database.createEnvironment(parse(environmentNameSchema, input))
     return workspace.activateEnvironment(environment.id)
   })
@@ -84,6 +89,7 @@ export function registerIpc({
   })
 
   handle(IPC.removeEnvironment, async (_event, input) => {
+    search.cancelActive()
     const environmentId = parse(idSchema, input)
     const wasActive = workspace.activeEnvironmentId === environmentId
     database.removeEnvironment(environmentId)
@@ -96,7 +102,10 @@ export function registerIpc({
     return workspace.activateEnvironment(next.id)
   })
 
-  handle(IPC.switchEnvironment, async (_event, input) => workspace.activateEnvironment(parse(idSchema, input)))
+  handle(IPC.switchEnvironment, async (_event, input) => {
+    search.cancelActive()
+    return workspace.activateEnvironment(parse(idSchema, input))
+  })
   handle(IPC.refreshEnvironment, async () => workspace.getSnapshot())
   handle(IPC.persistEnvironmentState, async (_event, input) => {
     const state = parse(environmentStateSchema, input)
@@ -150,6 +159,8 @@ export function registerIpc({
     }), input)
     return workspace.searchProjectFiles(request.query, request.limit)
   })
+  handle(IPC.startGlobalSearch, async (_event, input) => search.start(parse(globalSearchRequestSchema, input)))
+  handle(IPC.cancelGlobalSearch, async (_event, input) => search.cancel(parse(idSchema, input)))
 
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))

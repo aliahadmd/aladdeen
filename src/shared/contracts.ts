@@ -11,6 +11,7 @@ export type ErrorCode =
   | 'CONFLICT'
   | 'PERMISSION_DENIED'
   | 'EXPORT_FAILED'
+  | 'SEARCH_FAILED'
   | 'INTERNAL'
 
 export interface AppError {
@@ -140,6 +141,62 @@ export type DocumentTarget =
   | { kind: 'project'; projectId: string; relativePath: string }
   | { kind: 'tracked'; fileId: string }
 
+export type GlobalSearchScope =
+  | { kind: 'environment' }
+  | { kind: 'project'; projectId: string }
+  | { kind: 'standalone' }
+
+export interface SearchBufferOverride {
+  fileId: string
+  content: string
+}
+
+export interface GlobalSearchRequest {
+  query: string
+  matchCase: boolean
+  wholeWord: boolean
+  scope: GlobalSearchScope
+  bufferOverrides: SearchBufferOverride[]
+}
+
+export interface GlobalSearchMatch {
+  id: string
+  target: DocumentTarget
+  name: string
+  location: string
+  lineNumber: number
+  columnStart: number
+  columnEnd: number
+  sourceOffsetStart: number
+  sourceOffsetEnd: number
+  snippet: string
+  snippetMatchStart: number
+  snippetMatchEnd: number
+  fileTruncated: boolean
+}
+
+export interface GlobalSearchSummary {
+  scannedFiles: number
+  totalFiles: number
+  matchedFiles: number
+  totalMatches: number
+  skippedFiles: number
+  truncated: boolean
+}
+
+export type GlobalSearchEvent =
+  | {
+      type: 'batch'
+      sessionId: string
+      matches: GlobalSearchMatch[]
+      scannedFiles: number
+      totalFiles: number
+      skippedFiles: number
+    }
+  | { type: 'complete'; sessionId: string; summary: GlobalSearchSummary }
+  | { type: 'cancelled'; sessionId: string }
+  | { type: 'error'; sessionId: string; error: AppError }
+
 export interface FileRevision {
   mtimeMs: number
   size: number
@@ -167,6 +224,11 @@ export interface OpenDocument extends DocumentSnapshot {
   deleted?: boolean
   editorScrollTop: number
   editorSelection: number
+  editorReveal?: {
+    id: number
+    from: number
+    to: number
+  }
 }
 
 export interface AppSettings {
@@ -261,6 +323,12 @@ export interface AladdeenApi {
     listChildren(projectId: string, parentPath: string, cursor?: number): Promise<Result<ProjectTreePage>>
     search(query: string, limit?: number): Promise<Result<IndexedFileSummary[]>>
   }
+  search: {
+    start(request: GlobalSearchRequest): Promise<Result<{ sessionId: string }>>
+    cancel(sessionId: string): Promise<Result<void>>
+    onEvent(callback: (event: GlobalSearchEvent) => void): () => void
+    onOpenRequest(callback: () => void): () => void
+  }
   document: {
     open(target: DocumentTarget): Promise<Result<DocumentSnapshot>>
     openFile(): Promise<Result<DocumentSnapshot>>
@@ -313,6 +381,10 @@ export const IPC = {
   updateProject: 'projects:update',
   listProjectChildren: 'projects:list-children',
   searchProjectFiles: 'projects:search-files',
+  startGlobalSearch: 'search:start',
+  cancelGlobalSearch: 'search:cancel',
+  globalSearchEvent: 'search:event',
+  globalSearchOpenRequest: 'search:open-request',
   environmentEvent: 'environment:event',
   systemOpenFileRequest: 'system:open-file-request',
   acceptSystemOpenFile: 'system:accept-open-file',

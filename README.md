@@ -12,6 +12,7 @@ Aladdeen is a responsive, offline-first Markdown viewer and editor for macOS, Wi
 - Named environments containing multiple folder projects and standalone files
 - Bulk-linked project folders with all-files or selective indexing, exclusions, groups, favorites, and archive/pause controls
 - Lazy searchable project trees, persistent recent files, cross-project Quick Open, and mixed-project draggable tabs
+- Cancellable environment-wide Markdown source search with exact editor reveal
 - Debounced atomic autosave with external-change conflict recovery
 - GFM tables, task lists, fenced code highlighting, and local images
 - Light, dark, system, and accent themes
@@ -52,6 +53,7 @@ Platform builds are unsigned by default. The GitHub Actions workflow builds each
 - `Cmd/Ctrl+O`: open a Markdown file
 - `Cmd/Ctrl+Shift+O`: add an existing folder project
 - `Cmd/Ctrl+P`: search every indexed project file
+- `Cmd/Ctrl+Shift+F`: search Markdown contents in the active environment
 - `Cmd/Ctrl+S`: flush autosave now
 - `Cmd/Ctrl+E`: toggle editing
 

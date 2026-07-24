@@ -23,7 +23,9 @@ test('onboards into a persistent environment', async () => {
 
 test('bulk-links a selectively indexed project and quick-opens files without filling recents', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
-  const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-library-'))
+  const projectParent = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-library-'))
+  const projectPath = join(projectParent, 'library')
+  await mkdir(projectPath)
   await mkdir(join(projectPath, 'docs'))
   await mkdir(join(projectPath, 'archive'))
   await writeFile(join(projectPath, 'docs', 'guide.md'), '# Indexed guide\n', 'utf8')
@@ -82,11 +84,45 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
     await guideResult.click()
     await expect(window.getByRole('heading', { name: 'Indexed guide' })).toBeVisible()
     await expect(window.locator('.tracked-file-row')).toHaveCount(1)
+
+    await window.keyboard.press('ControlOrMeta+Shift+F')
+    const contentSearch = window.getByLabel('Search Markdown source')
+    await expect(contentSearch).toBeVisible()
+    await contentSearch.fill('Indexed guide')
+    const contentMatch = window.getByRole('option', { name: /Indexed guide/ })
+    await expect(contentMatch).toContainText('Indexed guide')
+    await window.locator('[data-sonner-toast]').evaluateAll((toasts) => toasts.forEach((toast) => toast.remove()))
+    await window.setViewportSize({ width: 640, height: 480 })
+    await expect(window).toHaveScreenshot('global-search-640-light.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    })
+    await window.setViewportSize({ width: 900, height: 700 })
+    await expect(window).toHaveScreenshot('global-search-900-light.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    })
+    await window.setViewportSize({ width: 1440, height: 900 })
+    await expect(window).toHaveScreenshot('global-search-1440-light.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    })
+    await window.evaluate(() => {
+      document.documentElement.classList.add('dark')
+      document.documentElement.dataset.theme = 'dark'
+    })
+    await expect(window).toHaveScreenshot('global-search-1440-dark.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01
+    })
+    await contentMatch.click()
+    await expect(window.locator('.cm-editor')).toBeVisible()
+    await expect(window.locator('.cm-selectionBackground')).toBeVisible()
   } finally {
     await application.close()
     await Promise.all([
       rm(userData, { recursive: true, force: true }),
-      rm(projectPath, { recursive: true, force: true })
+      rm(projectParent, { recursive: true, force: true })
     ])
   }
 })
@@ -109,6 +145,13 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
     await expect(window.getByRole('heading', { name: 'Individual files' })).toBeVisible()
     await expect(window.locator('.tracked-file-row')).toContainText('hello')
     await expect(window.locator('.tracked-file-copy strong')).toHaveText('hello')
+
+    await window.keyboard.press('ControlOrMeta+Shift+F')
+    await window.getByRole('button', { name: 'Entire environment' }).click()
+    await window.getByRole('button', { name: 'Standalone files' }).click()
+    await window.getByLabel('Search Markdown source').fill('Preview works')
+    await expect(window.getByRole('option', { name: /Preview works/ })).toBeVisible()
+    await window.keyboard.press('Escape')
 
     await window.getByRole('button', { name: 'Edit' }).click()
     const editor = window.locator('.cm-content')

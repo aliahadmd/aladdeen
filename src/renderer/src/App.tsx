@@ -6,6 +6,7 @@ import { AddProjectsDialog } from './components/AddProjectsDialog'
 import { BrandMark } from './components/BrandMark'
 import { ConflictDialog } from './components/ConflictDialog'
 import { DocumentView } from './components/DocumentView'
+import { GlobalSearchDialog } from './components/GlobalSearchDialog'
 import { OnboardingDialog } from './components/OnboardingDialog'
 import { QuickOpenDialog } from './components/QuickOpenDialog'
 import { Sidebar } from './components/Sidebar'
@@ -214,6 +215,7 @@ export default function App(): React.JSX.Element {
       {!environment && <OnboardingDialog />}
       <AddProjectsDialog />
       <QuickOpenDialog />
+      <GlobalSearchDialog />
       <ConflictDialog />
       <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'app-toast' }} />
     </div>

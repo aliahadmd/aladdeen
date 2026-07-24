@@ -22,6 +22,33 @@ export const documentTargetSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('tracked'), fileId: idSchema })
 ])
 
+const globalSearchScopeSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('environment') }),
+  z.object({ kind: z.literal('project'), projectId: idSchema }),
+  z.object({ kind: z.literal('standalone') })
+])
+
+export const globalSearchRequestSchema = z.object({
+  query: z.string().trim().min(1).max(500)
+    .refine((value) => !/[\0\r\n]/.test(value), 'Search contains an invalid character'),
+  matchCase: z.boolean(),
+  wholeWord: z.boolean(),
+  scope: globalSearchScopeSchema,
+  bufferOverrides: z.array(z.object({
+    fileId: idSchema,
+    content: z.string().max(10 * 1024 * 1024)
+  })).max(100)
+}).superRefine((value, context) => {
+  const totalCharacters = value.bufferOverrides.reduce((total, override) => total + override.content.length, 0)
+  if (totalCharacters > 64 * 1024 * 1024) {
+    context.addIssue({
+      code: 'custom',
+      path: ['bufferOverrides'],
+      message: 'Open search buffers are too large.'
+    })
+  }
+})
+
 export const saveDocumentSchema = z.object({
   fileId: idSchema,
   content: z.string().max(20_000_000),

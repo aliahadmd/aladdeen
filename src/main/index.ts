@@ -12,6 +12,7 @@ import {
 } from 'electron'
 import { AppDatabase } from '@main/services/database'
 import { ExportService } from '@main/services/export'
+import { GlobalSearchService } from '@main/services/global-search'
 import { WorkspaceService } from '@main/services/workspace'
 import { registerIpc } from '@main/ipc'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
@@ -29,6 +30,7 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null
 let database: AppDatabase | null = null
 let workspace: WorkspaceService | null = null
+let globalSearch: GlobalSearchService | null = null
 let pendingSystemFile: string | null = null
 let pendingOpenRequest: OpenFileRequest | undefined
 let quitting = false
@@ -75,12 +77,14 @@ app.whenReady().then(async () => {
   workspace = new WorkspaceService(database, (environmentEvent) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.environmentEvent, environmentEvent)
   })
+  globalSearch = new GlobalSearchService(database, workspace, () => mainWindow)
 
   const exportService = new ExportService(workspace, () => mainWindow)
   registerIpc({
     database,
     workspace,
     exports: exportService,
+    search: globalSearch,
     getWindow: () => mainWindow,
     getPendingOpenRequest: () => pendingOpenRequest,
     acceptSystemOpenFile
@@ -142,6 +146,7 @@ function createWindow(): void {
   mainWindow.on('maximize', rememberBounds)
   mainWindow.on('unmaximize', rememberBounds)
   mainWindow.on('closed', () => {
+    globalSearch?.cancelActive(false)
     mainWindow = null
   })
 }
@@ -218,6 +223,16 @@ function installMenu(): void {
     {
       label: 'Edit',
       submenu: [
+        {
+          label: 'Search Environment…',
+          accelerator: 'CmdOrCtrl+Shift+F',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send(IPC.globalSearchOpenRequest)
+            }
+          }
+        },
+        { type: 'separator' },
         { role: 'undo' },
         { role: 'redo' },
         { type: 'separator' },
@@ -252,6 +267,7 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   quitting = true
+  globalSearch?.close()
   void workspace?.close()
   database?.close()
 })

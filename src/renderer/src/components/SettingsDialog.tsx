@@ -77,6 +77,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
               </div>
               <dl className="settings-shortcuts">
                 <div><dt>Quick open</dt><dd>⌘/Ctrl P</dd></div>
+                <div><dt>Search contents</dt><dd>⌘/Ctrl ⇧ F</dd></div>
                 <div><dt>Open file</dt><dd>⌘/Ctrl O</dd></div>
                 <div><dt>Add project</dt><dd>⌘/Ctrl ⇧ O</dd></div>
                 <div><dt>Edit or preview</dt><dd>⌘/Ctrl E</dd></div>

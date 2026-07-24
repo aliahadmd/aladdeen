@@ -10,6 +10,7 @@ import {
   ChevronRight,
   FilePlus2,
   FileQuestion,
+  FileSearch2,
   FileText,
   Folder,
   FolderKanban,
@@ -67,6 +68,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const locateTrackedFile = useAppStore((state) => state.locateTrackedFile)
   const setSelectedLocation = useAppStore((state) => state.setSelectedLocation)
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen)
+  const setGlobalSearchOpen = useAppStore((state) => state.setGlobalSearchOpen)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -309,9 +311,20 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
         <div className="environment-header-actions">
           <button
             className="sidebar-icon-button"
+            onClick={() => {
+              if (compact) setSidebarOpen(false)
+              setGlobalSearchOpen(true)
+            }}
+            aria-label="Search Markdown contents"
+            title="Search Markdown contents (⌘/Ctrl Shift F)"
+          >
+            <FileSearch2 size={15} />
+          </button>
+          <button
+            className="sidebar-icon-button"
             onClick={() => setSearchOpen((value) => !value)}
-            aria-label={searchOpen ? 'Close search' : 'Search environment'}
-            title={searchOpen ? 'Close search' : 'Search environment'}
+            aria-label={searchOpen ? 'Close file filter' : 'Filter projects and files'}
+            title={searchOpen ? 'Close file filter' : 'Filter projects and files'}
           >
             {searchOpen ? <X size={15} /> : <Search size={15} />}
           </button>

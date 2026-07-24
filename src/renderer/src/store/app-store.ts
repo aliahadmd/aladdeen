@@ -8,6 +8,7 @@ import type {
   EnvironmentEvent,
   EnvironmentSnapshot,
   ExportRequest,
+  GlobalSearchMatch,
   OpenDocument,
   OpenFileRequest,
   ProjectImportSelection,
@@ -15,6 +16,7 @@ import type {
   TrackedFileSummary,
   UpdateProjectRequest
 } from '@shared/contracts'
+import { findNearestLiteralMatch, matchesLiteral } from '@shared/search'
 
 type MobilePane = 'editor' | 'preview'
 
@@ -30,6 +32,7 @@ interface AppState {
   conflictFileId: string | null
   pendingOpenRequest?: OpenFileRequest
   projectImportOpen: boolean
+  globalSearchOpen: boolean
   selectedProjectId: string | null
   selectedFolderPath: string
   initialize(): Promise<void>
@@ -49,6 +52,12 @@ interface AppState {
   createFolder(name: string): Promise<void>
   openDocument(target: DocumentTarget): Promise<void>
   openRelativeDocument(fileId: string, target: string): Promise<void>
+  openSearchMatch(
+    match: GlobalSearchMatch,
+    query: string,
+    matchCase: boolean,
+    wholeWord: boolean
+  ): Promise<void>
   openDroppedFile(file: File): Promise<void>
   setActiveFileId(fileId: string): void
   updateContent(fileId: string, content: string): void
@@ -70,9 +79,11 @@ interface AppState {
   setMobilePane(value: MobilePane): void
   setSidebarOpen(value: boolean): void
   setProjectImportOpen(value: boolean): void
+  setGlobalSearchOpen(value: boolean): void
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+let editorRevealId = 0
 
 function withoutCancelled(error: { code: string; message: string }): void {
   if (error.code !== 'CANCELLED') toast.error(error.message)
@@ -152,6 +163,7 @@ export const useAppStore = create<AppState>((set, get) => {
     sidebarOpen: false,
     conflictFileId: null,
     projectImportOpen: false,
+    globalSearchOpen: false,
     selectedProjectId: null,
     selectedFolderPath: '',
 
@@ -212,7 +224,14 @@ export const useAppStore = create<AppState>((set, get) => {
       else {
         saveTimers.forEach((timer) => clearTimeout(timer))
         saveTimers.clear()
-        set({ environment: null, documents: [], activeFileId: null, selectedProjectId: null, selectedFolderPath: '' })
+        set({
+          environment: null,
+          documents: [],
+          activeFileId: null,
+          globalSearchOpen: false,
+          selectedProjectId: null,
+          selectedFolderPath: ''
+        })
       }
       return true
     },
@@ -242,6 +261,7 @@ export const useAppStore = create<AppState>((set, get) => {
         documents,
         activeFileId: preferred,
         sidebarOpen: false,
+        globalSearchOpen: false,
         conflictFileId: null,
         selectedProjectId: null,
         selectedFolderPath: ''
@@ -345,6 +365,64 @@ export const useAppStore = create<AppState>((set, get) => {
       const result = await window.aladdeen.document.openRelative(fileId, target)
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
+    },
+
+    async openSearchMatch(match, query, matchCase, wholeWord) {
+      let fileId: string | undefined
+      if (match.target.kind === 'tracked') {
+        fileId = match.target.fileId
+      } else {
+        const target = match.target
+        fileId = get().documents.find((document) =>
+          document.projectId === target.projectId && document.relativePath === target.relativePath
+        )?.id
+      }
+
+      if (!fileId || !get().documents.some((document) => document.id === fileId)) {
+        const result = await window.aladdeen.document.open(match.target)
+        if (!result.ok) return withoutCancelled(result.error)
+        fileId = result.value.id
+        await ingestDocument(result.value)
+      } else {
+        set({ activeFileId: fileId, sidebarOpen: false })
+        await persistOpenState()
+      }
+
+      const document = get().documents.find((candidate) => candidate.id === fileId)
+      if (!document) return
+      let from = match.sourceOffsetStart
+      let to = match.sourceOffsetEnd
+      if (!matchesLiteral(document.content, from, to, query, matchCase, wholeWord)) {
+        const nearest = findNearestLiteralMatch(
+          document.content,
+          query,
+          matchCase,
+          wholeWord,
+          match.sourceOffsetStart
+        )
+        if (nearest) {
+          from = nearest.from
+          to = nearest.to
+        } else {
+          from = offsetForLine(document.content, match.lineNumber)
+          to = from
+          toast.info('That search match no longer exists. The file changed after searching.')
+        }
+      }
+      editorRevealId += 1
+      set((state) => ({
+        activeFileId: fileId,
+        editing: true,
+        mobilePane: 'editor',
+        globalSearchOpen: false,
+        documents: state.documents.map((candidate) => candidate.id === fileId
+          ? {
+              ...candidate,
+              editorSelection: to,
+              editorReveal: { id: editorRevealId, from, to }
+            }
+          : candidate)
+      }))
     },
 
     async openDroppedFile(file) {
@@ -586,9 +664,25 @@ export const useAppStore = create<AppState>((set, get) => {
     },
     setProjectImportOpen(value) {
       set({ projectImportOpen: value })
+    },
+
+    setGlobalSearchOpen(value) {
+      set({ globalSearchOpen: value })
     }
   }
 })
+
+function offsetForLine(content: string, requestedLine: number): number {
+  let line = 1
+  let offset = 0
+  while (line < requestedLine) {
+    const newline = content.indexOf('\n', offset)
+    if (newline < 0) return content.length
+    offset = newline + 1
+    line += 1
+  }
+  return offset
+}
 
 export function isDocumentDirty(document: OpenDocument): boolean {
   return document.content !== document.savedContent

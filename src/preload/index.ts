@@ -1,5 +1,11 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { IPC, type EnvironmentEvent, type AladdeenApi, type OpenFileRequest } from '@shared/contracts'
+import {
+  IPC,
+  type EnvironmentEvent,
+  type GlobalSearchEvent,
+  type AladdeenApi,
+  type OpenFileRequest
+} from '@shared/contracts'
 
 const api: AladdeenApi = {
   app: {
@@ -24,6 +30,20 @@ const api: AladdeenApi = {
     listChildren: (projectId, parentPath, cursor) =>
       ipcRenderer.invoke(IPC.listProjectChildren, { projectId, parentPath, cursor }),
     search: (query, limit) => ipcRenderer.invoke(IPC.searchProjectFiles, { query, limit })
+  },
+  search: {
+    start: (request) => ipcRenderer.invoke(IPC.startGlobalSearch, request),
+    cancel: (sessionId) => ipcRenderer.invoke(IPC.cancelGlobalSearch, sessionId),
+    onEvent: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, searchEvent: GlobalSearchEvent): void => callback(searchEvent)
+      ipcRenderer.on(IPC.globalSearchEvent, listener)
+      return () => ipcRenderer.removeListener(IPC.globalSearchEvent, listener)
+    },
+    onOpenRequest: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on(IPC.globalSearchOpenRequest, listener)
+      return () => ipcRenderer.removeListener(IPC.globalSearchOpenRequest, listener)
+    }
   },
   document: {
     open: (target) => ipcRenderer.invoke(IPC.openDocument, target),
