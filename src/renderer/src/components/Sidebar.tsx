@@ -397,7 +397,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
 
       <div className="mx-[10px] mt-0.5 mb-[5px] grid min-w-0 shrink-0 gap-0.5 rounded-lg border border-border bg-[color-mix(in_oklab,var(--surface-elevated)_72%,transparent)] px-[9px] py-2" title={activeDocument?.fullPath}>
         <strong className={cn('overflow-hidden text-[12px] font-[630] leading-4 text-ellipsis whitespace-nowrap text-foreground', !activeDocument && 'text-foreground-soft')}>{activeDocument?.name ?? 'No file selected'}</strong>
-        <span className="overflow-hidden text-[9px] leading-[13px] text-ellipsis whitespace-nowrap text-foreground-muted">{activeDocument?.location ?? 'Open or create a Markdown file'}</span>
+        <span className="active-document-location overflow-hidden text-[9px] leading-[13px] text-ellipsis whitespace-nowrap text-foreground-muted">{activeDocument?.location ?? 'Open or create a Markdown file'}</span>
       </div>
 
       <div className="flex min-h-[35px] shrink-0 items-center justify-between pt-0 pr-[9px] pb-0.5 pl-[11px]">

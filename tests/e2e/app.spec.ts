@@ -9,6 +9,7 @@ test('onboards into a persistent environment', async () => {
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
+    await window.setViewportSize({ width: 1280, height: 768 })
     await expect(window.getByRole('heading', { name: 'Create your first environment' })).toBeVisible()
     await expect(window.getByLabel('Environment name')).toHaveValue('Personal')
     await expect(window).toHaveScreenshot('onboarding.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
@@ -549,6 +550,11 @@ test('renders extended Markdown safely and responsively', async () => {
     await expect(window.locator('.markdown-body script')).toHaveCount(0)
     await expect(window.locator('.mermaid-svg svg')).toBeVisible({ timeout: 10_000 })
     expect(remoteRequests).toEqual([])
+    await window.locator('.active-document-location, .tracked-file-copy small').evaluateAll((locations) => {
+      locations.forEach((location) => {
+        location.textContent = 'Local file'
+      })
+    })
 
     for (const viewport of [
       { width: 1440, height: 900 },
