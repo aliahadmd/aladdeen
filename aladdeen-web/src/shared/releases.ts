@@ -38,8 +38,8 @@ function createArtifact(
 export const RELEASE_ARTIFACTS = {
 	arm64: createArtifact(
 		"arm64",
-		"Apple Silicon",
-		"For Macs with M1, M2, M3, M4, or newer Apple chips.",
+		"macOS arm64 · M-series Apple silicon",
+		"For Macs with an M1, M2, M3, M4, or newer M-series chip.",
 	),
 } as const satisfies Record<DownloadArch, ReleaseArtifact>;
 

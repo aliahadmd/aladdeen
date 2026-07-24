@@ -24,7 +24,7 @@ if (!/^[a-f0-9]{64}$/.test(artifact.sha256)) {
   throw new Error("Release manifest arm64 sha256 is invalid.");
 }
 if (Object.keys(manifest.macos ?? {}).some((architecture) => architecture !== "arm64")) {
-  throw new Error("Release manifest must contain only the Apple silicon arm64 artifact.");
+  throw new Error("Release manifest must contain only the macOS arm64 (M-series Apple silicon) artifact.");
 }
 
 async function readJson(url) {

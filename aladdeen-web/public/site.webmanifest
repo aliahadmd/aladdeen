@@ -1,7 +1,7 @@
 {
 	"name": "Aladdeen",
 	"short_name": "Aladdeen",
-	"description": "A calm, offline-first Markdown workspace made only for Apple silicon Macs.",
+	"description": "A calm, offline-first Markdown workspace made only for macOS arm64 on M-series Apple silicon.",
 	"start_url": "/",
 	"display": "standalone",
 	"background_color": "#ffffff",

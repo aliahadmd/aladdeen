@@ -38,11 +38,11 @@ describe("Aladdeen landing page", () => {
 		expect(document.querySelector("#faq")).toBeInTheDocument();
 	});
 
-	it("links only the Apple silicon download to its versioned Worker route", () => {
+	it("links only the macOS arm64 download to its versioned Worker route", () => {
 		render(<App />);
 
 		const appleLinks = screen.getAllByRole("link", {
-			name: /Download for Apple Silicon/,
+			name: /Download for macOS arm64/,
 		});
 		expect(appleLinks[0]).toHaveAttribute(
 			"href",

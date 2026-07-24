@@ -4,7 +4,7 @@
 
 # Aladdeen
 
-Aladdeen is a responsive, offline-first Markdown viewer and editor made only for Apple silicon Macs (M1 or newer). It keeps ordinary `.md` files on disk, gives them a clean live preview, and exports finished documents to PDF or DOCX without a network connection.
+Aladdeen is a responsive, offline-first Markdown viewer and editor made only for macOS arm64 on M-series Apple silicon (M1 or newer). It keeps ordinary `.md` files on disk, gives them a clean live preview, and exports finished documents to PDF or DOCX without a network connection.
 
 ## Features
 
@@ -44,10 +44,10 @@ pnpm build
 pnpm dist:mac
 ```
 
-Aladdeen produces arm64 DMG and ZIP artifacts only. Builds are ad-hoc signed so the Electron bundle is internally valid without
+Aladdeen produces macOS arm64 DMG and ZIP artifacts only. Release packaging is guarded to native M-series Macs, and builds are ad-hoc signed so the Electron bundle is internally valid without
 requiring a paid Apple Developer account. They are not notarized, so macOS requires
 the user to approve the first launch in System Settings → Privacy & Security. The
-GitHub Actions workflow builds on a native Apple silicon runner. Auto-update and
+GitHub Actions workflow builds on a native macOS arm64 runner. Auto-update and
 publishing are intentionally not configured.
 
 ## Keyboard shortcuts

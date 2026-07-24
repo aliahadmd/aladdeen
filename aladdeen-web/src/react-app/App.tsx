@@ -55,9 +55,9 @@ const faqItems = [
 			"No. Reading, editing, searching, local images, and PDF or DOCX export work offline. Aladdeen does not provide cloud sync or fetch remote images.",
 	},
 	{
-		question: "Which platforms can I download today?",
+		question: "Which Mac does Aladdeen support?",
 		answer:
-			`Aladdeen v${CURRENT_RELEASE} is made only for Apple silicon Macs with an M1 or newer chip.`,
+			`Aladdeen v${CURRENT_RELEASE} is made only for macOS arm64 on M-series Apple silicon (M1 or newer).`,
 	},
 	{
 		question: "Why does macOS show a warning?",
@@ -317,17 +317,17 @@ function App() {
 				<section className="mx-auto w-full max-w-5xl px-6 pb-12 pt-20 md:pb-20 md:pt-28">
 					<div className="max-w-3xl">
 						<p className="text-sm text-neutral-400 dark:text-neutral-400">
-							Aladdeen for Apple silicon · Preview {CURRENT_RELEASE}
+							Aladdeen for macOS arm64 · M-series Apple silicon · Preview {CURRENT_RELEASE}
 						</p>
 						<h1 className="mt-5 max-w-2xl text-4xl font-bold tracking-[-0.035em] text-balance text-neutral-950 dark:text-neutral-50 md:text-6xl md:leading-[1.03]">
 							All your Markdown, one calm place.
 						</h1>
 						<p className="mt-6 max-w-xl text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Made only for Apple silicon Macs. A responsive, offline-first workspace for reading, editing, finding, and exporting the files you already own.
+							Made only for macOS arm64 on M-series Apple silicon. A responsive, offline-first workspace for reading, editing, finding, and exporting the files you already own.
 						</p>
 						<div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
-								Download for Apple Silicon
+								Download for macOS arm64
 							</DownloadLink>
 						</div>
 						<p className="mt-4 text-xs text-neutral-400 dark:text-neutral-400">
@@ -428,7 +428,7 @@ function App() {
 							Built for the Mac you have.
 						</h2>
 						<p className="mt-4 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Version {CURRENT_RELEASE} is a free Apple silicon preview for M1 and newer Macs. The installer is delivered from a private Cloudflare R2 bucket through this site. It is ad-hoc signed for bundle integrity but is not Apple notarized.
+							Version {CURRENT_RELEASE} is a free macOS arm64 preview for M-series Macs (M1 or newer). The installer is delivered from a private Cloudflare R2 bucket through this site. It is ad-hoc signed for bundle integrity but is not Apple notarized.
 						</p>
 					</div>
 
@@ -507,7 +507,7 @@ function App() {
 						</p>
 						<div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
-								Download for Apple Silicon
+								Download for macOS arm64
 							</DownloadLink>
 						</div>
 					</div>

@@ -1,7 +1,7 @@
 {
   "name": "aladdeen",
   "version": "0.3.0",
-  "description": "A calm, offline-first Markdown workspace for Apple silicon Macs.",
+  "description": "A calm, offline-first Markdown workspace for macOS arm64 (M-series Apple silicon).",
   "main": "./out/main/index.js",
   "author": {
     "name": "Ali Ahad",
@@ -23,7 +23,7 @@
     "check:release": "node scripts/check-release-metadata.mjs",
     "icons": "node scripts/generate-icon.mjs",
     "dist": "pnpm dist:mac",
-    "dist:mac": "pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never"
+    "dist:mac": "node scripts/assert-macos-arm.mjs && pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never"
   },
   "dependencies": {
     "chokidar": "^5.0.0",

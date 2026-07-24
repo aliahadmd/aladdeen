@@ -368,7 +368,7 @@ function AboutSettings(): React.JSX.Element {
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">A calm Markdown workspace</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Aladdeen is an offline-first Markdown workspace made only for Apple silicon Macs.
+            Aladdeen is an offline-first Markdown workspace made only for macOS arm64 on M-series Apple silicon.
           </p>
         </section>
         <section className="py-5">
