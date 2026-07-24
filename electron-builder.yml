@@ -17,9 +17,12 @@ fileAssociations:
 mac:
   icon: build/icon.png
   category: public.app-category.productivity
+  artifactName: ${productName}-${version}-${arch}-mac.${ext}
   target:
     - dmg
     - zip
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
 win:
   icon: build/icon.png
   target:
