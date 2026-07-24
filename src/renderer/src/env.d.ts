@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-import type { FluidMdApi } from '@shared/contracts'
+import type { AladdeenApi } from '@shared/contracts'
 
 declare global {
   interface Window {
-    fluidmd: FluidMdApi
+    aladdeen: AladdeenApi
   }
 }
 

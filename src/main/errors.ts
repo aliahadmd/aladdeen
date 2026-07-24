@@ -1,18 +1,18 @@
-import type { AppError, ErrorCode, Result } from '@shared/contracts'
+import type { AppError as AppErrorPayload, ErrorCode, Result } from '@shared/contracts'
 
-export class FluidError extends Error {
+export class DesktopError extends Error {
   constructor(
     public readonly code: ErrorCode,
     message: string,
     public readonly details?: string
   ) {
     super(message)
-    this.name = 'FluidError'
+    this.name = 'DesktopError'
   }
 }
 
-export function toAppError(error: unknown, fallback: ErrorCode = 'INTERNAL'): AppError {
-  if (error instanceof FluidError) {
+export function toAppError(error: unknown, fallback: ErrorCode = 'INTERNAL'): AppErrorPayload {
+  if (error instanceof DesktopError) {
     return { code: error.code, message: error.message, details: error.details }
   }
 
@@ -20,7 +20,7 @@ export function toAppError(error: unknown, fallback: ErrorCode = 'INTERNAL'): Ap
     const candidate = error as NodeJS.ErrnoException
     if (candidate.code === 'ENOENT') return { code: 'NOT_FOUND', message: 'The file no longer exists.' }
     if (candidate.code === 'EACCES' || candidate.code === 'EPERM') {
-      return { code: 'PERMISSION_DENIED', message: 'FluidMD does not have permission to complete that action.' }
+      return { code: 'PERMISSION_DENIED', message: 'Aladdeen does not have permission to complete that action.' }
     }
     if (candidate.code === 'EEXIST') return { code: 'ALREADY_EXISTS', message: 'An item with that name already exists.' }
     return { code: fallback, message: error.message || 'Something went wrong.' }

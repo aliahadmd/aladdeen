@@ -2,8 +2,8 @@ import { useMemo, type Ref } from 'react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import {
   extractMarkdownMetadata,
-  fluidMarkdownRehypePlugins,
-  fluidMarkdownRemarkPlugins,
+  aladdeenMarkdownRehypePlugins,
+  aladdeenMarkdownRemarkPlugins,
   prepareMarkdownSource
 } from '@shared/markdown'
 import { MarkdownCodeBlock } from './MarkdownCodeBlock'
@@ -111,8 +111,8 @@ export function MarkdownContent({
       data-document-author={metadata?.author}
     >
       <ReactMarkdown
-        remarkPlugins={fluidMarkdownRemarkPlugins}
-        rehypePlugins={fluidMarkdownRehypePlugins}
+        remarkPlugins={aladdeenMarkdownRemarkPlugins}
+        rehypePlugins={aladdeenMarkdownRehypePlugins}
         components={components}
         urlTransform={safeUrlTransform}
       >

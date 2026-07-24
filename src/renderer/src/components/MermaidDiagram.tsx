@@ -66,7 +66,7 @@ async function renderMermaid(source: string, theme: 'light' | 'dark'): Promise<M
         flowchart: { htmlLabels: false },
         suppressErrorRendering: true
       })
-      const id = `fluidmd-mermaid-${renderSequence++}`
+      const id = `aladdeen-mermaid-${renderSequence++}`
       const rendered = await mermaid.render(id, source)
       const result = { svg: sanitizeMermaidSvg(rendered.svg) }
       diagramCache.set(cacheKey, result)

@@ -1,7 +1,7 @@
 import { basename } from 'node:path'
 import { dialog, ipcMain, nativeTheme, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import { z, type ZodType } from 'zod'
-import { asResult, FluidError } from '@main/errors'
+import { asResult, DesktopError } from '@main/errors'
 import type { AppDatabase } from '@main/services/database'
 import type { ExportService } from '@main/services/export'
 import type { WorkspaceService } from '@main/services/workspace'
@@ -14,10 +14,12 @@ import {
   exportRequestSchema,
   externalUrlSchema,
   idSchema,
+  projectImportSelectionSchema,
   relativePathSchema,
   renameEntrySchema,
   saveDocumentSchema,
-  settingsSchema
+  settingsSchema,
+  updateProjectSchema
 } from '@shared/schemas'
 
 interface IpcDependencies {
@@ -31,16 +33,16 @@ interface IpcDependencies {
 
 function parse<T>(schema: ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input)
-  if (!result.success) throw new FluidError('INVALID_PATH', 'FluidMD rejected an invalid request.', z.prettifyError(result.error))
+  if (!result.success) throw new DesktopError('INVALID_PATH', 'Aladdeen rejected an invalid request.', z.prettifyError(result.error))
   return result.data
 }
 
 function requireTrustedSender(event: IpcMainInvokeEvent, window: BrowserWindow | null): void {
   if (!window || window.isDestroyed() || event.sender.id !== window.webContents.id) {
-    throw new FluidError('PERMISSION_DENIED', 'The request did not come from the FluidMD window.')
+    throw new DesktopError('PERMISSION_DENIED', 'The request did not come from the Aladdeen window.')
   }
   if (event.senderFrame && event.senderFrame !== window.webContents.mainFrame) {
-    throw new FluidError('PERMISSION_DENIED', 'Subframes cannot use desktop features.')
+    throw new DesktopError('PERMISSION_DENIED', 'Subframes cannot use desktop features.')
   }
 }
 
@@ -108,24 +110,45 @@ export function registerIpc({
       buttonLabel: 'Choose location',
       properties: ['openDirectory', 'createDirectory']
     })
-    if (result.canceled || !result.filePaths[0]) throw new FluidError('CANCELLED', 'New folder was cancelled.')
+    if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'New folder was cancelled.')
     return workspace.createProject(result.filePaths[0], name)
   })
 
-  handle(IPC.addProject, async () => {
+  handle(IPC.chooseProjects, async () => {
     const result = await showOpenDialog(getWindow(), {
-      title: 'Add an existing Markdown folder',
-      buttonLabel: 'Add project',
-      properties: ['openDirectory', 'createDirectory']
+      title: 'Choose Markdown project folders',
+      buttonLabel: 'Review projects',
+      properties: ['openDirectory', 'createDirectory', 'multiSelections']
     })
-    if (result.canceled || !result.filePaths[0]) throw new FluidError('CANCELLED', 'Add project was cancelled.')
-    return workspace.addProjectPath(result.filePaths[0])
+    if (result.canceled || result.filePaths.length === 0) throw new DesktopError('CANCELLED', 'Add project was cancelled.')
+    return workspace.prepareProjectImports(result.filePaths)
   })
 
+  handle(IPC.commitProjectImport, async (_event, input) => {
+    const selections = parse(z.array(projectImportSelectionSchema).min(1).max(100), input)
+    return workspace.commitProjectImports(selections)
+  })
   handle(IPC.removeProject, async (_event, input) => workspace.removeProject(parse(idSchema, input)))
   handle(IPC.persistExpandedPaths, async (_event, input) => {
     const request = parse(z.object({ projectId: idSchema, paths: z.array(relativePathSchema).max(5_000) }), input)
     workspace.persistExpandedPaths(request.projectId, request.paths)
+  })
+  handle(IPC.inspectProjectScope, async (_event, input) => workspace.inspectProjectScope(parse(idSchema, input)))
+  handle(IPC.updateProject, async (_event, input) => workspace.updateProject(parse(updateProjectSchema, input)))
+  handle(IPC.listProjectChildren, async (_event, input) => {
+    const request = parse(z.object({
+      projectId: idSchema,
+      parentPath: relativePathSchema,
+      cursor: z.number().int().min(0).max(1_000_000).optional()
+    }), input)
+    return workspace.listProjectChildren(request.projectId, request.parentPath, request.cursor)
+  })
+  handle(IPC.searchProjectFiles, async (_event, input) => {
+    const request = parse(z.object({
+      query: z.string().max(500),
+      limit: z.number().int().min(1).max(100).optional()
+    }), input)
+    return workspace.searchProjectFiles(request.query, request.limit)
   })
 
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
@@ -140,7 +163,7 @@ export function registerIpc({
       properties: ['openFile'],
       filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
     })
-    if (result.canceled || !result.filePaths[0]) throw new FluidError('CANCELLED', 'Open file was cancelled.')
+    if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'Open file was cancelled.')
     return workspace.openAbsoluteDocument(result.filePaths[0])
   })
   handle(IPC.openDroppedFile, async (_event, input) => workspace.openAbsoluteDocument(parse(z.string().min(1).max(16_384), input)))
@@ -158,7 +181,7 @@ export function registerIpc({
       defaultPath: 'Untitled.md',
       filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
     })
-    if (result.canceled || !result.filePath) throw new FluidError('CANCELLED', 'New file was cancelled.')
+    if (result.canceled || !result.filePath) throw new DesktopError('CANCELLED', 'New file was cancelled.')
     return workspace.createStandaloneFile(result.filePath)
   })
 
@@ -189,7 +212,7 @@ export function registerIpc({
       properties: ['openFile'],
       filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
     })
-    if (result.canceled || !result.filePaths[0]) throw new FluidError('CANCELLED', 'Locate file was cancelled.')
+    if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'Locate file was cancelled.')
     return workspace.locateTrackedFile(fileId, result.filePaths[0])
   })
 

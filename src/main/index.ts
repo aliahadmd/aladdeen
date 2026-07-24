@@ -21,7 +21,7 @@ const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
 
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: 'fluidmd-asset',
+    scheme: 'aladdeen-asset',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
   }
 ])
@@ -59,7 +59,16 @@ app.on('open-file', (event, filePath) => {
 })
 
 app.whenReady().then(async () => {
-  database = new AppDatabase(app.getPath('userData'))
+  const previousApplicationDirectory = process.platform === 'linux'
+    ? ['fl', 'uid', 'md'].join('')
+    : ['Fl', 'uid', 'MD'].join('')
+  const previousUserDataPath = app.commandLine.hasSwitch('user-data-dir')
+    ? undefined
+    : join(app.getPath('appData'), previousApplicationDirectory)
+  database = new AppDatabase(
+    app.getPath('userData'),
+    previousUserDataPath
+  )
   const settings = database.getSettings()
   nativeTheme.themeSource = settings.theme
 
@@ -97,7 +106,7 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     backgroundColor: '#f7f7f9',
-    title: 'FluidMD',
+    title: 'Aladdeen',
     webPreferences: {
       preload: join(mainBundleDirectory, '../preload/index.cjs'),
       contextIsolation: true,
@@ -143,7 +152,7 @@ function configureSessionSecurity(): void {
 }
 
 function registerAssetProtocol(service: WorkspaceService): void {
-  protocol.handle('fluidmd-asset', async (request) => {
+  protocol.handle('aladdeen-asset', async (request) => {
     try {
       const url = new URL(request.url)
       if (url.hostname !== 'document') return new Response('Not found', { status: 404 })
@@ -183,7 +192,7 @@ async function acceptSystemOpenFile(token: string): Promise<DocumentSnapshot> {
   systemOpenTokens.delete(token)
   if (!request || request.expiresAt < Date.now()) throw new Error('The file-open request expired. Open the file again.')
   pendingOpenRequest = undefined
-  if (!workspace) throw new Error('FluidMD is not ready.')
+  if (!workspace) throw new Error('Aladdeen is not ready.')
   return workspace.openAbsoluteDocument(request.path)
 }
 

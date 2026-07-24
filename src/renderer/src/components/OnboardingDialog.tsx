@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { FolderKanban, ShieldCheck } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { useAppStore } from '@renderer/store/app-store'
+import { BrandMark } from './BrandMark'
 
 export function OnboardingDialog(): React.JSX.Element {
   const createEnvironment = useAppStore((state) => state.createEnvironment)
@@ -19,8 +20,8 @@ export function OnboardingDialog(): React.JSX.Element {
     <div className="onboarding-layer" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
       <div className="onboarding-backdrop" />
       <section className="onboarding-card">
-        <div className="onboarding-symbol"><FolderKanban size={25} /></div>
-        <p className="eyebrow">WELCOME TO FLUIDMD</p>
+        <BrandMark className="onboarding-symbol" title="Aladdeen" />
+        <p className="eyebrow">WELCOME TO ALADDEEN</p>
         <h1 id="onboarding-title">Create your first environment</h1>
         <p className="onboarding-copy">
           Keep project folders and independent Markdown files together without moving anything on disk.

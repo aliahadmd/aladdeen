@@ -1,5 +1,5 @@
-appId: com.fluidmd.app
-productName: FluidMD
+appId: com.aladdeen.app
+productName: Aladdeen
 asar: true
 directories:
   buildResources: build

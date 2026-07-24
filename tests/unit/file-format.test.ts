@@ -18,7 +18,7 @@ describe('Markdown file encoding', () => {
 
   it('rejects binary input and returns stable hashes', () => {
     expect(() => decodeMarkdown(Buffer.from([0, 1, 2]))).toThrow(/binary/i)
-    expect(sha256(Buffer.from('fluid'))).toMatch(/^[a-f0-9]{64}$/)
-    expect(sha256(Buffer.from('fluid'))).toBe(sha256(Buffer.from('fluid')))
+    expect(sha256(Buffer.from('aladdeen'))).toMatch(/^[a-f0-9]{64}$/)
+    expect(sha256(Buffer.from('aladdeen'))).toBe(sha256(Buffer.from('aladdeen')))
   })
 })

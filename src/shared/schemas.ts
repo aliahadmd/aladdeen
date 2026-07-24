@@ -46,6 +46,35 @@ export const environmentStateSchema = z.object({
   activeFileId: idSchema.optional()
 })
 
+const projectScopeModeSchema = z.enum(['all', 'selected'])
+const projectIncludePathsSchema = z.array(relativePathSchema).max(20_000)
+const projectExcludePatternsSchema = z
+  .array(z.string().trim().min(1).max(500).refine((value) => !value.includes('\0'), 'Pattern contains an invalid character'))
+  .max(200)
+
+export const projectImportSelectionSchema = z.object({
+  token: idSchema,
+  scopeMode: projectScopeModeSchema,
+  includePaths: projectIncludePathsSchema,
+  excludePatterns: projectExcludePatternsSchema,
+  groupName: z.string().trim().max(60).optional(),
+  pinned: z.boolean()
+}).refine((value) => value.scopeMode === 'all' || value.includePaths.length > 0, {
+  message: 'Choose at least one folder or Markdown file for a selective project.'
+})
+
+export const updateProjectSchema = z.object({
+  projectId: idSchema,
+  scopeMode: projectScopeModeSchema,
+  includePaths: projectIncludePathsSchema,
+  excludePatterns: projectExcludePatternsSchema,
+  groupName: z.string().trim().max(60).optional(),
+  pinned: z.boolean(),
+  archived: z.boolean()
+}).refine((value) => value.scopeMode === 'all' || value.includePaths.length > 0, {
+  message: 'Choose at least one folder or Markdown file for a selective project.'
+})
+
 export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']),
   accent: z.enum(['indigo', 'blue', 'emerald', 'amber', 'rose']),

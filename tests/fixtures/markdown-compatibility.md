@@ -1,13 +1,13 @@
 ---
-title: "FluidMD Compatibility"
-author: "FluidMD"
+title: "Aladdeen Compatibility"
+author: "Aladdeen"
 date: 2026-07-24
 tags: [offline, markdown]
 version: "1.0"
 draft: false
 ---
 
-# FluidMD Compatibility
+# Aladdeen Compatibility
 
 [TOC]
 

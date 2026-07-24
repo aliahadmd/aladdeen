@@ -10,8 +10,10 @@ import type {
   ExportRequest,
   OpenDocument,
   OpenFileRequest,
+  ProjectImportSelection,
   ThemeMode,
-  TrackedFileSummary
+  TrackedFileSummary,
+  UpdateProjectRequest
 } from '@shared/contracts'
 
 type MobilePane = 'editor' | 'preview'
@@ -27,6 +29,7 @@ interface AppState {
   sidebarOpen: boolean
   conflictFileId: string | null
   pendingOpenRequest?: OpenFileRequest
+  projectImportOpen: boolean
   selectedProjectId: string | null
   selectedFolderPath: string
   initialize(): Promise<void>
@@ -37,7 +40,9 @@ interface AppState {
   loadEnvironment(snapshot: EnvironmentSnapshot): Promise<void>
   refreshEnvironment(): Promise<void>
   createProject(name: string): Promise<void>
-  addProject(): Promise<void>
+  addProject(): void
+  commitProjectImport(selections: ProjectImportSelection[]): Promise<boolean>
+  updateProject(request: UpdateProjectRequest): Promise<boolean>
   removeProject(projectId: string): Promise<void>
   openFile(): Promise<void>
   createFile(name?: string): Promise<void>
@@ -64,6 +69,7 @@ interface AppState {
   setEditing(value: boolean): void
   setMobilePane(value: MobilePane): void
   setSidebarOpen(value: boolean): void
+  setProjectImportOpen(value: boolean): void
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -102,7 +108,7 @@ function mergeTrackedMetadata(documents: OpenDocument[], snapshot: EnvironmentSn
 export const useAppStore = create<AppState>((set, get) => {
   const persistOpenState = async (): Promise<void> => {
     if (!get().environment) return
-    await window.fluidmd.environments.persistState({
+    await window.aladdeen.environments.persistState({
       openFileIds: get().documents.map((document) => document.id),
       activeFileId: get().activeFileId ?? undefined
     })
@@ -145,11 +151,12 @@ export const useAppStore = create<AppState>((set, get) => {
     mobilePane: 'preview',
     sidebarOpen: false,
     conflictFileId: null,
+    projectImportOpen: false,
     selectedProjectId: null,
     selectedFolderPath: '',
 
     async initialize() {
-      const result = await window.fluidmd.app.bootstrap()
+      const result = await window.aladdeen.app.bootstrap()
       if (!result.ok) {
         toast.error(result.error.message)
         set({ initialized: true })
@@ -169,7 +176,7 @@ export const useAppStore = create<AppState>((set, get) => {
         if (!(await flushDocuments())) return false
         await persistOpenState()
       }
-      const result = await window.fluidmd.environments.create(name)
+      const result = await window.aladdeen.environments.create(name)
       if (!result.ok) {
         withoutCancelled(result.error)
         return false
@@ -183,7 +190,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async renameEnvironment(name) {
       const environmentId = get().environment?.environment.id
       if (!environmentId) return false
-      const result = await window.fluidmd.environments.rename(environmentId, name)
+      const result = await window.aladdeen.environments.rename(environmentId, name)
       if (!result.ok) {
         withoutCancelled(result.error)
         return false
@@ -196,7 +203,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const environmentId = get().environment?.environment.id
       if (!environmentId || !(await flushDocuments())) return false
       await persistOpenState()
-      const result = await window.fluidmd.environments.remove(environmentId)
+      const result = await window.aladdeen.environments.remove(environmentId)
       if (!result.ok) {
         withoutCancelled(result.error)
         return false
@@ -214,7 +221,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (environmentId === get().environment?.environment.id) return
       if (!(await flushDocuments())) return
       await persistOpenState()
-      const result = await window.fluidmd.environments.switch(environmentId)
+      const result = await window.aladdeen.environments.switch(environmentId)
       if (!result.ok) return withoutCancelled(result.error)
       await get().loadEnvironment(result.value)
     },
@@ -224,7 +231,7 @@ export const useAppStore = create<AppState>((set, get) => {
       saveTimers.clear()
       const documents: OpenDocument[] = []
       for (const fileId of snapshot.openFileIds) {
-        const opened = await window.fluidmd.document.open({ kind: 'tracked', fileId })
+        const opened = await window.aladdeen.document.open({ kind: 'tracked', fileId })
         if (opened.ok) documents.push(openDocumentFromSnapshot(opened.value))
       }
       const preferred = snapshot.activeFileId && documents.some((document) => document.id === snapshot.activeFileId)
@@ -243,34 +250,63 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async refreshEnvironment() {
       if (!get().environment) return
-      const result = await window.fluidmd.environments.refresh()
+      const result = await window.aladdeen.environments.refresh()
       if (result.ok) set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value) }))
       else if (result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
     },
 
     async createProject(name) {
-      const result = await window.fluidmd.projects.create(name)
+      const result = await window.aladdeen.projects.create(name)
       if (!result.ok) return withoutCancelled(result.error)
       const newest = result.value.projects.find((project) => !get().environment?.projects.some((old) => old.id === project.id))
       set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value), selectedProjectId: newest?.id ?? null, selectedFolderPath: '' }))
     },
 
-    async addProject() {
-      const result = await window.fluidmd.projects.addExisting()
-      if (!result.ok) return withoutCancelled(result.error)
+    addProject() {
+      set({ projectImportOpen: true })
+    },
+
+    async commitProjectImport(selections) {
+      const result = await window.aladdeen.projects.commitImport(selections)
+      if (!result.ok) {
+        withoutCancelled(result.error)
+        return false
+      }
       const newest = result.value.projects.find((project) => !get().environment?.projects.some((old) => old.id === project.id))
-      set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value), selectedProjectId: newest?.id ?? null, selectedFolderPath: '' }))
+      set((state) => ({
+        environment: result.value,
+        documents: mergeTrackedMetadata(state.documents, result.value),
+        selectedProjectId: newest?.id ?? null,
+        selectedFolderPath: '',
+        projectImportOpen: false
+      }))
+      return true
+    },
+
+    async updateProject(request) {
+      const result = await window.aladdeen.projects.update(request)
+      if (!result.ok) {
+        withoutCancelled(result.error)
+        return false
+      }
+      set((state) => ({
+        environment: result.value,
+        documents: mergeTrackedMetadata(state.documents, result.value),
+        selectedProjectId: request.archived && state.selectedProjectId === request.projectId ? null : state.selectedProjectId,
+        selectedFolderPath: request.archived && state.selectedProjectId === request.projectId ? '' : state.selectedFolderPath
+      }))
+      return true
     },
 
     async removeProject(projectId) {
-      const result = await window.fluidmd.projects.remove(projectId)
+      const result = await window.aladdeen.projects.remove(projectId)
       if (!result.ok) return withoutCancelled(result.error)
       set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value), selectedProjectId: null, selectedFolderPath: '' }))
     },
 
     async openFile() {
       if (!get().environment) return
-      const result = await window.fluidmd.document.openFile()
+      const result = await window.aladdeen.document.openFile()
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
@@ -279,8 +315,8 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!get().environment) return
       const projectId = get().selectedProjectId
       const result = projectId && name
-        ? await window.fluidmd.files.create({ projectId, parentPath: get().selectedFolderPath, name })
-        : await window.fluidmd.files.create()
+        ? await window.aladdeen.files.create({ projectId, parentPath: get().selectedFolderPath, name })
+        : await window.aladdeen.files.create()
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
@@ -288,7 +324,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async createFolder(name) {
       const projectId = get().selectedProjectId
       if (!projectId) return
-      const result = await window.fluidmd.files.createFolder({ projectId, parentPath: get().selectedFolderPath, name })
+      const result = await window.aladdeen.files.createFolder({ projectId, parentPath: get().selectedFolderPath, name })
       if (!result.ok) return withoutCancelled(result.error)
       set({ environment: result.value })
     },
@@ -300,20 +336,20 @@ export const useAppStore = create<AppState>((set, get) => {
         await persistOpenState()
         return
       }
-      const result = await window.fluidmd.document.open(target)
+      const result = await window.aladdeen.document.open(target)
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
 
     async openRelativeDocument(fileId, target) {
-      const result = await window.fluidmd.document.openRelative(fileId, target)
+      const result = await window.aladdeen.document.openRelative(fileId, target)
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
 
     async openDroppedFile(file) {
       if (!get().environment) return
-      const result = await window.fluidmd.document.openDropped(file)
+      const result = await window.aladdeen.document.openDropped(file)
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
@@ -350,13 +386,13 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!document || (document.content === document.savedContent && !force)) return true
       if (document.deleted && !force) {
         set((state) => ({ documents: state.documents.map((item) => item.id === fileId
-          ? { ...item, status: 'error', error: 'This file was deleted outside FluidMD.' }
+          ? { ...item, status: 'error', error: 'This file was deleted outside Aladdeen.' }
           : item) }))
         return false
       }
       const snapshotContent = document.content
       set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'saving' } : item) }))
-      const result = await window.fluidmd.document.save({ fileId, content: snapshotContent, expectedRevision: document.revision, force })
+      const result = await window.aladdeen.document.save({ fileId, content: snapshotContent, expectedRevision: document.revision, force })
       if (!result.ok) {
         if (result.error.code === 'CONFLICT') {
           set((state) => ({
@@ -424,7 +460,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async removeTrackedFile(fileId) {
       await get().closeDocument(fileId)
       if (get().documents.some((document) => document.id === fileId)) return
-      const result = await window.fluidmd.files.removeTracked(fileId)
+      const result = await window.aladdeen.files.removeTracked(fileId)
       if (!result.ok) return withoutCancelled(result.error)
       set({ environment: result.value })
     },
@@ -432,14 +468,14 @@ export const useAppStore = create<AppState>((set, get) => {
     async trashTrackedFile(fileId) {
       const document = get().documents.find((candidate) => candidate.id === fileId)
       if (document && isDocumentDirty(document) && !(await get().saveDocument(fileId))) return
-      const result = await window.fluidmd.files.trashTracked(fileId)
+      const result = await window.aladdeen.files.trashTracked(fileId)
       if (!result.ok) return withoutCancelled(result.error)
       toast.success(`${document?.name ?? 'File'} moved to Trash.`)
       await get().refreshEnvironment()
     },
 
     async locateTrackedFile(fileId) {
-      const result = await window.fluidmd.files.locate(fileId)
+      const result = await window.aladdeen.files.locate(fileId)
       if (!result.ok) return withoutCancelled(result.error)
       set((state) => ({ documents: state.documents.map((document) => document.id === fileId
         ? { ...document, ...result.value, savedContent: result.value.content, status: 'saved', deleted: false, error: undefined }
@@ -454,9 +490,9 @@ export const useAppStore = create<AppState>((set, get) => {
       if (event.type === 'removed') {
         if (document) {
           set((state) => ({ documents: state.documents.map((item) => item.id === event.fileId
-            ? { ...item, deleted: true, status: 'error', error: 'This file was deleted outside FluidMD.' }
+            ? { ...item, deleted: true, status: 'error', error: 'This file was deleted outside Aladdeen.' }
             : item) }))
-          toast.warning(`${document.name} was removed outside FluidMD.`)
+          toast.warning(`${document.name} was removed outside Aladdeen.`)
         }
         await get().refreshEnvironment()
         return
@@ -465,11 +501,11 @@ export const useAppStore = create<AppState>((set, get) => {
       if (isDocumentDirty(document) || document.status === 'saving') {
         set((state) => ({
           conflictFileId: event.fileId ?? null,
-          documents: state.documents.map((item) => item.id === event.fileId ? { ...item, status: 'conflict', error: 'This file changed outside FluidMD.' } : item)
+          documents: state.documents.map((item) => item.id === event.fileId ? { ...item, status: 'conflict', error: 'This file changed outside Aladdeen.' } : item)
         }))
         return
       }
-      const result = await window.fluidmd.document.read(event.fileId)
+      const result = await window.aladdeen.document.read(event.fileId)
       if (!result.ok) return
       set((state) => ({ documents: state.documents.map((item) => item.id === event.fileId
         ? { ...item, ...result.value, savedContent: result.value.content, status: 'saved', error: undefined }
@@ -486,7 +522,7 @@ export const useAppStore = create<AppState>((set, get) => {
         toast.error('Resolve the current save issue before opening another file.')
         return
       }
-      const result = await window.fluidmd.document.acceptOpenFile(request.token)
+      const result = await window.aladdeen.document.acceptOpenFile(request.token)
       if (!result.ok) return withoutCancelled(result.error)
       set({ pendingOpenRequest: undefined })
       await ingestDocument(result.value)
@@ -501,11 +537,11 @@ export const useAppStore = create<AppState>((set, get) => {
         return
       }
       if (action === 'copy') {
-        const copy = await window.fluidmd.document.saveCopy(fileId, document.content)
+        const copy = await window.aladdeen.document.saveCopy(fileId, document.content)
         if (!copy.ok) return withoutCancelled(copy.error)
         toast.success('A copy of your changes was saved.')
       }
-      const external = await window.fluidmd.document.read(fileId)
+      const external = await window.aladdeen.document.read(fileId)
       if (!external.ok) return withoutCancelled(external.error)
       set((state) => ({
         conflictFileId: null,
@@ -519,7 +555,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const document = get().documents.find((candidate) => candidate.id === get().activeFileId)
       if (!document) return
       await get().saveDocument(document.id)
-      const result = await window.fluidmd.export.document({
+      const result = await window.aladdeen.export.document({
         fileId: document.id,
         title: document.name.replace(/\.(md|markdown)$/i, ''),
         content: document.content,
@@ -532,7 +568,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async updateSettings(next) {
       const settings = { ...get().settings, ...next }
       set({ settings })
-      const result = await window.fluidmd.settings.update(settings)
+      const result = await window.aladdeen.settings.update(settings)
       if (!result.ok) toast.error(result.error.message)
     },
 
@@ -547,6 +583,9 @@ export const useAppStore = create<AppState>((set, get) => {
     },
     setSidebarOpen(value) {
       set({ sidebarOpen: value })
+    },
+    setProjectImportOpen(value) {
+      set({ projectImportOpen: value })
     }
   }
 })

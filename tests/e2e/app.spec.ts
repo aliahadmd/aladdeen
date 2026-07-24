@@ -1,11 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
 import { strFromU8, unzipSync } from 'fflate'
 
 test('onboards into a persistent environment', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-'))
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
@@ -21,20 +21,90 @@ test('onboards into a persistent environment', async () => {
   }
 })
 
+test('bulk-links a selectively indexed project and quick-opens files without filling recents', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
+  const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-library-'))
+  await mkdir(join(projectPath, 'docs'))
+  await mkdir(join(projectPath, 'archive'))
+  await writeFile(join(projectPath, 'docs', 'guide.md'), '# Indexed guide\n', 'utf8')
+  await writeFile(join(projectPath, 'archive', 'old.md'), '# Archived\n', 'utf8')
+  const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
+
+  try {
+    const window = await application.firstWindow()
+    await window.setViewportSize({ width: 685, height: 831 })
+    await window.getByRole('button', { name: 'Create environment' }).click()
+    await application.evaluate(({ dialog }, folderPath) => {
+      Object.defineProperty(dialog, 'showOpenDialog', {
+        configurable: true,
+        value: async () => ({ canceled: false, filePaths: [folderPath] })
+      })
+    }, projectPath)
+
+    await window.keyboard.press('ControlOrMeta+Shift+O')
+    await expect(window.getByRole('heading', { name: 'Add project folders' })).toBeVisible()
+    await window.getByRole('button', { name: /Choose one or more folders/ }).click()
+    await expect(window.getByText('2 Markdown files')).toBeVisible()
+    const importDialog = window.locator('.project-import-dialog')
+    const dialogLayout = await importDialog.evaluate((dialog) => {
+      const candidateList = dialog.querySelector('.project-candidate-list')!.getBoundingClientRect()
+      const scopeEditor = dialog.querySelector('.project-scope-editor')!.getBoundingClientRect()
+      const bounds = dialog.getBoundingClientRect()
+      return {
+        width: bounds.width,
+        fitsHorizontally: dialog.scrollWidth <= dialog.clientWidth,
+        candidateAboveEditor: candidateList.bottom <= scopeEditor.top + 1
+      }
+    })
+    expect(dialogLayout.width).toBeGreaterThan(640)
+    expect(dialogLayout.fitsHorizontally).toBe(true)
+    expect(dialogLayout.candidateAboveEditor).toBe(true)
+
+    await window.setViewportSize({ width: 640, height: 480 })
+    await expect(window.locator('.project-dialog-actions')).toBeInViewport()
+    expect(await importDialog.evaluate((dialog) => {
+      const bounds = dialog.getBoundingClientRect()
+      return bounds.left >= 0 && bounds.right <= innerWidth && bounds.top >= 0 && bounds.bottom <= innerHeight
+    })).toBe(true)
+    await window.getByRole('radio', { name: /Selected folders and files/ }).click()
+    await window.getByRole('checkbox', { name: 'Include docs' }).click()
+    await window.getByRole('button', { name: 'Add 1 project' }).click()
+
+    const projectRow = window.locator('.project-row').filter({ hasText: basename(projectPath) })
+    await expect(projectRow).toContainText('1')
+    await expect(window.locator('.tracked-file-row')).toHaveCount(0)
+
+    await window.keyboard.press('ControlOrMeta+P')
+    const quickOpen = window.getByPlaceholder('Search indexed Markdown files…')
+    await quickOpen.fill('guide')
+    const guideResult = window.getByRole('option', { name: /guide\.md/ })
+    await expect(guideResult).toContainText(`${basename(projectPath)} › docs/guide.md`)
+    await guideResult.click()
+    await expect(window.getByRole('heading', { name: 'Indexed guide' })).toBeVisible()
+    await expect(window.locator('.tracked-file-row')).toHaveCount(1)
+  } finally {
+    await application.close()
+    await Promise.all([
+      rm(userData, { recursive: true, force: true }),
+      rm(projectPath, { recursive: true, force: true })
+    ])
+  }
+})
+
 test('opens, previews, edits, and autosaves a Markdown file', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-workspace-'))
   const markdownPath = join(workspace, 'hello.md')
   const pdfPath = join(workspace, 'hello.pdf')
   const docxPath = join(workspace, 'hello.docx')
-  await writeFile(markdownPath, '# Hello FluidMD\n\n- [x] Preview works\n', 'utf8')
+  await writeFile(markdownPath, '# Hello Aladdeen\n\n- [x] Preview works\n', 'utf8')
   const application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
 
   try {
     const window = await application.firstWindow()
     await expect(window.getByText(/After setup, we’ll open/)).toBeVisible()
     await window.getByRole('button', { name: 'Create environment' }).click()
-    await expect(window.getByRole('heading', { name: 'Hello FluidMD' })).toBeVisible()
+    await expect(window.getByRole('heading', { name: 'Hello Aladdeen' })).toBeVisible()
     await expect(window.getByRole('tab', { name: /hello\.md/i })).toBeVisible()
     await expect(window.getByRole('heading', { name: 'Individual files' })).toBeVisible()
     await expect(window.locator('.tracked-file-row')).toContainText('hello')
@@ -117,8 +187,8 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
 })
 
 test('restores tabs independently for each environment', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-environments-'))
-  const folder = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-files-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-environments-'))
+  const folder = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-files-'))
   const markdownPath = join(folder, 'persistent.md')
   await writeFile(markdownPath, '# Persistent tab\n', 'utf8')
   let application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
@@ -151,7 +221,7 @@ test('restores tabs independently for each environment', async () => {
 })
 
 test('keeps the environment sidebar usable at compact window sizes', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-compact-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-compact-'))
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
@@ -182,7 +252,7 @@ test('keeps the environment sidebar usable at compact window sizes', async () =>
 })
 
 test('uses compact document chrome and persists the desktop sidebar layout', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-chrome-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-chrome-'))
   let application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     let window = await application.firstWindow()
@@ -204,7 +274,7 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
     await window.getByRole('button', { name: 'Collapse sidebar' }).click()
     await expect(window.getByRole('button', { name: 'Show sidebar' })).toBeVisible()
     await expect.poll(async () => {
-      const result = await window.evaluate(() => globalThis.window.fluidmd.settings.get())
+      const result = await window.evaluate(() => globalThis.window.aladdeen.settings.get())
       return result.ok ? result.value : null
     }).toMatchObject({ sidebarWidth: 336, sidebarCollapsed: true })
 
@@ -221,8 +291,8 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
 })
 
 test('renders extended Markdown safely and responsively', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-markdown-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-markdown-file-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-markdown-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-markdown-file-'))
   const markdownPath = join(workspace, 'compatibility.md')
   const fixture = await readFile(resolve('tests/fixtures/markdown-compatibility.md'), 'utf8')
   await writeFile(markdownPath, fixture, 'utf8')
@@ -236,8 +306,8 @@ test('renders extended Markdown safely and responsively', async () => {
     })
     await window.getByRole('button', { name: 'Create environment' }).click()
 
-    await expect(window.getByRole('article', { name: 'FluidMD Compatibility' })).toBeVisible()
-    await expect(window.getByText('title: "FluidMD Compatibility"')).toHaveCount(0)
+    await expect(window.getByRole('article', { name: 'Aladdeen Compatibility' })).toBeVisible()
+    await expect(window.getByText('title: "Aladdeen Compatibility"')).toHaveCount(0)
     await expect(window.locator('.markdown-toc')).toHaveCount(1)
     await expect(window.locator('.markdown-callout')).toContainText('Local first')
     await expect(window.locator('dl')).toContainText('A definition with formatting.')
@@ -274,8 +344,8 @@ test('renders extended Markdown safely and responsively', async () => {
 })
 
 test('exports extended Markdown structure to PDF and DOCX', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-export-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'fluidmd-e2e-export-file-'))
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-export-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-export-file-'))
   const markdownPath = join(workspace, 'export-compatibility.md')
   const pdfPath = join(workspace, 'export-compatibility.pdf')
   const docxPath = join(workspace, 'export-compatibility.docx')
@@ -327,7 +397,7 @@ test('exports extended Markdown structure to PDF and DOCX', async () => {
     const coreXml = strFromU8(archive['docProps/core.xml']!)
     const footnotesXml = strFromU8(archive['word/footnotes.xml']!)
 
-    expect(coreXml).toContain('FluidMD Compatibility')
+    expect(coreXml).toContain('Aladdeen Compatibility')
     expect(coreXml).toContain('offline, markdown')
     expect(documentXml).toContain('A definition with ')
     expect(documentXml).toContain('Local first')

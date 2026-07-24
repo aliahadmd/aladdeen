@@ -14,7 +14,7 @@ interface ExportRenderPayload {
 
 declare global {
   interface Window {
-    renderFluidMdExport(payload: ExportRenderPayload): Promise<void>
+    renderAladdeenExport(payload: ExportRenderPayload): Promise<void>
   }
 }
 
@@ -45,7 +45,7 @@ async function waitForImages(): Promise<void> {
   )
 }
 
-window.renderFluidMdExport = async ({ fileId, title, content }) => {
+window.renderAladdeenExport = async ({ fileId, title, content }) => {
   root.render(
     <MarkdownContent
       content={content}

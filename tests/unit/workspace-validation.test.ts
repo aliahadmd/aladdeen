@@ -15,9 +15,9 @@ describe('workspace safety', () => {
   })
 
   it('contains resolved paths inside the root', () => {
-    const root = '/tmp/fluidmd-workspace'
-    expect(resolveSyntacticPath(root, 'notes/today.md')).toBe('/tmp/fluidmd-workspace/notes/today.md')
-    expect(isPathInside(root, '/tmp/fluidmd-workspace/notes')).toBe(true)
+    const root = '/tmp/aladdeen-workspace'
+    expect(resolveSyntacticPath(root, 'notes/today.md')).toBe('/tmp/aladdeen-workspace/notes/today.md')
+    expect(isPathInside(root, '/tmp/aladdeen-workspace/notes')).toBe(true)
     expect(() => resolveSyntacticPath(root, '../outside.md')).toThrow(/outside/i)
   })
 })

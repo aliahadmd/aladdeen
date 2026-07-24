@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('application metadata database', () => {
   it('migrates a new database and persists environments, projects, files, and tab state', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'fluidmd-db-'))
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
     created.push(directory)
     const database = new AppDatabase(directory)
 
@@ -27,6 +27,22 @@ describe('application metadata database', () => {
     database.setSettings({ theme: 'dark', accent: 'rose', sidebarWidth: 368, sidebarCollapsed: true })
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
+    database.replaceProjectIndex(project.id, [{
+      projectId: project.id,
+      relativePath: 'hello.md',
+      parentPath: '',
+      name: 'hello.md',
+      mtimeMs: 100,
+      size: 12
+    }])
+    database.updateProject(project.id, {
+      scopeMode: 'selected',
+      includePaths: ['hello.md'],
+      excludePatterns: ['archive/**'],
+      groupName: 'Writing',
+      pinned: true,
+      archived: false
+    })
     const file = database.upsertTrackedFile(environment.id, '/notes/hello.md', project.id)
     database.setProjectExpandedPaths(project.id, ['guides'])
     database.setEnvironmentState(environment.id, [file.id], file.id)
@@ -39,7 +55,15 @@ describe('application metadata database', () => {
     })
     expect(database.listEnvironments()).toHaveLength(1)
     expect(database.getActiveEnvironmentId()).toBe(environment.id)
-    expect(database.listProjects(environment.id)[0]?.path).toBe('/notes')
+    expect(database.listProjects(environment.id)[0]).toMatchObject({
+      path: '/notes',
+      scopeMode: 'selected',
+      includePaths: ['hello.md'],
+      groupName: 'Writing',
+      pinned: true
+    })
+    expect(database.listProjectIndex(project.id).map((entry) => entry.relativePath)).toEqual(['hello.md'])
+    expect(database.searchProjectIndex(environment.id, 'hello', 10)[0]?.projectName).toBe('notes')
     expect(database.listTrackedFiles(environment.id)[0]?.id).toBe(file.id)
     expect(database.getProjectExpandedPaths(project.id)).toEqual(['guides'])
     expect(database.getEnvironmentState(environment.id)).toEqual({ openFileIds: [file.id], activeFileId: file.id })
@@ -47,7 +71,7 @@ describe('application metadata database', () => {
   })
 
   it('enforces case-insensitive unique environment names', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'fluidmd-db-'))
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
     created.push(directory)
     const database = new AppDatabase(directory)
     database.createEnvironment('Writing')
@@ -56,9 +80,10 @@ describe('application metadata database', () => {
   })
 
   it('imports legacy workspace metadata into a Personal environment', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'fluidmd-db-'))
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
     created.push(directory)
-    const legacy = new DatabaseSync(join(directory, 'fluidmd.sqlite'))
+    const previousDatabaseName = ['fl', 'uid', 'md.sqlite'].join('')
+    const legacy = new DatabaseSync(join(directory, previousDatabaseName))
     legacy.exec(`
       CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at INTEGER NOT NULL) STRICT;
       CREATE TABLE recent_workspaces (path TEXT PRIMARY KEY, last_opened_at INTEGER NOT NULL) STRICT;

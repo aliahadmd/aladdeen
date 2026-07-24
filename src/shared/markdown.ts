@@ -117,7 +117,7 @@ const SAFE_TAG_NAMES = [
   'var'
 ]
 
-export const fluidMarkdownSanitizeSchema: SanitizeSchema = {
+export const aladdeenMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   clobberPrefix: '',
   tagNames: [...new Set(SAFE_TAG_NAMES)],
@@ -191,7 +191,7 @@ export const fluidMarkdownSanitizeSchema: SanitizeSchema = {
   protocols: {
     ...defaultSchema.protocols,
     href: ['http', 'https'],
-    src: ['fluidmd-asset']
+    src: ['aladdeen-asset']
   },
   required: {
     ...defaultSchema.required,
@@ -400,7 +400,7 @@ function transformCallout(node: MarkdownNode): void {
   })
 }
 
-const remarkFluidMdStructure: Plugin = () => (tree) => {
+const remarkAladdeenStructure: Plugin = () => (tree) => {
   const root = tree as unknown as MarkdownParent
   const slugger = new GithubSlugger()
   const headings: MarkdownHeading[] = []
@@ -477,7 +477,7 @@ const AUTO_DIRECTION_TAGS = new Set([
   'th'
 ])
 
-const rehypeFluidMdPolish: Plugin = () => (tree) => {
+const rehypeAladdeenPolish: Plugin = () => (tree) => {
   visit(tree as never, 'element', (node: { tagName?: string; properties?: Record<string, unknown>; children?: unknown[] }, index, parent) => {
     if (!node.tagName) return
     node.properties ??= {}
@@ -493,23 +493,23 @@ const rehypeFluidMdPolish: Plugin = () => (tree) => {
   })
 }
 
-export const fluidMarkdownRemarkPlugins: PluggableList = [
+export const aladdeenMarkdownRemarkPlugins: PluggableList = [
   [remarkFrontmatter, ['yaml', 'toml']],
   remarkMath,
   remarkGfm,
   remarkDeflist,
   remarkSmartypants,
-  remarkFluidMdStructure
+  remarkAladdeenStructure
 ]
 
-export const fluidMarkdownRehypePlugins: PluggableList = [
+export const aladdeenMarkdownRehypePlugins: PluggableList = [
   rehypeRaw,
-  [rehypeSanitize, fluidMarkdownSanitizeSchema],
+  [rehypeSanitize, aladdeenMarkdownSanitizeSchema],
   [rehypeKatex, { throwOnError: false, strict: 'ignore', trust: false }],
   [rehypeHighlight, { detect: false, subset: false }],
-  rehypeFluidMdPolish
+  rehypeAladdeenPolish
 ]
 
 export function createMarkdownAstProcessor() {
-  return unified().use(remarkParse).use(fluidMarkdownRemarkPlugins)
+  return unified().use(remarkParse).use(aladdeenMarkdownRemarkPlugins)
 }

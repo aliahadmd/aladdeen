@@ -27,6 +27,7 @@ export interface WorkspaceTreeNode {
   path: string
   kind: 'file' | 'directory'
   children?: WorkspaceTreeNode[]
+  descendantCount?: number
 }
 
 export interface EnvironmentSummary {
@@ -41,8 +42,77 @@ export interface ProjectSummary {
   environmentId: string
   name: string
   displayPath: string
+  /** Root entries only. Deeper entries are loaded with projects.listChildren. */
   tree: WorkspaceTreeNode[]
   expandedPaths: string[]
+  scopeMode: ProjectScopeMode
+  includePaths: string[]
+  excludePatterns: string[]
+  groupName?: string
+  pinned: boolean
+  archived: boolean
+  fileCount: number
+  indexStatus: ProjectIndexStatus
+  indexedAt?: number
+}
+
+export type ProjectScopeMode = 'all' | 'selected'
+export type ProjectIndexStatus = 'ready' | 'indexing' | 'error' | 'paused'
+
+export interface ProjectScopeNode extends WorkspaceTreeNode {
+  children?: ProjectScopeNode[]
+  descendantCount: number
+}
+
+export interface ProjectImportPreview {
+  token: string
+  name: string
+  displayPath: string
+  fileCount: number
+  tree: ProjectScopeNode[]
+  truncated: boolean
+}
+
+export interface ProjectImportSelection {
+  token: string
+  scopeMode: ProjectScopeMode
+  includePaths: string[]
+  excludePatterns: string[]
+  groupName?: string
+  pinned: boolean
+}
+
+export interface ProjectScopePreview {
+  project: ProjectSummary
+  tree: ProjectScopeNode[]
+  totalMarkdownFiles: number
+  truncated: boolean
+}
+
+export interface UpdateProjectRequest {
+  projectId: string
+  scopeMode: ProjectScopeMode
+  includePaths: string[]
+  excludePatterns: string[]
+  groupName?: string
+  pinned: boolean
+  archived: boolean
+}
+
+export interface ProjectTreePage {
+  projectId: string
+  parentPath: string
+  entries: WorkspaceTreeNode[]
+  total: number
+  nextCursor?: number
+}
+
+export interface IndexedFileSummary {
+  projectId: string
+  projectName: string
+  name: string
+  relativePath: string
+  location: string
 }
 
 export interface TrackedFileSummary {
@@ -168,7 +238,7 @@ export interface SaveCopyResult {
   path: string
 }
 
-export interface FluidMdApi {
+export interface AladdeenApi {
   app: {
     bootstrap(): Promise<Result<BootstrapData>>
   }
@@ -182,9 +252,14 @@ export interface FluidMdApi {
   }
   projects: {
     create(name: string): Promise<Result<EnvironmentSnapshot>>
-    addExisting(): Promise<Result<EnvironmentSnapshot>>
+    chooseExisting(): Promise<Result<ProjectImportPreview[]>>
+    commitImport(selections: ProjectImportSelection[]): Promise<Result<EnvironmentSnapshot>>
     remove(projectId: string): Promise<Result<EnvironmentSnapshot>>
     persistExpandedPaths(projectId: string, paths: string[]): Promise<Result<void>>
+    inspectScope(projectId: string): Promise<Result<ProjectScopePreview>>
+    update(request: UpdateProjectRequest): Promise<Result<EnvironmentSnapshot>>
+    listChildren(projectId: string, parentPath: string, cursor?: number): Promise<Result<ProjectTreePage>>
+    search(query: string, limit?: number): Promise<Result<IndexedFileSummary[]>>
   }
   document: {
     open(target: DocumentTarget): Promise<Result<DocumentSnapshot>>
@@ -230,9 +305,14 @@ export const IPC = {
   refreshEnvironment: 'environments:refresh',
   persistEnvironmentState: 'environments:persist-state',
   createProject: 'projects:create',
-  addProject: 'projects:add-existing',
+  chooseProjects: 'projects:choose-existing',
+  commitProjectImport: 'projects:commit-import',
   removeProject: 'projects:remove',
   persistExpandedPaths: 'projects:persist-expanded',
+  inspectProjectScope: 'projects:inspect-scope',
+  updateProject: 'projects:update',
+  listProjectChildren: 'projects:list-children',
+  searchProjectFiles: 'projects:search-files',
   environmentEvent: 'environment:event',
   systemOpenFileRequest: 'system:open-file-request',
   acceptSystemOpenFile: 'system:accept-open-file',

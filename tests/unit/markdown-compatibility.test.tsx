@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FluidMdApi } from '@shared/contracts'
+import type { AladdeenApi } from '@shared/contracts'
 import {
   extractMarkdownMetadata,
   prepareMarkdownSource
@@ -14,16 +14,16 @@ function renderMarkdown(content: string) {
       documentId="11111111-1111-4111-8111-111111111111"
       fallbackTitle="fixture.md"
       theme="light"
-      onOpenExternal={(target) => void window.fluidmd.system.openExternal(target)}
+      onOpenExternal={(target) => void window.aladdeen.system.openExternal(target)}
     />
   )
 }
 
 describe('extended Markdown compatibility', () => {
   beforeEach(() => {
-    Object.defineProperty(window, 'fluidmd', {
+    Object.defineProperty(window, 'aladdeen', {
       configurable: true,
-      value: { system: { openExternal: vi.fn() } } as unknown as FluidMdApi
+      value: { system: { openExternal: vi.fn() } } as unknown as AladdeenApi
     })
   })
 
@@ -121,7 +121,7 @@ Footnote.[^one]
   })
 
   it('blocks remote images, preserves local dimensions, and prevents unhandled navigation', () => {
-    const openExternal = vi.mocked(window.fluidmd.system.openExternal)
+    const openExternal = vi.mocked(window.aladdeen.system.openExternal)
     const { container } = renderMarkdown(`
 ![Remote](https://example.com/image.png)
 <img src="./local.png" alt="Local" width="320" height="180">

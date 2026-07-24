@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { FluidMdApi, OpenDocument } from '@shared/contracts'
+import type { AladdeenApi, OpenDocument } from '@shared/contracts'
 import { MarkdownPreview } from '@renderer/components/MarkdownPreview'
 
 const document: OpenDocument = {
@@ -21,9 +21,9 @@ const document: OpenDocument = {
 
 describe('Markdown preview', () => {
   it('renders GFM, rewrites local assets, and blocks remote images and raw HTML', () => {
-    Object.defineProperty(window, 'fluidmd', {
+    Object.defineProperty(window, 'aladdeen', {
       configurable: true,
-      value: { system: { openExternal: vi.fn() } } as unknown as FluidMdApi
+      value: { system: { openExternal: vi.fn() } } as unknown as AladdeenApi
     })
     const { container } = render(<MarkdownPreview document={document} />)
 
@@ -32,7 +32,7 @@ describe('Markdown preview', () => {
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByAltText('Local')).toHaveAttribute(
       'src',
-      'fluidmd-asset://document/11111111-1111-4111-8111-111111111111?path=..%2Fimages%2Fcover.png'
+      'aladdeen-asset://document/11111111-1111-4111-8111-111111111111?path=..%2Fimages%2Fcover.png'
     )
     expect(screen.getByText('Remote')).toBeInTheDocument()
     expect(container.querySelector('script')).toBeNull()

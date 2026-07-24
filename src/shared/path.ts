@@ -32,5 +32,5 @@ export function resolveRelativePath(fromFile: string, target: string): string | 
 
 export function toAssetUrl(fileId: string, target: string): string | null {
   if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) return null
-  return `fluidmd-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(target)}`
+  return `aladdeen-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(target)}`
 }

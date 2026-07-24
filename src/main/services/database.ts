@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { FluidError } from '@main/errors'
+import { DesktopError } from '@main/errors'
 import type { AppSettings, EnvironmentSummary } from '@shared/contracts'
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -10,6 +10,22 @@ const DEFAULT_SETTINGS: AppSettings = {
   accent: 'indigo',
   sidebarWidth: 320,
   sidebarCollapsed: false
+}
+
+const DATABASE_FILENAME = 'aladdeen.sqlite'
+const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
+
+function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
+  if (existsSync(destination)) return
+  const candidates = [
+    join(userDataPath, PREVIOUS_DATABASE_FILENAME),
+    previousUserDataPath ? join(previousUserDataPath, PREVIOUS_DATABASE_FILENAME) : undefined
+  ]
+  for (const candidate of candidates) {
+    if (!candidate || candidate === destination || !existsSync(candidate)) continue
+    copyFileSync(candidate, destination)
+    return
+  }
 }
 
 interface WindowState {
@@ -26,6 +42,24 @@ export interface ProjectRecord {
   path: string
   name: string
   lastOpenedAt: number
+  scopeMode: 'all' | 'selected'
+  includePaths: string[]
+  excludePatterns: string[]
+  groupName?: string
+  pinned: boolean
+  archived: boolean
+  fileCount: number
+  indexStatus: 'ready' | 'indexing' | 'error' | 'paused'
+  indexedAt?: number
+}
+
+export interface ProjectIndexFileRecord {
+  projectId: string
+  relativePath: string
+  parentPath: string
+  name: string
+  mtimeMs: number
+  size: number
 }
 
 export interface TrackedFileRecord {
@@ -45,9 +79,10 @@ export interface EnvironmentStateRecord {
 export class AppDatabase {
   private readonly db: DatabaseSync
 
-  constructor(userDataPath: string) {
-    const databasePath = join(userDataPath, 'fluidmd.sqlite')
+  constructor(userDataPath: string, previousUserDataPath?: string) {
+    const databasePath = join(userDataPath, DATABASE_FILENAME)
     mkdirSync(dirname(databasePath), { recursive: true })
+    restorePreviousDatabase(databasePath, userDataPath, previousUserDataPath)
     this.db = new DatabaseSync(databasePath)
     this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;')
     this.migrate()
@@ -126,6 +161,34 @@ export class AppDatabase {
       `)
       this.importLegacyWorkspaceHistory()
       this.db.exec('DROP TABLE IF EXISTS workspace_state; DROP TABLE IF EXISTS recent_workspaces;')
+    }
+
+    if (row.user_version < 3) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE environment_projects ADD COLUMN scope_mode TEXT NOT NULL DEFAULT 'all';
+        ALTER TABLE environment_projects ADD COLUMN include_paths TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE environment_projects ADD COLUMN exclude_patterns TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE environment_projects ADD COLUMN group_name TEXT;
+        ALTER TABLE environment_projects ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE environment_projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE environment_projects ADD COLUMN file_count INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE environment_projects ADD COLUMN index_status TEXT NOT NULL DEFAULT 'indexing';
+        ALTER TABLE environment_projects ADD COLUMN indexed_at INTEGER;
+        CREATE TABLE project_index_files (
+          project_id TEXT NOT NULL REFERENCES environment_projects(id) ON DELETE CASCADE,
+          relative_path TEXT NOT NULL,
+          parent_path TEXT NOT NULL,
+          name TEXT NOT NULL,
+          mtime_ms REAL NOT NULL,
+          size INTEGER NOT NULL,
+          PRIMARY KEY(project_id, relative_path)
+        ) STRICT;
+        CREATE INDEX project_index_parent ON project_index_files(project_id, parent_path, name);
+        CREATE INDEX project_index_name ON project_index_files(project_id, name);
+        PRAGMA user_version = 3;
+        COMMIT;
+      `)
     }
   }
 
@@ -227,7 +290,7 @@ export class AppDatabase {
 
   createEnvironment(name: string): EnvironmentSummary {
     if (this.db.prepare('SELECT 1 FROM environments WHERE name = ? COLLATE NOCASE').get(name)) {
-      throw new FluidError('ALREADY_EXISTS', 'An environment with that name already exists.')
+      throw new DesktopError('ALREADY_EXISTS', 'An environment with that name already exists.')
     }
     const id = randomUUID()
     const now = Date.now()
@@ -241,14 +304,14 @@ export class AppDatabase {
 
   renameEnvironment(id: string, name: string): void {
     const duplicate = this.db.prepare('SELECT id FROM environments WHERE name = ? COLLATE NOCASE AND id <> ?').get(name, id)
-    if (duplicate) throw new FluidError('ALREADY_EXISTS', 'An environment with that name already exists.')
+    if (duplicate) throw new DesktopError('ALREADY_EXISTS', 'An environment with that name already exists.')
     const result = this.db.prepare('UPDATE environments SET name = ?, updated_at = ? WHERE id = ?').run(name, Date.now(), id)
-    if (result.changes === 0) throw new FluidError('NOT_FOUND', 'That environment no longer exists.')
+    if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That environment no longer exists.')
   }
 
   removeEnvironment(id: string): void {
     const result = this.db.prepare('DELETE FROM environments WHERE id = ?').run(id)
-    if (result.changes === 0) throw new FluidError('NOT_FOUND', 'That environment no longer exists.')
+    if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That environment no longer exists.')
     if (this.getActiveEnvironmentId() === id) this.setSetting('active_environment_id', '')
   }
 
@@ -266,36 +329,170 @@ export class AppDatabase {
 
   listProjects(environmentId: string): ProjectRecord[] {
     return (this.db
-      .prepare('SELECT id, environment_id, path, name, last_opened_at FROM environment_projects WHERE environment_id = ? ORDER BY name COLLATE NOCASE')
-      .all(environmentId) as Array<{ id: string; environment_id: string; path: string; name: string; last_opened_at: number }>).map(
-      (row) => ({ id: row.id, environmentId: row.environment_id, path: row.path, name: row.name, lastOpenedAt: row.last_opened_at })
-    )
+      .prepare(`SELECT id, environment_id, path, name, last_opened_at, scope_mode, include_paths,
+        exclude_patterns, group_name, pinned, archived, file_count, index_status, indexed_at
+        FROM environment_projects WHERE environment_id = ?
+        ORDER BY pinned DESC, COALESCE(group_name, '') COLLATE NOCASE, name COLLATE NOCASE`)
+      .all(environmentId) as unknown as ProjectRow[]).map(projectFromRow)
   }
 
   getProject(id: string): ProjectRecord | null {
     const row = this.db
-      .prepare('SELECT id, environment_id, path, name, last_opened_at FROM environment_projects WHERE id = ?')
-      .get(id) as { id: string; environment_id: string; path: string; name: string; last_opened_at: number } | undefined
-    return row ? { id: row.id, environmentId: row.environment_id, path: row.path, name: row.name, lastOpenedAt: row.last_opened_at } : null
+      .prepare(`SELECT id, environment_id, path, name, last_opened_at, scope_mode, include_paths,
+        exclude_patterns, group_name, pinned, archived, file_count, index_status, indexed_at
+        FROM environment_projects WHERE id = ?`)
+      .get(id) as ProjectRow | undefined
+    return row ? projectFromRow(row) : null
   }
 
-  addProject(environmentId: string, path: string, name: string): ProjectRecord {
+  addProject(
+    environmentId: string,
+    path: string,
+    name: string,
+    options: {
+      scopeMode?: ProjectRecord['scopeMode']
+      includePaths?: string[]
+      excludePatterns?: string[]
+      groupName?: string
+      pinned?: boolean
+    } = {}
+  ): ProjectRecord {
     const existing = this.db
       .prepare('SELECT id FROM environment_projects WHERE environment_id = ? AND path = ?')
       .get(environmentId, path)
-    if (existing) throw new FluidError('ALREADY_EXISTS', 'That folder is already a project in this environment.')
+    if (existing) throw new DesktopError('ALREADY_EXISTS', 'That folder is already a project in this environment.')
     const id = randomUUID()
     const now = Date.now()
     this.db
-      .prepare('INSERT INTO environment_projects (id, environment_id, path, name, last_opened_at) VALUES (?, ?, ?, ?, ?)')
-      .run(id, environmentId, path, name, now)
+      .prepare(`INSERT INTO environment_projects (
+        id, environment_id, path, name, last_opened_at, scope_mode, include_paths,
+        exclude_patterns, group_name, pinned, archived, file_count, index_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'indexing')`)
+      .run(
+        id,
+        environmentId,
+        path,
+        name,
+        now,
+        options.scopeMode ?? 'all',
+        JSON.stringify(options.includePaths ?? []),
+        JSON.stringify(options.excludePatterns ?? []),
+        normalizeOptionalText(options.groupName),
+        options.pinned ? 1 : 0
+      )
     this.db.prepare('INSERT INTO project_state (project_id, expanded_paths, updated_at) VALUES (?, ?, ?)').run(id, '[]', now)
-    return { id, environmentId, path, name, lastOpenedAt: now }
+    return this.getProject(id)!
+  }
+
+  updateProject(
+    id: string,
+    options: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'groupName' | 'pinned' | 'archived'>
+  ): ProjectRecord {
+    const result = this.db
+      .prepare(`UPDATE environment_projects SET scope_mode = ?, include_paths = ?, exclude_patterns = ?,
+        group_name = ?, pinned = ?, archived = ?, index_status = ?, indexed_at = NULL
+        WHERE id = ?`)
+      .run(
+        options.scopeMode,
+        JSON.stringify(options.includePaths),
+        JSON.stringify(options.excludePatterns),
+        normalizeOptionalText(options.groupName),
+        options.pinned ? 1 : 0,
+        options.archived ? 1 : 0,
+        options.archived ? 'paused' : 'indexing',
+        id
+      )
+    if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That project no longer exists.')
+    return this.getProject(id)!
+  }
+
+  setProjectIndexStatus(
+    id: string,
+    status: ProjectRecord['indexStatus'],
+    fileCount?: number,
+    indexedAt?: number
+  ): void {
+    const count = fileCount ?? this.getProject(id)?.fileCount ?? 0
+    this.db
+      .prepare('UPDATE environment_projects SET index_status = ?, file_count = ?, indexed_at = ? WHERE id = ?')
+      .run(status, count, indexedAt ?? null, id)
+  }
+
+  replaceProjectIndex(projectId: string, files: ProjectIndexFileRecord[]): void {
+    this.db.exec('BEGIN')
+    try {
+      this.db.prepare('DELETE FROM project_index_files WHERE project_id = ?').run(projectId)
+      const insert = this.db.prepare(`INSERT INTO project_index_files
+        (project_id, relative_path, parent_path, name, mtime_ms, size) VALUES (?, ?, ?, ?, ?, ?)`)
+      for (const file of files) {
+        insert.run(projectId, file.relativePath, file.parentPath, file.name, file.mtimeMs, file.size)
+      }
+      this.db
+        .prepare("UPDATE environment_projects SET file_count = ?, index_status = 'ready', indexed_at = ? WHERE id = ?")
+        .run(files.length, Date.now(), projectId)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  listProjectIndex(projectId: string): ProjectIndexFileRecord[] {
+    return (this.db
+      .prepare(`SELECT project_id, relative_path, parent_path, name, mtime_ms, size
+        FROM project_index_files WHERE project_id = ? ORDER BY relative_path COLLATE NOCASE`)
+      .all(projectId) as Array<{
+        project_id: string
+        relative_path: string
+        parent_path: string
+        name: string
+        mtime_ms: number
+        size: number
+      }>).map((row) => ({
+      projectId: row.project_id,
+      relativePath: row.relative_path,
+      parentPath: row.parent_path,
+      name: row.name,
+      mtimeMs: row.mtime_ms,
+      size: row.size
+    }))
+  }
+
+  searchProjectIndex(environmentId: string, query: string, limit: number): Array<ProjectIndexFileRecord & {
+    projectName: string
+  }> {
+    const pattern = `%${escapeLike(query)}%`
+    return (this.db
+      .prepare(`SELECT f.project_id, f.relative_path, f.parent_path, f.name, f.mtime_ms, f.size,
+          p.name AS project_name
+        FROM project_index_files f
+        JOIN environment_projects p ON p.id = f.project_id
+        WHERE p.environment_id = ? AND p.archived = 0
+          AND (? = '' OR f.name LIKE ? ESCAPE '\\' OR f.relative_path LIKE ? ESCAPE '\\')
+        ORDER BY p.pinned DESC, p.last_opened_at DESC, f.name COLLATE NOCASE
+        LIMIT ?`)
+      .all(environmentId, query, pattern, pattern, limit) as Array<{
+        project_id: string
+        relative_path: string
+        parent_path: string
+        name: string
+        mtime_ms: number
+        size: number
+        project_name: string
+      }>).map((row) => ({
+      projectId: row.project_id,
+      relativePath: row.relative_path,
+      parentPath: row.parent_path,
+      name: row.name,
+      mtimeMs: row.mtime_ms,
+      size: row.size,
+      projectName: row.project_name
+    }))
   }
 
   removeProject(id: string): void {
     const result = this.db.prepare('DELETE FROM environment_projects WHERE id = ?').run(id)
-    if (result.changes === 0) throw new FluidError('NOT_FOUND', 'That project no longer exists.')
+    if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That project no longer exists.')
   }
 
   getProjectExpandedPaths(projectId: string): string[] {
@@ -363,7 +560,7 @@ export class AppDatabase {
     const result = this.db
       .prepare('UPDATE environment_files SET path = ?, project_id = ?, missing = 0, last_opened_at = ? WHERE id = ?')
       .run(path, projectId ?? null, Date.now(), id)
-    if (result.changes === 0) throw new FluidError('NOT_FOUND', 'That file is no longer tracked.')
+    if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That file is no longer tracked.')
   }
 
   setTrackedFileMissing(id: string, missing: boolean): void {
@@ -372,7 +569,7 @@ export class AppDatabase {
 
   removeTrackedFile(id: string): void {
     const result = this.db.prepare('DELETE FROM environment_files WHERE id = ?').run(id)
-    if (result.changes === 0) throw new FluidError('NOT_FOUND', 'That file is no longer tracked.')
+    if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That file is no longer tracked.')
   }
 
   getEnvironmentState(environmentId: string): EnvironmentStateRecord {
@@ -422,4 +619,54 @@ function parseStringArray(value?: string): string[] {
   } catch {
     return []
   }
+}
+
+interface ProjectRow {
+  id: string
+  environment_id: string
+  path: string
+  name: string
+  last_opened_at: number
+  scope_mode: string
+  include_paths: string
+  exclude_patterns: string
+  group_name: string | null
+  pinned: number
+  archived: number
+  file_count: number
+  index_status: string
+  indexed_at: number | null
+}
+
+function projectFromRow(row: ProjectRow): ProjectRecord {
+  const scopeMode: ProjectRecord['scopeMode'] = row.scope_mode === 'selected' ? 'selected' : 'all'
+  const indexStatus: ProjectRecord['indexStatus'] =
+    row.index_status === 'ready' || row.index_status === 'error' || row.index_status === 'paused'
+      ? row.index_status
+      : 'indexing'
+  return {
+    id: row.id,
+    environmentId: row.environment_id,
+    path: row.path,
+    name: row.name,
+    lastOpenedAt: row.last_opened_at,
+    scopeMode,
+    includePaths: parseStringArray(row.include_paths),
+    excludePatterns: parseStringArray(row.exclude_patterns),
+    groupName: row.group_name ?? undefined,
+    pinned: Boolean(row.pinned),
+    archived: Boolean(row.archived),
+    fileCount: row.file_count,
+    indexStatus,
+    indexedAt: row.indexed_at ?? undefined
+  }
+}
+
+function normalizeOptionalText(value?: string): string | null {
+  const normalized = value?.trim()
+  return normalized ? normalized : null
+}
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&')
 }

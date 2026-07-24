@@ -2,9 +2,12 @@ import { useEffect, useRef } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
 import { Toaster } from 'sonner'
+import { AddProjectsDialog } from './components/AddProjectsDialog'
+import { BrandMark } from './components/BrandMark'
 import { ConflictDialog } from './components/ConflictDialog'
 import { DocumentView } from './components/DocumentView'
 import { OnboardingDialog } from './components/OnboardingDialog'
+import { QuickOpenDialog } from './components/QuickOpenDialog'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { useEffectiveDarkMode } from './hooks/use-effective-dark-mode'
@@ -41,8 +44,8 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     void initialize()
-    const offEvent = window.fluidmd.document.onEvent((event) => void handleEnvironmentEvent(event))
-    const offOpenFileRequest = window.fluidmd.document.onOpenFileRequest((request) => void acceptSystemOpenFile(request))
+    const offEvent = window.aladdeen.document.onEvent((event) => void handleEnvironmentEvent(event))
+    const offOpenFileRequest = window.aladdeen.document.onOpenFileRequest((request) => void acceptSystemOpenFile(request))
     return () => {
       offEvent()
       offOpenFileRequest()
@@ -107,7 +110,7 @@ export default function App(): React.JSX.Element {
   if (!initialized) {
     return (
       <div className="loading-screen">
-        <div className="brand-mark large-mark">F</div>
+        <BrandMark className="brand-mark large-mark" title="Aladdeen" />
         <LoaderCircle className="spinner" size={18} />
       </div>
     )
@@ -209,8 +212,10 @@ export default function App(): React.JSX.Element {
       )}
 
       {!environment && <OnboardingDialog />}
+      <AddProjectsDialog />
+      <QuickOpenDialog />
       <ConflictDialog />
-      <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'fluid-toast' }} />
+      <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'app-toast' }} />
     </div>
   )
 }

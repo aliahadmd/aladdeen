@@ -21,12 +21,12 @@ export function TabBar(): React.JSX.Element | null {
           draggable
           onDragStart={(event) => {
             event.dataTransfer.effectAllowed = 'move'
-            event.dataTransfer.setData('text/fluidmd-tab', document.id)
+            event.dataTransfer.setData('text/aladdeen-tab', document.id)
           }}
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => {
             event.preventDefault()
-            const source = event.dataTransfer.getData('text/fluidmd-tab')
+            const source = event.dataTransfer.getData('text/aladdeen-tab')
             if (source) reorderDocument(source, document.id)
           }}
           onClick={() => setActiveFileId(document.id)}

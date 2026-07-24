@@ -1,12 +1,17 @@
-# FluidMD
+<p align="center">
+  <img src="build/icon.svg" width="88" height="88" alt="Aladdeen genie lamp logo">
+</p>
 
-FluidMD is a responsive, offline-first Markdown viewer and editor for macOS, Windows, and Linux. It keeps ordinary `.md` files on disk, gives them a clean live preview, and exports finished documents to PDF or DOCX without a network connection.
+# Aladdeen
+
+Aladdeen is a responsive, offline-first Markdown viewer and editor for macOS, Windows, and Linux. It keeps ordinary `.md` files on disk, gives them a clean live preview, and exports finished documents to PDF or DOCX without a network connection.
 
 ## Features
 
 - Preview-first reading with adaptive split editing
 - Named environments containing multiple folder projects and standalone files
-- Searchable project trees, persistent recent files, and mixed-project draggable tabs
+- Bulk-linked project folders with all-files or selective indexing, exclusions, groups, favorites, and archive/pause controls
+- Lazy searchable project trees, persistent recent files, cross-project Quick Open, and mixed-project draggable tabs
 - Debounced atomic autosave with external-change conflict recovery
 - GFM tables, task lists, fenced code highlighting, and local images
 - Light, dark, system, and accent themes
@@ -46,7 +51,8 @@ Platform builds are unsigned by default. The GitHub Actions workflow builds each
 
 - `Cmd/Ctrl+O`: open a Markdown file
 - `Cmd/Ctrl+Shift+O`: add an existing folder project
+- `Cmd/Ctrl+P`: search every indexed project file
 - `Cmd/Ctrl+S`: flush autosave now
 - `Cmd/Ctrl+E`: toggle editing
 
-Environment, project, and recent-file metadata is stored in SQLite; Markdown content is never imported into the database. FluidMD does not provide cloud sync, remote image fetching, raw HTML rendering, plugins, or WYSIWYG editing. Your Markdown remains portable and under your control.
+Environment, project-index, and recent-file metadata is stored in SQLite; Markdown content is never imported into the database. Aladdeen does not provide cloud sync, remote image fetching, plugins, or WYSIWYG editing. Your Markdown remains portable and under your control.

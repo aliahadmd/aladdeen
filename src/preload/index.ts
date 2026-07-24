@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
-import { IPC, type EnvironmentEvent, type FluidMdApi, type OpenFileRequest } from '@shared/contracts'
+import { IPC, type EnvironmentEvent, type AladdeenApi, type OpenFileRequest } from '@shared/contracts'
 
-const api: FluidMdApi = {
+const api: AladdeenApi = {
   app: {
     bootstrap: () => ipcRenderer.invoke(IPC.bootstrap)
   },
@@ -15,9 +15,15 @@ const api: FluidMdApi = {
   },
   projects: {
     create: (name) => ipcRenderer.invoke(IPC.createProject, name),
-    addExisting: () => ipcRenderer.invoke(IPC.addProject),
+    chooseExisting: () => ipcRenderer.invoke(IPC.chooseProjects),
+    commitImport: (selections) => ipcRenderer.invoke(IPC.commitProjectImport, selections),
     remove: (projectId) => ipcRenderer.invoke(IPC.removeProject, projectId),
-    persistExpandedPaths: (projectId, paths) => ipcRenderer.invoke(IPC.persistExpandedPaths, { projectId, paths })
+    persistExpandedPaths: (projectId, paths) => ipcRenderer.invoke(IPC.persistExpandedPaths, { projectId, paths }),
+    inspectScope: (projectId) => ipcRenderer.invoke(IPC.inspectProjectScope, projectId),
+    update: (request) => ipcRenderer.invoke(IPC.updateProject, request),
+    listChildren: (projectId, parentPath, cursor) =>
+      ipcRenderer.invoke(IPC.listProjectChildren, { projectId, parentPath, cursor }),
+    search: (query, limit) => ipcRenderer.invoke(IPC.searchProjectFiles, { query, limit })
   },
   document: {
     open: (target) => ipcRenderer.invoke(IPC.openDocument, target),
@@ -62,4 +68,4 @@ const api: FluidMdApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('fluidmd', api)
+contextBridge.exposeInMainWorld('aladdeen', api)

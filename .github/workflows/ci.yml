@@ -1,4 +1,4 @@
-name: Build and test FluidMD
+name: Build and test Aladdeen
 
 on:
   push:
@@ -51,6 +51,6 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
-          name: fluidmd-${{ matrix.os }}
+          name: aladdeen-${{ matrix.os }}
           path: release/**
           if-no-files-found: error

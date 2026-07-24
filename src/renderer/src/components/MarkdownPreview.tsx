@@ -20,7 +20,7 @@ export function MarkdownPreview({ document }: { document: OpenDocument }): React
           documentId={document.id}
           fallbackTitle={document.name}
           theme={dark ? 'dark' : 'light'}
-          onOpenExternal={(target) => void window.fluidmd.system.openExternal(target)}
+          onOpenExternal={(target) => void window.aladdeen.system.openExternal(target)}
           onOpenRelativeDocument={(target) => void openRelativeDocument(document.id, target)}
         />
       </div>

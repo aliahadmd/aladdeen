@@ -48,7 +48,7 @@ export function DocumentView(): React.JSX.Element {
             </div>
           ) : (
             <div className="wide-split">
-              <PanelGroup direction="horizontal" autoSaveId="fluidmd-editor-split">
+              <PanelGroup direction="horizontal" autoSaveId="aladdeen-editor-split">
                 <Panel defaultSize={44} minSize={28} maxSize={70}>
                   <MarkdownEditor document={document} dark={dark} />
                 </Panel>

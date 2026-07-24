@@ -1,7 +1,8 @@
 import * as Dialog from '@radix-ui/react-dialog'
-import { Check, Command, Info, Palette, Settings2, X } from 'lucide-react'
+import { Check, Command, Palette, Settings2, X } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
 import { accentOptions, themeOptions, useAppStore } from '@renderer/store/app-store'
+import { BrandMark } from './BrandMark'
 
 interface SettingsDialogProps {
   open: boolean
@@ -22,7 +23,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
             <div>
               <Dialog.Title className="dialog-title">Settings</Dialog.Title>
               <Dialog.Description className="dialog-description">
-                Personalize FluidMD without changing your Markdown files.
+                Personalize Aladdeen without changing your Markdown files.
               </Dialog.Description>
             </div>
             <Dialog.Close className="settings-close" aria-label="Close settings"><X size={16} /></Dialog.Close>
@@ -75,6 +76,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
                 <h3 id="shortcut-settings-heading">Keyboard shortcuts</h3>
               </div>
               <dl className="settings-shortcuts">
+                <div><dt>Quick open</dt><dd>⌘/Ctrl P</dd></div>
                 <div><dt>Open file</dt><dd>⌘/Ctrl O</dd></div>
                 <div><dt>Add project</dt><dd>⌘/Ctrl ⇧ O</dd></div>
                 <div><dt>Edit or preview</dt><dd>⌘/Ctrl E</dd></div>
@@ -82,10 +84,10 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
               </dl>
             </section>
 
-            <section className="settings-about" aria-label="About FluidMD">
-              <Info size={15} />
+            <section className="settings-about" aria-label="About Aladdeen">
+              <BrandMark className="settings-about-logo" />
               <div>
-                <strong>FluidMD {packageMetadata.version}</strong>
+                <strong>Aladdeen {packageMetadata.version}</strong>
                 <span>Offline-first Markdown workspace. Your documents stay at their original disk locations.</span>
               </div>
             </section>

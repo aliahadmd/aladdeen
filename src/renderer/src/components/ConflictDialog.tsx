@@ -18,7 +18,7 @@ export function ConflictDialog(): React.JSX.Element {
           </div>
           <AlertDialog.Title className="dialog-title">{document?.name ?? 'This file'} changed on disk</AlertDialog.Title>
           <AlertDialog.Description className="dialog-description">
-            FluidMD paused autosave so neither version is lost. Choose which copy should become the active document.
+            Aladdeen paused autosave so neither version is lost. Choose which copy should become the active document.
           </AlertDialog.Description>
           <div className="conflict-options">
             <button onClick={() => void resolveConflict('reload')}>

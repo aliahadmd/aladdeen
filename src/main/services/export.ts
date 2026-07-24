@@ -27,7 +27,7 @@ import {
 } from 'docx'
 import imageSize from 'image-size'
 import type { FootnoteDefinition, PhrasingContent, Root, RootContent, Table as MdTable } from 'mdast'
-import { FluidError } from '@main/errors'
+import { DesktopError } from '@main/errors'
 import type { ExportRequest, SaveCopyResult } from '@shared/contracts'
 import {
   createMarkdownAstProcessor,
@@ -65,7 +65,7 @@ export class ExportService {
       defaultPath: suggestedName,
       filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
     })
-    if (result.canceled || !result.filePath) throw new FluidError('CANCELLED', 'Save copy was cancelled.')
+    if (result.canceled || !result.filePath) throw new DesktopError('CANCELLED', 'Save copy was cancelled.')
     await writeFile(result.filePath, content, { encoding: 'utf8', flag: 'wx' }).catch(async (error: NodeJS.ErrnoException) => {
       if (error.code !== 'EEXIST') throw error
       await writeFile(result.filePath!, content, 'utf8')
@@ -79,7 +79,7 @@ export class ExportService {
       defaultPath: `${request.title}.pdf`,
       filters: [{ name: 'PDF document', extensions: ['pdf'] }]
     })
-    if (destination.canceled || !destination.filePath) throw new FluidError('CANCELLED', 'PDF export was cancelled.')
+    if (destination.canceled || !destination.filePath) throw new DesktopError('CANCELLED', 'PDF export was cancelled.')
 
     const printWindow = new BrowserWindow({
       show: false,
@@ -111,7 +111,7 @@ export class ExportService {
         title: request.title,
         content: request.content
       })
-      await printWindow.webContents.executeJavaScript(`window.renderFluidMdExport(${payload})`, true)
+      await printWindow.webContents.executeJavaScript(`window.renderAladdeenExport(${payload})`, true)
       const buffer = await printWindow.webContents.printToPDF({
         pageSize: 'A4',
         landscape: false,
@@ -122,7 +122,7 @@ export class ExportService {
       await writeFile(destination.filePath, buffer)
       return { path: destination.filePath }
     } catch (error) {
-      throw new FluidError('EXPORT_FAILED', 'Could not generate the PDF.', error instanceof Error ? error.message : undefined)
+      throw new DesktopError('EXPORT_FAILED', 'Could not generate the PDF.', error instanceof Error ? error.message : undefined)
     } finally {
       if (!printWindow.isDestroyed()) printWindow.destroy()
     }
@@ -134,7 +134,7 @@ export class ExportService {
       defaultPath: `${request.title}.docx`,
       filters: [{ name: 'Word document', extensions: ['docx'] }]
     })
-    if (destination.canceled || !destination.filePath) throw new FluidError('CANCELLED', 'DOCX export was cancelled.')
+    if (destination.canceled || !destination.filePath) throw new DesktopError('CANCELLED', 'DOCX export was cancelled.')
 
     try {
       const metadata = extractMarkdownMetadata(request.content)
@@ -162,9 +162,9 @@ export class ExportService {
       ].filter(Boolean)
       const document = new Document({
         title: metadata?.title || request.title,
-        creator: metadata?.author || 'FluidMD',
+        creator: metadata?.author || 'Aladdeen',
         keywords: metadata?.tags.join(', ') || undefined,
-        description: ['Exported from Markdown by FluidMD', ...metadataDetails].join('. '),
+        description: ['Exported from Markdown by Aladdeen', ...metadataDetails].join('. '),
         footnotes,
         styles: {
           default: {
@@ -175,8 +175,8 @@ export class ExportService {
           },
           paragraphStyles: [
             {
-              id: 'FluidCode',
-              name: 'FluidMD Code',
+              id: 'AladdeenCode',
+              name: 'Aladdeen Code',
               basedOn: 'Normal',
               quickFormat: true,
               run: { font: 'Courier New', size: 18, color: '252535' },
@@ -200,7 +200,7 @@ export class ExportService {
       await writeFile(destination.filePath, buffer)
       return { path: destination.filePath }
     } catch (error) {
-      throw new FluidError('EXPORT_FAILED', 'Could not generate the Word document.', error instanceof Error ? error.message : undefined)
+      throw new DesktopError('EXPORT_FAILED', 'Could not generate the Word document.', error instanceof Error ? error.message : undefined)
     }
   }
 
@@ -220,7 +220,7 @@ export class ExportService {
       if (extended.type === 'math') {
         children.push(
           new Paragraph({
-            style: 'FluidCode',
+            style: 'AladdeenCode',
             children: [
               new TextRun({ text: 'Math', bold: true, font: 'Courier New' }),
               new TextRun({ break: 1, text: extended.value ?? '', font: 'Courier New' })
@@ -292,7 +292,7 @@ export class ExportService {
             const label = node.lang?.toLowerCase() === 'mermaid' ? 'Mermaid diagram\n' : ''
           children.push(
             new Paragraph({
-              style: 'FluidCode',
+              style: 'AladdeenCode',
               children: [new TextRun({ text: `${label}${node.value}`, font: 'Courier New' })],
               shading: { type: ShadingType.CLEAR, fill: 'F1F1F6', color: 'auto' }
             })
