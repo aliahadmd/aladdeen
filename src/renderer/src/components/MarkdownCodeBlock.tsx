@@ -1,10 +1,12 @@
 import { Children, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
+import type { MarkdownSourceDataAttributes } from '@shared/markdown'
 import { MermaidDiagram } from './MermaidDiagram'
 
 interface MarkdownCodeBlockProps {
   children?: ReactNode
   theme: 'light' | 'dark'
+  sourceAttributes?: MarkdownSourceDataAttributes
 }
 
 interface CodeElementProps {
@@ -41,7 +43,11 @@ async function copyCode(value: string): Promise<boolean> {
   }
 }
 
-export function MarkdownCodeBlock({ children, theme }: MarkdownCodeBlockProps): React.JSX.Element {
+export function MarkdownCodeBlock({
+  children,
+  theme,
+  sourceAttributes
+}: MarkdownCodeBlockProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedTimer = useRef<number | undefined>(undefined)
   const child = Children.count(children) === 1 ? Children.only(children) : null
@@ -56,10 +62,16 @@ export function MarkdownCodeBlock({ children, theme }: MarkdownCodeBlockProps): 
     []
   )
 
-  if (language === 'mermaid') return <MermaidDiagram source={source} theme={theme} />
+  if (language === 'mermaid') {
+    return <MermaidDiagram source={source} theme={theme} sourceAttributes={sourceAttributes} />
+  }
   if (language === 'mermaid-disabled') {
     return (
-      <figure className="mermaid-diagram mermaid-error" data-mermaid-state="error">
+      <figure
+        {...sourceAttributes}
+        className="mermaid-diagram mermaid-error"
+        data-mermaid-state="error"
+      >
         <figcaption>Mermaid diagram limit reached — showing source.</figcaption>
         <pre>
           <code className="language-mermaid">{source}</code>
@@ -76,7 +88,7 @@ export function MarkdownCodeBlock({ children, theme }: MarkdownCodeBlockProps): 
   }
 
   return (
-    <figure className="markdown-code-block">
+    <figure {...sourceAttributes} className="markdown-code-block">
       <figcaption className="code-block-toolbar">
         <span>{language || 'Plain text'}</span>
         <button type="button" onClick={() => void handleCopy()} aria-label={`Copy ${language || 'plain text'} code`}>

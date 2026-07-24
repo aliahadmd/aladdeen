@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import DOMPurify from 'dompurify'
+import type { MarkdownSourceDataAttributes } from '@shared/markdown'
 
 interface MermaidDiagramProps {
   source: string
   theme: 'light' | 'dark'
+  sourceAttributes?: MarkdownSourceDataAttributes
 }
 
 interface MermaidResult {
@@ -89,7 +91,11 @@ async function renderMermaid(source: string, theme: 'light' | 'dark'): Promise<M
   return pending
 }
 
-export function MermaidDiagram({ source, theme }: MermaidDiagramProps): React.JSX.Element {
+export function MermaidDiagram({
+  source,
+  theme,
+  sourceAttributes
+}: MermaidDiagramProps): React.JSX.Element {
   const [result, setResult] = useState<MermaidResult>({})
 
   useEffect(() => {
@@ -108,7 +114,11 @@ export function MermaidDiagram({ source, theme }: MermaidDiagramProps): React.JS
 
   if (result.error) {
     return (
-      <figure className="mermaid-diagram mermaid-error" data-mermaid-state="error">
+      <figure
+        {...sourceAttributes}
+        className="mermaid-diagram mermaid-error"
+        data-mermaid-state="error"
+      >
         <figcaption>Mermaid diagram unavailable — {result.error}</figcaption>
         <pre>
           <code className="language-mermaid">{source}</code>
@@ -119,14 +129,19 @@ export function MermaidDiagram({ source, theme }: MermaidDiagramProps): React.JS
 
   if (!result.svg) {
     return (
-      <figure className="mermaid-diagram mermaid-loading" data-mermaid-state="loading" aria-busy="true">
+      <figure
+        {...sourceAttributes}
+        className="mermaid-diagram mermaid-loading"
+        data-mermaid-state="loading"
+        aria-busy="true"
+      >
         <figcaption>Rendering Mermaid diagram…</figcaption>
       </figure>
     )
   }
 
   return (
-    <figure className="mermaid-diagram" data-mermaid-state="ready">
+    <figure {...sourceAttributes} className="mermaid-diagram" data-mermaid-state="ready">
       <div
         className="mermaid-svg"
         role="img"

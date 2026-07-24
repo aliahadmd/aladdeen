@@ -31,6 +31,30 @@ export interface MarkdownHeading {
   text: string
 }
 
+export interface MarkdownSourceReplacement {
+  preparedStart: number
+  preparedEnd: number
+  originalStart: number
+  originalEnd: number
+}
+
+export interface MarkdownSourceMap {
+  originalLength: number
+  preparedLength: number
+  replacements: MarkdownSourceReplacement[]
+}
+
+export interface PreparedMarkdownSource {
+  content: string
+  sourceMap: MarkdownSourceMap
+}
+
+export interface MarkdownSourceDataAttributes {
+  'data-aladdeen-source-start'?: number | string
+  'data-aladdeen-source-end'?: number | string
+  'data-aladdeen-source-exact'?: string
+}
+
 interface PositionedNode {
   type: string
   value?: string
@@ -272,8 +296,17 @@ function isEscaped(source: string, index: number): boolean {
   return slashes % 2 === 1
 }
 
-export function prepareMarkdownSource(source: string): string {
-  if (!source.includes('\\(') && !source.includes('\\[')) return source
+export function prepareMarkdownSourceWithMap(source: string): PreparedMarkdownSource {
+  const identity = (): PreparedMarkdownSource => ({
+    content: source,
+    sourceMap: {
+      originalLength: source.length,
+      preparedLength: source.length,
+      replacements: []
+    }
+  })
+
+  if (!source.includes('\\(') && !source.includes('\\[')) return identity()
   const ranges = excludedSourceRanges(source)
   const excluded = (index: number): boolean =>
     ranges.some(([start, end]) => index >= start && index < end)
@@ -301,20 +334,64 @@ export function prepareMarkdownSource(source: string): string {
 
   pair('\\(', '\\)', '$')
   pair('\\[', '\\]', '$$')
-  if (replacements.size === 0) return source
+  if (replacements.size === 0) return identity()
 
   let result = ''
+  const sourceMapReplacements: MarkdownSourceReplacement[] = []
   for (let index = 0; index < source.length; ) {
     const replacement = replacements.get(index)
     if (replacement) {
+      const preparedStart = result.length
       result += replacement.value
+      sourceMapReplacements.push({
+        preparedStart,
+        preparedEnd: result.length,
+        originalStart: index,
+        originalEnd: index + replacement.length
+      })
       index += replacement.length
     } else {
       result += source[index]
       index += 1
     }
   }
-  return result
+  return {
+    content: result,
+    sourceMap: {
+      originalLength: source.length,
+      preparedLength: result.length,
+      replacements: sourceMapReplacements
+    }
+  }
+}
+
+export function originalOffsetForPrepared(sourceMap: MarkdownSourceMap, offset: number): number {
+  const preparedOffset = Math.min(Math.max(Math.trunc(offset), 0), sourceMap.preparedLength)
+  let low = 0
+  let high = sourceMap.replacements.length
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (sourceMap.replacements[middle]!.preparedStart <= preparedOffset) low = middle + 1
+    else high = middle
+  }
+  const replacement = sourceMap.replacements[low - 1]
+  if (!replacement) return preparedOffset
+  if (preparedOffset <= replacement.preparedEnd) {
+    const preparedLength = replacement.preparedEnd - replacement.preparedStart
+    const originalLength = replacement.originalEnd - replacement.originalStart
+    if (preparedLength <= 0) return replacement.originalStart
+    const progress = (preparedOffset - replacement.preparedStart) / preparedLength
+    return Math.min(
+      replacement.originalEnd,
+      replacement.originalStart + Math.round(progress * originalLength)
+    )
+  }
+  const delta = replacement.originalEnd - replacement.preparedEnd
+  return Math.min(preparedOffset + delta, sourceMap.originalLength)
+}
+
+export function prepareMarkdownSource(source: string): string {
+  return prepareMarkdownSourceWithMap(source).content
 }
 
 function toList(items: TocEntry[]): MarkdownNode {
@@ -491,6 +568,139 @@ const rehypeAladdeenPolish: Plugin = () => (tree) => {
       if (!isTaskInput) (parent as { children: unknown[] }).children.splice(index, 1)
     }
   })
+}
+
+interface SourcePositionNode {
+  type: string
+  tagName?: string
+  value?: string
+  properties?: Record<string, unknown>
+  children?: SourcePositionNode[]
+  position?: {
+    start: { offset?: number }
+    end: { offset?: number }
+  }
+}
+
+interface SourcePositionOptions {
+  preparedContent: string
+  sourceMap: MarkdownSourceMap
+}
+
+const EXACT_TEXT_PARENT_TAGS = new Set([
+  'a',
+  'abbr',
+  'bdo',
+  'big',
+  'cite',
+  'dd',
+  'del',
+  'dt',
+  'em',
+  'figcaption',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'ins',
+  'kbd',
+  'li',
+  'mark',
+  'p',
+  'samp',
+  'small',
+  'strong',
+  'sub',
+  'summary',
+  'sup',
+  'td',
+  'th',
+  'time',
+  'u',
+  'var'
+])
+
+function mappedSourcePosition(
+  node: SourcePositionNode,
+  sourceMap: MarkdownSourceMap
+): { start: number; end: number } | null {
+  const preparedStart = node.position?.start.offset
+  const preparedEnd = node.position?.end.offset
+  if (typeof preparedStart !== 'number' || typeof preparedEnd !== 'number' || preparedEnd <= preparedStart) {
+    return null
+  }
+  const start = originalOffsetForPrepared(sourceMap, preparedStart)
+  const end = originalOffsetForPrepared(sourceMap, preparedEnd)
+  return end > start ? { start, end } : null
+}
+
+function sourcePositionProperties(
+  position: { start: number; end: number },
+  exact = false
+): Record<string, unknown> {
+  return {
+    dataAladdeenSourceStart: position.start,
+    dataAladdeenSourceEnd: position.end,
+    ...(exact ? { dataAladdeenSourceExact: 'true' } : {})
+  }
+}
+
+/**
+ * Runs after sanitization so source-position attributes can only originate from
+ * Aladdeen, never from user-authored raw HTML.
+ */
+export const rehypeAladdeenSourcePositions: Plugin = (rawOptions?: unknown) => {
+  const options = rawOptions as SourcePositionOptions | undefined
+  return (tree) => {
+    if (!options) return
+    const root = tree as unknown as SourcePositionNode
+
+    visit(root as never, 'element', (node: SourcePositionNode) => {
+      const position = mappedSourcePosition(node, options.sourceMap)
+      if (!position) return
+      node.properties = {
+        ...(node.properties ?? {}),
+        ...sourcePositionProperties(position)
+      }
+    })
+
+    visit(
+      root as never,
+      'text',
+      (node: SourcePositionNode, index: number | undefined, parent: SourcePositionNode | undefined) => {
+        if (
+          typeof index !== 'number' ||
+          !parent?.children ||
+          !parent.tagName ||
+          !EXACT_TEXT_PARENT_TAGS.has(parent.tagName) ||
+          typeof node.value !== 'string' ||
+          !/\S/u.test(node.value)
+        ) {
+          return
+        }
+        const preparedStart = node.position?.start.offset
+        const preparedEnd = node.position?.end.offset
+        const position = mappedSourcePosition(node, options.sourceMap)
+        if (
+          !position ||
+          typeof preparedStart !== 'number' ||
+          typeof preparedEnd !== 'number' ||
+          options.preparedContent.slice(preparedStart, preparedEnd) !== node.value
+        ) {
+          return
+        }
+        parent.children[index] = {
+          type: 'element',
+          tagName: 'span',
+          properties: sourcePositionProperties(position, true),
+          children: [node],
+          position: node.position
+        }
+      }
+    )
+  }
 }
 
 export const aladdeenMarkdownRemarkPlugins: PluggableList = [

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ImageOff } from 'lucide-react'
 import { toAssetUrl } from '@shared/path'
+import type { MarkdownSourceDataAttributes } from '@shared/markdown'
 
 interface MarkdownImageProps {
   documentId: string
@@ -10,6 +11,7 @@ interface MarkdownImageProps {
   width?: number | string
   height?: number | string
   loading?: 'eager' | 'lazy'
+  sourceAttributes?: MarkdownSourceDataAttributes
 }
 
 export function MarkdownImage({
@@ -19,7 +21,8 @@ export function MarkdownImage({
   title,
   width,
   height,
-  loading = 'lazy'
+  loading = 'lazy',
+  sourceAttributes
 }: MarkdownImageProps): React.JSX.Element {
   const [failed, setFailed] = useState(false)
 
@@ -28,7 +31,13 @@ export function MarkdownImage({
   if (!asset || failed) {
     const message = isRemote ? 'Remote image blocked' : 'Image unavailable'
     return (
-      <span className="blocked-image" role="img" aria-label={`${message}${alt ? `: ${alt}` : ''}`} title={message}>
+      <span
+        {...sourceAttributes}
+        className="blocked-image"
+        role="img"
+        aria-label={`${message}${alt ? `: ${alt}` : ''}`}
+        title={message}
+      >
         <ImageOff size={18} aria-hidden="true" />
         <span>{alt || message}</span>
       </span>
@@ -37,6 +46,7 @@ export function MarkdownImage({
 
   return (
     <img
+      {...sourceAttributes}
       src={asset}
       alt={alt}
       title={title}

@@ -217,6 +217,20 @@ export interface DocumentSnapshot {
   revision: FileRevision
 }
 
+export interface PreviewSourceTarget {
+  from: number
+  to: number
+  exact: boolean
+}
+
+export interface EditorRevealRequest {
+  id: number
+  from: number
+  to: number
+  select: boolean
+  origin: 'preview' | 'search'
+}
+
 export interface OpenDocument extends DocumentSnapshot {
   savedContent: string
   status: SaveStatus
@@ -224,11 +238,7 @@ export interface OpenDocument extends DocumentSnapshot {
   deleted?: boolean
   editorScrollTop: number
   editorSelection: number
-  editorReveal?: {
-    id: number
-    from: number
-    to: number
-  }
+  editorReveal?: EditorRevealRequest
 }
 
 export interface AppSettings {

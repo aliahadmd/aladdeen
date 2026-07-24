@@ -7,6 +7,8 @@ import { MarkdownContent } from './MarkdownContent'
 
 export function MarkdownPreview({ document }: { document: OpenDocument }): React.JSX.Element {
   const openRelativeDocument = useAppStore((state) => state.openRelativeDocument)
+  const editing = useAppStore((state) => state.editing)
+  const revealPreviewSource = useAppStore((state) => state.revealPreviewSource)
   const dark = useEffectiveDarkMode()
   const scrollRef = useRef<HTMLDivElement>(null)
   const articleRef = useRef<HTMLElement>(null)
@@ -22,6 +24,8 @@ export function MarkdownPreview({ document }: { document: OpenDocument }): React
           theme={dark ? 'dark' : 'light'}
           onOpenExternal={(target) => void window.aladdeen.system.openExternal(target)}
           onOpenRelativeDocument={(target) => void openRelativeDocument(document.id, target)}
+          onRevealSource={(target) => revealPreviewSource(document.id, target)}
+          sourceNavigationEnabled={editing}
         />
       </div>
       <HeadingOutline

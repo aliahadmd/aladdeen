@@ -164,6 +164,12 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
     await expect(window.getByRole('heading', { name: 'Edited offline' })).toBeVisible()
     await expect.poll(async () => readFile(markdownPath, 'utf8')).toContain('Autosave keeps this on disk.')
 
+    await window.locator('.preview-pane').getByText('Done.').click()
+    await expect(window.locator('.cm-selectionBackground')).toBeVisible()
+    expect(
+      await window.evaluate(() => document.activeElement?.closest('.cm-editor') !== null)
+    ).toBe(true)
+
     await window.getByRole('button', { name: 'Preview' }).click()
     await window.setViewportSize({ width: 900, height: 700 })
     const outlineTrigger = window.getByRole('button', { name: '2 level 1 headings' })

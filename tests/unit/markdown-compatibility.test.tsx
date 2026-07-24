@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AladdeenApi } from '@shared/contracts'
 import {
   extractMarkdownMetadata,
+  originalOffsetForPrepared,
+  prepareMarkdownSourceWithMap,
   prepareMarkdownSource
 } from '@shared/markdown'
 import { MarkdownContent } from '@renderer/components/MarkdownContent'
@@ -50,6 +52,19 @@ describe('extended Markdown compatibility', () => {
     expect(prepared).toContain('Math $x + 1$.')
     expect(prepared).toContain('`code \\(not math\\)`')
     expect(prepared).toContain('\\[not math\\]')
+  })
+
+  it('maps prepared math offsets back to the original source', () => {
+    const source = 'Before \\(x + 1\\), then \\[y = 2\\], and after.'
+    const prepared = prepareMarkdownSourceWithMap(source)
+    const preparedAfter = prepared.content.indexOf('after')
+    const preparedInlineEnd = prepared.content.indexOf(', then')
+
+    expect(prepared.content).toBe('Before $x + 1$, then $$y = 2$$, and after.')
+    expect(originalOffsetForPrepared(prepared.sourceMap, preparedAfter)).toBe(source.indexOf('after'))
+    expect(originalOffsetForPrepared(prepared.sourceMap, preparedInlineEnd)).toBe(
+      source.indexOf(', then')
+    )
   })
 
   it('hides frontmatter, builds one nested TOC, and assigns stable duplicate slugs', () => {

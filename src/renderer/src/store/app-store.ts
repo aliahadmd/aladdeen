@@ -11,6 +11,7 @@ import type {
   GlobalSearchMatch,
   OpenDocument,
   OpenFileRequest,
+  PreviewSourceTarget,
   ProjectImportSelection,
   ThemeMode,
   TrackedFileSummary,
@@ -58,6 +59,7 @@ interface AppState {
     matchCase: boolean,
     wholeWord: boolean
   ): Promise<void>
+  revealPreviewSource(fileId: string, target: PreviewSourceTarget): void
   openDroppedFile(file: File): Promise<void>
   setActiveFileId(fileId: string): void
   updateContent(fileId: string, content: string): void
@@ -419,9 +421,43 @@ export const useAppStore = create<AppState>((set, get) => {
           ? {
               ...candidate,
               editorSelection: to,
-              editorReveal: { id: editorRevealId, from, to }
+              editorReveal: {
+                id: editorRevealId,
+                from,
+                to,
+                select: true,
+                origin: 'search'
+              }
             }
           : candidate)
+      }))
+    },
+
+    revealPreviewSource(fileId, target) {
+      const state = get()
+      if (!state.editing || state.activeFileId !== fileId) return
+      const document = state.documents.find((candidate) => candidate.id === fileId)
+      if (!document) return
+      const from = Math.min(Math.max(Math.trunc(target.from), 0), document.content.length)
+      const to = Math.min(Math.max(Math.trunc(target.to), from), document.content.length)
+      editorRevealId += 1
+      set((current) => ({
+        mobilePane: 'editor',
+        documents: current.documents.map((candidate) =>
+          candidate.id === fileId
+            ? {
+                ...candidate,
+                editorSelection: target.exact ? to : from,
+                editorReveal: {
+                  id: editorRevealId,
+                  from,
+                  to,
+                  select: target.exact,
+                  origin: 'preview'
+                }
+              }
+            : candidate
+        )
       }))
     },
 
@@ -451,7 +487,12 @@ export const useAppStore = create<AppState>((set, get) => {
     updateEditorView(fileId, scrollTop, selection) {
       set((state) => ({
         documents: state.documents.map((document) => document.id === fileId
-          ? { ...document, editorScrollTop: scrollTop, editorSelection: selection }
+          ? {
+              ...document,
+              editorScrollTop: scrollTop,
+              editorSelection: selection,
+              editorReveal: undefined
+            }
           : document)
       }))
     },
