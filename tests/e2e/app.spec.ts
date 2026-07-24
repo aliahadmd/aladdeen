@@ -9,13 +9,14 @@ test('onboards into a persistent environment', async () => {
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
-    await window.setViewportSize({ width: 1280, height: 768 })
+    await window.setViewportSize({ width: 900, height: 700 })
     await expect(window.getByRole('heading', { name: 'Create your first environment' })).toBeVisible()
     await expect(window.getByLabel('Environment name')).toHaveValue('Personal')
     await expect(window).toHaveScreenshot('onboarding.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
     await window.getByRole('button', { name: 'Create environment' }).click()
-    await expect(window.getByRole('button', { name: 'Switch environment' })).toContainText('Personal')
     await expect(window.getByRole('heading', { name: 'Your Markdown, one calm place.' })).toBeVisible()
+    await window.getByRole('button', { name: 'Show sidebar' }).click()
+    await expect(window.getByRole('button', { name: 'Switch environment' })).toContainText('Personal')
   } finally {
     await application.close()
     await rm(userData, { recursive: true, force: true })
