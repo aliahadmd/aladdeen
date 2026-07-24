@@ -235,6 +235,56 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
   }
 })
 
+test('keeps a long editor manually scrollable after preview-to-source navigation', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-scroll-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-scroll-workspace-'))
+  const markdownPath = join(workspace, 'long-document.md')
+  const paragraphs = Array.from(
+    { length: 400 },
+    (_, index) => `Paragraph ${index + 1} with unique navigation text ${index + 1}.`
+  )
+  await writeFile(markdownPath, ['# Long document', ...paragraphs].join('\n\n'), 'utf8')
+  const application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
+
+  try {
+    const window = await application.firstWindow()
+    await window.getByRole('button', { name: 'Create environment' }).click()
+    await expect(window.getByRole('heading', { name: 'Long document' })).toBeVisible()
+    await window.getByRole('button', { name: 'Edit' }).click()
+
+    const scroller = window.locator('.editor-pane .cm-scroller')
+    await expect.poll(() =>
+      scroller.evaluate((element) => element.scrollHeight > element.clientHeight)
+    ).toBe(true)
+
+    await scroller.hover()
+    await window.mouse.wheel(0, 800)
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+
+    const previewTarget = window.locator('.preview-pane').getByText(paragraphs[349]!)
+    await previewTarget.scrollIntoViewIfNeeded()
+    await previewTarget.click()
+    const revealedTop = await scroller.evaluate((element) => element.scrollTop)
+    expect(revealedTop).toBeGreaterThan(0)
+
+    await scroller.hover()
+    await window.mouse.wheel(0, -700)
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeLessThan(revealedTop)
+    const manuallyScrolledTop = await scroller.evaluate((element) => element.scrollTop)
+
+    await window.mouse.wheel(0, 900)
+    await expect.poll(() => scroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+      manuallyScrolledTop
+    )
+  } finally {
+    await application.close()
+    await Promise.all([
+      rm(userData, { recursive: true, force: true }),
+      rm(workspace, { recursive: true, force: true })
+    ])
+  }
+})
+
 test('restores tabs independently for each environment', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-environments-'))
   const folder = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-files-'))

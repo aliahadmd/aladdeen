@@ -2415,7 +2415,8 @@ body.is-resizing-sidebar * {
   background: var(--surface);
 }
 
-.editor-pane .cm-theme,
+.editor-pane .cm-theme-light,
+.editor-pane .cm-theme-dark,
 .editor-pane .cm-editor {
   height: 100%;
 }
