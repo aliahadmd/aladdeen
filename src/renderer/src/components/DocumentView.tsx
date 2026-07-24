@@ -2,6 +2,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { AlertCircle, CheckCircle2, CloudOff, LoaderCircle, PencilLine } from 'lucide-react'
 import { MarkdownEditor } from './MarkdownEditor'
 import { MarkdownPreview } from './MarkdownPreview'
+import { DocumentActions } from './DocumentActions'
 import { Welcome } from './Welcome'
 import { useEffectiveDarkMode } from '@renderer/hooks/use-effective-dark-mode'
 import { useMediaQuery } from '@renderer/hooks/use-media-query'
@@ -23,6 +24,7 @@ export function DocumentView(): React.JSX.Element {
 
   return (
     <section className="document-workspace">
+      <DocumentActions />
       {editing && (
         <div className="compact-pane-switch" role="tablist" aria-label="Document view">
           <button className={mobilePane === 'editor' ? 'is-active' : ''} onClick={() => setMobilePane('editor')}>

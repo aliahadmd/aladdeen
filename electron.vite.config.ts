@@ -33,6 +33,14 @@ export default defineConfig({
   renderer: {
     root: resolve('src/renderer'),
     plugins: [react(), tailwindcss()],
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/renderer/index.html'),
+          export: resolve('src/renderer/export.html')
+        }
+      }
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

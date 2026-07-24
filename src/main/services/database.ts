@@ -5,7 +5,12 @@ import { DatabaseSync } from 'node:sqlite'
 import { FluidError } from '@main/errors'
 import type { AppSettings, EnvironmentSummary } from '@shared/contracts'
 
-const DEFAULT_SETTINGS: AppSettings = { theme: 'system', accent: 'indigo' }
+const DEFAULT_SETTINGS: AppSettings = {
+  theme: 'system',
+  accent: 'indigo',
+  sidebarWidth: 320,
+  sidebarCollapsed: false
+}
 
 interface WindowState {
   x?: number
@@ -177,6 +182,13 @@ export class AppDatabase {
     for (const row of rows) {
       if (row.key === 'theme' && ['light', 'dark', 'system'].includes(row.value)) settings.theme = row.value as AppSettings['theme']
       if (row.key === 'accent' && ['indigo', 'blue', 'emerald', 'amber', 'rose'].includes(row.value)) settings.accent = row.value as AppSettings['accent']
+      if (row.key === 'sidebar_width') {
+        const width = Number(row.value)
+        if (Number.isInteger(width) && width >= 248 && width <= 420) settings.sidebarWidth = width
+      }
+      if (row.key === 'sidebar_collapsed' && ['true', 'false'].includes(row.value)) {
+        settings.sidebarCollapsed = row.value === 'true'
+      }
     }
     return settings
   }
@@ -184,6 +196,8 @@ export class AppDatabase {
   setSettings(settings: AppSettings): AppSettings {
     this.setSetting('theme', settings.theme)
     this.setSetting('accent', settings.accent)
+    this.setSetting('sidebar_width', String(settings.sidebarWidth))
+    this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
     return settings
   }
 

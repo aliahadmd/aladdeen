@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import { basename, extname } from 'node:path'
+import { basename, extname, join } from 'node:path'
 import {
   BrowserWindow,
   dialog,
@@ -12,6 +12,7 @@ import {
   Document,
   ExternalHyperlink,
   FileChild,
+  FootnoteReferenceRun,
   HeadingLevel,
   ImageRun,
   Packer,
@@ -25,70 +26,25 @@ import {
   type ParagraphChild
 } from 'docx'
 import imageSize from 'image-size'
-import type { PhrasingContent, Root, RootContent, Table as MdTable } from 'mdast'
-import { unified } from 'unified'
-import { visit } from 'unist-util-visit'
-import rehypeHighlight from 'rehype-highlight'
-import rehypeStringify from 'rehype-stringify'
-import remarkGfm from 'remark-gfm'
-import remarkParse from 'remark-parse'
-import remarkRehype from 'remark-rehype'
+import type { FootnoteDefinition, PhrasingContent, Root, RootContent, Table as MdTable } from 'mdast'
 import { FluidError } from '@main/errors'
 import type { ExportRequest, SaveCopyResult } from '@shared/contracts'
-import { toAssetUrl } from '@shared/path'
+import {
+  createMarkdownAstProcessor,
+  extractMarkdownMetadata,
+  prepareMarkdownSource
+} from '@shared/markdown'
 import type { WorkspaceService } from './workspace'
 
-const PRINT_CSS = `
-  :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #252535; }
-  @page { size: A4 portrait; margin: 18mm 17mm 20mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-size: 11pt; line-height: 1.65; overflow-wrap: anywhere; }
-  article { max-width: 100%; }
-  h1, h2, h3, h4, h5, h6 { color: #171725; line-height: 1.22; margin: 1.4em 0 .55em; page-break-after: avoid; }
-  h1 { font-size: 28pt; letter-spacing: -.025em; border-bottom: 1px solid #e7e7ed; padding-bottom: .3em; }
-  h2 { font-size: 20pt; letter-spacing: -.018em; border-bottom: 1px solid #ededf2; padding-bottom: .2em; }
-  h3 { font-size: 15pt; }
-  p, ul, ol, blockquote, pre, table { margin: .75em 0; }
-  a { color: #4f46e5; text-decoration-color: #a5a1ef; }
-  blockquote { border-left: 3px solid #aaa6ed; color: #5c5b6a; margin-left: 0; padding: .15em 0 .15em 1em; }
-  code { font: .9em "SFMono-Regular", Consolas, "Liberation Mono", monospace; background: #f1f1f6; border-radius: 4px; padding: .12em .32em; }
-  pre { background: #171721; color: #e9e9f3; border-radius: 9px; padding: 14px 16px; white-space: pre-wrap; page-break-inside: avoid; }
-  pre code { background: transparent; color: inherit; padding: 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-  th, td { border: 1px solid #dddde6; text-align: left; padding: 7px 9px; vertical-align: top; }
-  th { background: #f4f4f8; font-weight: 650; }
-  img { display: block; max-width: 100%; height: auto; margin: 1em auto; page-break-inside: avoid; }
-  li + li { margin-top: .2em; }
-  input[type="checkbox"] { margin-right: .45em; }
-  .hljs-keyword, .hljs-selector-tag, .hljs-literal { color: #c792ea; }
-  .hljs-string, .hljs-attr { color: #c3e88d; }
-  .hljs-number, .hljs-built_in { color: #f78c6c; }
-  .hljs-comment { color: #8a8a9d; font-style: italic; }
-  .hljs-title, .hljs-function { color: #82aaff; }
-`
-
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
-}
-
-function localImagePlugin(fileId: string) {
-  return () => (tree: unknown) => {
-    visit(tree as never, 'element', (node: { tagName?: string; properties?: Record<string, unknown> }) => {
-      if (node.tagName !== 'img' || typeof node.properties?.src !== 'string') return
-      const url = toAssetUrl(fileId, node.properties.src)
-      if (url) node.properties.src = url
-      else {
-        node.tagName = 'span'
-        node.properties = { className: ['blocked-image'] }
-      }
-    })
-  }
-}
+const mainBundleDirectory = import.meta.dirname
 
 interface InlineStyle {
   bold?: boolean
   italics?: boolean
   strike?: boolean
+  subScript?: boolean
+  superScript?: boolean
+  underline?: { color?: string }
 }
 
 export class ExportService {
@@ -125,28 +81,37 @@ export class ExportService {
     })
     if (destination.canceled || !destination.filePath) throw new FluidError('CANCELLED', 'PDF export was cancelled.')
 
-    const rendered = await unified()
-      .use(remarkParse)
-      .use(remarkGfm)
-      .use(remarkRehype)
-      .use(localImagePlugin(request.fileId))
-      .use(rehypeHighlight, { detect: true })
-      .use(rehypeStringify)
-      .process(request.content)
-
-    const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src fluidmd-asset: data:; style-src 'unsafe-inline'"><title>${escapeHtml(request.title)}</title><style>${PRINT_CSS}</style></head><body><article>${String(rendered)}</article></body></html>`
     const printWindow = new BrowserWindow({
       show: false,
       width: 900,
       height: 1200,
-      webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false }
+      backgroundColor: '#ffffff',
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webSecurity: true
+      }
     })
     printWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     printWindow.webContents.on('will-navigate', (event) => event.preventDefault())
+    printWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
 
     try {
-      await printWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
-      await printWindow.webContents.executeJavaScript(`Promise.all([document.fonts.ready, ...Array.from(document.images).map((image) => image.complete ? Promise.resolve() : new Promise((resolve) => { image.addEventListener('load', resolve, { once: true }); image.addEventListener('error', resolve, { once: true }); }))])`)
+      if (process.env.ELECTRON_RENDERER_URL) {
+        const rendererUrl = process.env.ELECTRON_RENDERER_URL.endsWith('/')
+          ? process.env.ELECTRON_RENDERER_URL
+          : `${process.env.ELECTRON_RENDERER_URL}/`
+        await printWindow.loadURL(new URL('export.html', rendererUrl).toString())
+      } else {
+        await printWindow.loadFile(join(mainBundleDirectory, '../renderer/export.html'))
+      }
+      const payload = JSON.stringify({
+        fileId: request.fileId,
+        title: request.title,
+        content: request.content
+      })
+      await printWindow.webContents.executeJavaScript(`window.renderFluidMdExport(${payload})`, true)
       const buffer = await printWindow.webContents.printToPDF({
         pageSize: 'A4',
         landscape: false,
@@ -172,12 +137,35 @@ export class ExportService {
     if (destination.canceled || !destination.filePath) throw new FluidError('CANCELLED', 'DOCX export was cancelled.')
 
     try {
-      const tree = unified().use(remarkParse).use(remarkGfm).parse(request.content) as Root
-      const children = await this.blocksToDocx(tree.children, request.fileId)
+      const metadata = extractMarkdownMetadata(request.content)
+      const processor = createMarkdownAstProcessor()
+      const parsed = processor.parse(prepareMarkdownSource(request.content))
+      const tree = (await processor.run(parsed)) as Root
+      const definitions = tree.children.filter(
+        (node): node is FootnoteDefinition => node.type === 'footnoteDefinition'
+      )
+      const footnoteIds = new Map(definitions.map((definition, index) => [definition.identifier, index + 1]))
+      const body = tree.children.filter((node) => node.type !== 'footnoteDefinition')
+      const children = await this.blocksToDocx(body, request.fileId, 0, footnoteIds)
+      const footnotes: Record<string, { children: Paragraph[] }> = {}
+      for (const definition of definitions) {
+        const id = footnoteIds.get(definition.identifier)
+        if (!id) continue
+        const blocks = await this.blocksToDocx(definition.children, request.fileId, 0, footnoteIds)
+        footnotes[String(id)] = {
+          children: blocks.filter((block): block is Paragraph => block instanceof Paragraph)
+        }
+      }
+      const metadataDetails = [
+        metadata?.date ? `Date: ${metadata.date}` : '',
+        metadata?.version ? `Version: ${metadata.version}` : ''
+      ].filter(Boolean)
       const document = new Document({
-        title: request.title,
-        creator: 'FluidMD',
-        description: 'Exported from Markdown by FluidMD',
+        title: metadata?.title || request.title,
+        creator: metadata?.author || 'FluidMD',
+        keywords: metadata?.tags.join(', ') || undefined,
+        description: ['Exported from Markdown by FluidMD', ...metadataDetails].join('. '),
+        footnotes,
         styles: {
           default: {
             document: {
@@ -216,9 +204,50 @@ export class ExportService {
     }
   }
 
-  private async blocksToDocx(nodes: RootContent[], fileId: string, listLevel = 0): Promise<FileChild[]> {
+  private async blocksToDocx(
+    nodes: RootContent[],
+    fileId: string,
+    listLevel = 0,
+    footnoteIds = new Map<string, number>()
+  ): Promise<FileChild[]> {
     const children: FileChild[] = []
     for (const node of nodes) {
+      const extended = node as unknown as {
+        type: string
+        value?: string
+        children?: Array<{ type: string; children?: PhrasingContent[] }>
+      }
+      if (extended.type === 'math') {
+        children.push(
+          new Paragraph({
+            style: 'FluidCode',
+            children: [
+              new TextRun({ text: 'Math', bold: true, font: 'Courier New' }),
+              new TextRun({ break: 1, text: extended.value ?? '', font: 'Courier New' })
+            ],
+            shading: { type: ShadingType.CLEAR, fill: 'F1F1F6', color: 'auto' }
+          })
+        )
+        continue
+      }
+      if (extended.type === 'descriptionlist') {
+        for (const entry of extended.children ?? []) {
+          if (!entry.children) continue
+          children.push(
+            new Paragraph({
+              children: await this.inlineToDocx(
+                entry.children,
+                fileId,
+                entry.type === 'descriptionterm' ? { bold: true } : {},
+                footnoteIds
+              ),
+              indent: entry.type === 'descriptiondetails' ? { left: 360 } : undefined,
+              spacing: entry.type === 'descriptionterm' ? { before: 140, after: 40 } : { after: 100 }
+            })
+          )
+        }
+        continue
+      }
       switch (node.type) {
         case 'heading':
           children.push(
@@ -231,13 +260,13 @@ export class ExportService {
                 HeadingLevel.HEADING_5,
                 HeadingLevel.HEADING_6
               ][node.depth - 1],
-              children: await this.inlineToDocx(node.children, fileId),
+              children: await this.inlineToDocx(node.children, fileId, {}, footnoteIds),
               spacing: { before: node.depth === 1 ? 120 : 220, after: 110 }
             })
           )
           break
         case 'paragraph':
-          children.push(new Paragraph({ children: await this.inlineToDocx(node.children, fileId) }))
+          children.push(new Paragraph({ children: await this.inlineToDocx(node.children, fileId, {}, footnoteIds) }))
           break
         case 'blockquote': {
           for (const quoteNode of node.children) {
@@ -246,27 +275,30 @@ export class ExportService {
                 new Paragraph({
                   children: [
                     new TextRun({ text: '❝ ', color: '6D68C9' }),
-                    ...(await this.inlineToDocx(quoteNode.children, fileId))
+                    ...(await this.inlineToDocx(quoteNode.children, fileId, {}, footnoteIds))
                   ],
                   indent: { left: 420 },
                   border: { left: { style: BorderStyle.SINGLE, color: 'AAA6ED', size: 12, space: 12 } }
                 })
               )
             } else {
-              children.push(...(await this.blocksToDocx([quoteNode], fileId, listLevel)))
+              children.push(...(await this.blocksToDocx([quoteNode], fileId, listLevel, footnoteIds)))
             }
           }
           break
         }
         case 'code':
+          {
+            const label = node.lang?.toLowerCase() === 'mermaid' ? 'Mermaid diagram\n' : ''
           children.push(
             new Paragraph({
               style: 'FluidCode',
-              children: [new TextRun({ text: node.value, font: 'Courier New' })],
+              children: [new TextRun({ text: `${label}${node.value}`, font: 'Courier New' })],
               shading: { type: ShadingType.CLEAR, fill: 'F1F1F6', color: 'auto' }
             })
           )
           break
+          }
         case 'list': {
           let index = node.start ?? 1
           for (const item of node.children) {
@@ -275,20 +307,23 @@ export class ExportService {
             if (first?.type === 'paragraph') {
               children.push(
                 new Paragraph({
-                  children: [new TextRun({ text: marker }), ...(await this.inlineToDocx(first.children, fileId))],
+                  children: [
+                    new TextRun({ text: marker }),
+                    ...(await this.inlineToDocx(first.children, fileId, {}, footnoteIds))
+                  ],
                   bullet: node.ordered ? undefined : { level: Math.min(listLevel, 8) },
                   indent: node.ordered ? { left: 360 + listLevel * 240, hanging: 240 } : undefined
                 })
               )
             }
             const nested = item.children.filter((child) => child.type !== 'paragraph') as RootContent[]
-            children.push(...(await this.blocksToDocx(nested, fileId, listLevel + 1)))
+            children.push(...(await this.blocksToDocx(nested, fileId, listLevel + 1, footnoteIds)))
             index += 1
           }
           break
         }
         case 'table':
-          children.push(await this.tableToDocx(node, fileId))
+          children.push(await this.tableToDocx(node, fileId, footnoteIds))
           break
         case 'thematicBreak':
           children.push(
@@ -298,25 +333,38 @@ export class ExportService {
             })
           )
           break
-        case 'html':
+        case 'html': {
+          const text = this.safeHtmlText(node.value)
+          if (text) children.push(new Paragraph({ children: [new TextRun({ text })] }))
           break
+        }
         default:
           if ('children' in node && Array.isArray(node.children)) {
-            children.push(...(await this.blocksToDocx(node.children as RootContent[], fileId, listLevel)))
+            children.push(
+              ...(await this.blocksToDocx(node.children as RootContent[], fileId, listLevel, footnoteIds))
+            )
           }
       }
     }
     return children
   }
 
-  private async tableToDocx(node: MdTable, fileId: string): Promise<Table> {
+  private async tableToDocx(
+    node: MdTable,
+    fileId: string,
+    footnoteIds: Map<string, number>
+  ): Promise<Table> {
     const rows = await Promise.all(
       node.children.map(async (row, rowIndex) =>
         new TableRow({
           children: await Promise.all(
             row.children.map(async (cell) =>
               new TableCell({
-                children: [new Paragraph({ children: await this.inlineToDocx(cell.children, fileId) })],
+                children: [
+                  new Paragraph({
+                    children: await this.inlineToDocx(cell.children, fileId, {}, footnoteIds)
+                  })
+                ],
                 shading: rowIndex === 0 ? { type: ShadingType.CLEAR, fill: 'F0F0F5', color: 'auto' } : undefined,
                 margins: { top: 90, right: 110, bottom: 90, left: 110 }
               })
@@ -331,22 +379,86 @@ export class ExportService {
   private async inlineToDocx(
     nodes: PhrasingContent[],
     fileId: string,
-    style: InlineStyle = {}
+    style: InlineStyle = {},
+    footnoteIds = new Map<string, number>()
   ): Promise<ParagraphChild[]> {
     const result: ParagraphChild[] = []
+    let activeStyle = { ...style }
+    const htmlStyleStack: Array<{ tag: string; style: InlineStyle }> = []
     for (const node of nodes) {
+      const extended = node as unknown as { type: string; value?: string; identifier?: string }
+      if (extended.type === 'inlineMath') {
+        result.push(
+          new TextRun({
+            text: `\\(${extended.value ?? ''}\\)`,
+            font: 'Courier New',
+            shading: { type: ShadingType.CLEAR, fill: 'EEEEF4', color: 'auto' }
+          })
+        )
+        continue
+      }
+      if (extended.type === 'footnoteReference') {
+        const id = extended.identifier ? footnoteIds.get(extended.identifier) : undefined
+        if (id) result.push(new FootnoteReferenceRun(id))
+        continue
+      }
+      if (extended.type === 'html') {
+        const html = extended.value ?? ''
+        if (/^<\s*br\s*\/?\s*>$/i.test(html)) {
+          result.push(new TextRun({ break: 1 }))
+          continue
+        }
+        const tag = /^<\s*(\/?)\s*([a-z0-9-]+)/i.exec(html)
+        if (!tag) continue
+        const name = tag[2]!.toLowerCase()
+        if (tag[1]) {
+          const index = htmlStyleStack.findLastIndex((entry) => entry.tag === name)
+          if (index !== -1) {
+            activeStyle = htmlStyleStack[index]!.style
+            htmlStyleStack.splice(index)
+          }
+          continue
+        }
+        const nextStyle = this.htmlInlineStyle(name, activeStyle)
+        if (nextStyle) {
+          htmlStyleStack.push({ tag: name, style: activeStyle })
+          activeStyle = nextStyle
+        }
+        continue
+      }
       switch (node.type) {
         case 'text':
-          result.push(new TextRun({ text: node.value, ...style }))
+          result.push(new TextRun({ text: node.value, ...activeStyle }))
           break
         case 'strong':
-          result.push(...(await this.inlineToDocx(node.children, fileId, { ...style, bold: true })))
+          result.push(
+            ...(await this.inlineToDocx(
+              node.children,
+              fileId,
+              { ...activeStyle, bold: true },
+              footnoteIds
+            ))
+          )
           break
         case 'emphasis':
-          result.push(...(await this.inlineToDocx(node.children, fileId, { ...style, italics: true })))
+          result.push(
+            ...(await this.inlineToDocx(
+              node.children,
+              fileId,
+              { ...activeStyle, italics: true },
+              footnoteIds
+            ))
+          )
           break
         case 'delete':
-          result.push(...(await this.inlineToDocx(node.children, fileId, { ...style, strike: true })))
+          result.push(
+            ...(await this.inlineToDocx(
+              node.children,
+              fileId,
+              { ...activeStyle, strike: true },
+              footnoteIds
+            ))
+          )
           break
         case 'inlineCode':
           result.push(
@@ -362,7 +474,12 @@ export class ExportService {
           result.push(new TextRun({ break: 1 }))
           break
         case 'link': {
-          const linkChildren = await this.inlineToDocx(node.children, fileId, { ...style })
+          const linkChildren = await this.inlineToDocx(
+            node.children,
+            fileId,
+            { ...activeStyle },
+            footnoteIds
+          )
           if (/^(https?:|mailto:)/i.test(node.url)) {
             result.push(new ExternalHyperlink({ children: linkChildren, link: node.url }))
           } else result.push(...linkChildren)
@@ -373,17 +490,42 @@ export class ExportService {
           break
         case 'imageReference':
         case 'linkReference':
-          result.push(new TextRun({ text: node.label ?? node.identifier, ...style }))
-          break
-        case 'html':
+          result.push(new TextRun({ text: node.label ?? node.identifier, ...activeStyle }))
           break
         default:
           if ('children' in node && Array.isArray(node.children)) {
-            result.push(...(await this.inlineToDocx(node.children as PhrasingContent[], fileId, style)))
+            result.push(
+              ...(await this.inlineToDocx(
+                node.children as PhrasingContent[],
+                fileId,
+                activeStyle,
+                footnoteIds
+              ))
+            )
           }
       }
     }
     return result
+  }
+
+  private htmlInlineStyle(tag: string, current: InlineStyle): InlineStyle | null {
+    if (tag === 'b' || tag === 'strong') return { ...current, bold: true }
+    if (tag === 'em' || tag === 'i' || tag === 'cite' || tag === 'var') {
+      return { ...current, italics: true }
+    }
+    if (tag === 'del' || tag === 's') return { ...current, strike: true }
+    if (tag === 'sub') return { ...current, subScript: true }
+    if (tag === 'sup') return { ...current, superScript: true }
+    if (tag === 'u' || tag === 'ins') return { ...current, underline: {} }
+    return null
+  }
+
+  private safeHtmlText(value: string): string {
+    if (/<\s*(?:script|style|iframe|object|embed|form|svg)\b/i.test(value)) return ''
+    return value
+      .replace(/<\s*br\s*\/?\s*>/gi, '\n')
+      .replace(/<[^>]*>/g, '')
+      .trim()
   }
 
   private async imageToDocx(target: string, alt: string, fileId: string): Promise<ParagraphChild> {

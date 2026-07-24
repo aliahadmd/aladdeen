@@ -1,0 +1,106 @@
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-muted: #f3f3f7;
+  --surface-hover: #ededf3;
+  --border: #dddde6;
+  --border-strong: #cfcfda;
+  --text: #252535;
+  --text-soft: #5c5b6a;
+  --text-muted: #777687;
+  --accent: #4f46e5;
+  --accent-soft: #eeedff;
+  --accent-muted: #aaa6ed;
+  --danger: #c73f46;
+  --warning: #a96608;
+  --success: #21865b;
+}
+
+@page {
+  size: A4 portrait;
+  margin: 18mm 17mm 20mm;
+}
+
+html,
+body,
+#root {
+  width: auto;
+  height: auto;
+  overflow: visible;
+}
+
+body.export-document {
+  margin: 0;
+  background: white;
+  color: var(--text);
+  font-size: 11pt;
+  user-select: text;
+}
+
+.export-document .markdown-body {
+  width: 100%;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  font-size: 11pt;
+  line-height: 1.62;
+}
+
+.export-document .markdown-body h1 {
+  font-size: 28pt;
+}
+
+.export-document .markdown-body h2 {
+  font-size: 20pt;
+}
+
+.export-document .markdown-body h3 {
+  font-size: 15pt;
+}
+
+.export-document .markdown-body :is(h1, h2, h3, h4, h5, h6),
+.export-document .markdown-body pre,
+.export-document .markdown-body figure,
+.export-document .markdown-callout {
+  break-inside: avoid;
+}
+
+.export-document .markdown-body table {
+  display: table;
+  font-size: 10pt;
+}
+
+.export-document .markdown-code-block {
+  background: #f4f4f7;
+  box-shadow: none;
+}
+
+.export-document .markdown-code-block .code-block-toolbar {
+  border-color: #dddde6;
+  color: #666675;
+}
+
+.export-document .markdown-code-block .code-block-toolbar button {
+  display: none;
+}
+
+.export-document .markdown-body pre {
+  background: #f4f4f7;
+  color: #252535;
+  white-space: pre-wrap;
+}
+
+.export-document .markdown-body pre code {
+  color: #252535;
+}
+
+.export-document .mermaid-diagram {
+  background: white;
+}
+
+.export-document .blocked-image {
+  break-inside: avoid;
+}

@@ -18,15 +18,25 @@ describe('application metadata database', () => {
     created.push(directory)
     const database = new AppDatabase(directory)
 
-    expect(database.getSettings()).toEqual({ theme: 'system', accent: 'indigo' })
-    database.setSettings({ theme: 'dark', accent: 'rose' })
+    expect(database.getSettings()).toEqual({
+      theme: 'system',
+      accent: 'indigo',
+      sidebarWidth: 320,
+      sidebarCollapsed: false
+    })
+    database.setSettings({ theme: 'dark', accent: 'rose', sidebarWidth: 368, sidebarCollapsed: true })
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
     const file = database.upsertTrackedFile(environment.id, '/notes/hello.md', project.id)
     database.setProjectExpandedPaths(project.id, ['guides'])
     database.setEnvironmentState(environment.id, [file.id], file.id)
 
-    expect(database.getSettings()).toEqual({ theme: 'dark', accent: 'rose' })
+    expect(database.getSettings()).toEqual({
+      theme: 'dark',
+      accent: 'rose',
+      sidebarWidth: 368,
+      sidebarCollapsed: true
+    })
     expect(database.listEnvironments()).toHaveLength(1)
     expect(database.getActiveEnvironmentId()).toBe(environment.id)
     expect(database.listProjects(environment.id)[0]?.path).toBe('/notes')

@@ -135,7 +135,12 @@ export const useAppStore = create<AppState>((set, get) => {
     environment: null,
     documents: [],
     activeFileId: null,
-    settings: { theme: 'system', accent: 'indigo' },
+    settings: {
+      theme: 'system',
+      accent: 'indigo',
+      sidebarWidth: 320,
+      sidebarCollapsed: false
+    },
     editing: false,
     mobilePane: 'preview',
     sidebarOpen: false,

@@ -16,16 +16,23 @@ import {
   FolderPlus,
   LocateFixed,
   MoreHorizontal,
+  Moon,
+  PanelLeftClose,
   Pencil,
   Plus,
   Search,
+  Settings2,
+  Sun,
+  SwatchBook,
   Trash2,
   Unlink,
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProjectSummary, TrackedFileSummary, WorkspaceTreeNode } from '@shared/contracts'
-import { useAppStore } from '@renderer/store/app-store'
+import { markdownDisplayName, trackedFileDisplayLocation } from '@renderer/lib/display'
+import { themeOptions, useAppStore } from '@renderer/store/app-store'
+import { SettingsDialog } from './SettingsDialog'
 
 interface SidebarProps { compact?: boolean }
 type FormKind = 'environment' | 'rename-environment' | 'project' | 'file' | 'folder' | null
@@ -43,6 +50,8 @@ function filterTree(nodes: WorkspaceTreeNode[], query: string): WorkspaceTreeNod
 export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
   const activeFileId = useAppStore((state) => state.activeFileId)
+  const documents = useAppStore((state) => state.documents)
+  const settings = useAppStore((state) => state.settings)
   const selectedProjectId = useAppStore((state) => state.selectedProjectId)
   const selectedFolderPath = useAppStore((state) => state.selectedFolderPath)
   const switchEnvironment = useAppStore((state) => state.switchEnvironment)
@@ -62,6 +71,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const locateTrackedFile = useAppStore((state) => state.locateTrackedFile)
   const setSelectedLocation = useAppStore((state) => state.setSelectedLocation)
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen)
+  const updateSettings = useAppStore((state) => state.updateSettings)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [showAll, setShowAll] = useState(false)
@@ -73,6 +83,9 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const [removeProjectTarget, setRemoveProjectTarget] = useState<ProjectSummary | null>(null)
   const [trashTrackedTarget, setTrashTrackedTarget] = useState<TrackedFileSummary | null>(null)
   const [deleteEnvironmentOpen, setDeleteEnvironmentOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const activeDocument = documents.find((document) => document.id === activeFileId)
+  const ThemeIcon = settings.theme === 'dark' ? Moon : settings.theme === 'light' ? Sun : SwatchBook
 
   useEffect(() => {
     if (!environment) return
@@ -147,6 +160,36 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
 
   return (
     <aside className={`sidebar environment-sidebar ${compact ? 'is-compact' : ''}`} aria-label="Environment files">
+      <div className="sidebar-brand-row">
+        <div className="sidebar-brand" aria-label="FluidMD">
+          <div className="brand-mark sidebar-brand-mark" aria-hidden="true">F</div>
+          <strong>FluidMD</strong>
+        </div>
+        <div className="environment-header-actions">
+          <button
+            className="sidebar-icon-button"
+            onClick={() => setSearchOpen((value) => !value)}
+            aria-label={searchOpen ? 'Close search' : 'Search environment'}
+            title={searchOpen ? 'Close search' : 'Search environment'}
+          >
+            {searchOpen ? <X size={15} /> : <Search size={15} />}
+          </button>
+          <button
+            className="sidebar-icon-button"
+            onClick={() => compact ? setSidebarOpen(false) : void updateSettings({ sidebarCollapsed: true })}
+            aria-label={compact ? 'Close sidebar' : 'Collapse sidebar'}
+            title={compact ? 'Close sidebar' : 'Collapse sidebar'}
+          >
+            {compact ? <X size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </div>
+      </div>
+
+      <div className={`sidebar-document-context ${activeDocument ? '' : 'is-empty'}`} title={activeDocument?.fullPath}>
+        <strong>{activeDocument?.name ?? 'No file selected'}</strong>
+        <span>{activeDocument?.location ?? 'Open or create a Markdown file'}</span>
+      </div>
+
       <div className="environment-header">
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
@@ -170,10 +213,6 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <div className="environment-header-actions">
-          <button className="sidebar-icon-button" onClick={() => setSearchOpen((value) => !value)} aria-label="Search environment"><Search size={15} /></button>
-          {compact && <button className="sidebar-icon-button" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar"><X size={16} /></button>}
-        </div>
       </div>
 
       {searchOpen && (
@@ -280,6 +319,42 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
         <ScrollArea.Scrollbar className="scrollbar" orientation="vertical"><ScrollArea.Thumb className="scrollbar-thumb" /></ScrollArea.Scrollbar>
       </ScrollArea.Root>
 
+      <footer className="environment-footer">
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button className="sidebar-footer-button" aria-label="Appearance">
+              <ThemeIcon size={15} />
+              <span>{themeOptions.find((option) => option.value === settings.theme)?.label ?? 'Appearance'}</span>
+              <ChevronDown size={12} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content className="dropdown-content appearance-menu" side="top" sideOffset={7} align="start">
+              <DropdownMenu.Label className="dropdown-label">Appearance</DropdownMenu.Label>
+              {themeOptions.map((option) => (
+                <DropdownMenu.Item
+                  key={option.value}
+                  className="dropdown-item"
+                  onSelect={() => void updateSettings({ theme: option.value })}
+                >
+                  <span className="menu-check">{settings.theme === option.value && <Check size={14} />}</span>
+                  {option.label}
+                </DropdownMenu.Item>
+              ))}
+              <DropdownMenu.Separator className="dropdown-separator" />
+              <DropdownMenu.Item className="dropdown-item" onSelect={() => setSettingsOpen(true)}>
+                <Settings2 size={14} />
+                More appearance settings
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+        <button className="sidebar-footer-button settings-button" onClick={() => setSettingsOpen(true)}>
+          <Settings2 size={15} />
+          <span>Settings</span>
+        </button>
+      </footer>
+
       <SidebarForm
         kind={formKind}
         initialValue={formKind === 'rename-environment' ? environment.environment.name : ''}
@@ -339,6 +414,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
         onCancel={() => setDeleteEnvironmentOpen(false)}
         onConfirm={async () => { await removeEnvironment(); setDeleteEnvironmentOpen(false) }}
       />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </aside>
   )
 }
@@ -397,11 +473,13 @@ function ProjectTreeItem({
 }
 
 function TrackedFileRow({ file, active, onOpen, onLocate, onRemove, onTrash }: { file: TrackedFileSummary; active: boolean; onOpen(): void; onLocate(): void; onRemove(): void; onTrash(): void }): React.JSX.Element {
+  const displayName = markdownDisplayName(file.name)
+  const displayLocation = trackedFileDisplayLocation(file)
   return (
     <div className={`tracked-file-row ${active ? 'is-active' : ''} ${file.missing ? 'is-missing' : ''}`} title={file.fullPath}>
-      <button className="tracked-file-main" onClick={onOpen}>
+      <button className="tracked-file-main" onClick={onOpen} aria-label={`Open ${file.name}`}>
         {file.missing ? <FileQuestion size={15} /> : <FileText size={15} />}
-        <span className="tracked-file-copy"><strong>{file.name}</strong><small>{file.location}</small></span>
+        <span className="tracked-file-copy"><strong>{displayName}</strong><small>{displayLocation}</small></span>
         {file.missing && <span className="missing-badge">Missing</span>}
       </button>
       <DropdownMenu.Root>

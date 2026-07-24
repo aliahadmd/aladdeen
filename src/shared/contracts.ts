@@ -102,6 +102,8 @@ export interface OpenDocument extends DocumentSnapshot {
 export interface AppSettings {
   theme: ThemeMode
   accent: Accent
+  sidebarWidth: number
+  sidebarCollapsed: boolean
 }
 
 export interface BootstrapData {

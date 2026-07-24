@@ -1,14 +1,22 @@
-import { useEffect, useState } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
+import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
 import { Toaster } from 'sonner'
 import { ConflictDialog } from './components/ConflictDialog'
 import { DocumentView } from './components/DocumentView'
 import { OnboardingDialog } from './components/OnboardingDialog'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
-import { TopBar } from './components/TopBar'
 import { useEffectiveDarkMode } from './hooks/use-effective-dark-mode'
 import { useAppStore } from './store/app-store'
+
+const SIDEBAR_MIN_WIDTH = 248
+const SIDEBAR_DEFAULT_WIDTH = 320
+const SIDEBAR_MAX_WIDTH = 420
+
+function clampSidebarWidth(width: number): number {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)))
+}
 
 export default function App(): React.JSX.Element {
   const initialized = useAppStore((state) => state.initialized)
@@ -18,6 +26,7 @@ export default function App(): React.JSX.Element {
   const handleEnvironmentEvent = useAppStore((state) => state.handleEnvironmentEvent)
   const openDroppedFile = useAppStore((state) => state.openDroppedFile)
   const settings = useAppStore((state) => state.settings)
+  const updateSettings = useAppStore((state) => state.updateSettings)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen)
   const activeFileId = useAppStore((state) => state.activeFileId)
@@ -27,7 +36,8 @@ export default function App(): React.JSX.Element {
   const addProject = useAppStore((state) => state.addProject)
   const openFile = useAppStore((state) => state.openFile)
   const dark = useEffectiveDarkMode()
-  const [sidebarVisible, setSidebarVisible] = useState(true)
+  const sidebarWidthRef = useRef(settings.sidebarWidth)
+  const resizeState = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
 
   useEffect(() => {
     void initialize()
@@ -44,6 +54,11 @@ export default function App(): React.JSX.Element {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light'
     document.documentElement.dataset.accent = settings.accent
   }, [dark, settings.accent])
+
+  useEffect(() => {
+    sidebarWidthRef.current = settings.sidebarWidth
+    document.documentElement.style.setProperty('--sidebar-width', `${settings.sidebarWidth}px`)
+  }, [settings.sidebarWidth])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -98,14 +113,91 @@ export default function App(): React.JSX.Element {
     )
   }
 
+  const previewSidebarWidth = (width: number): void => {
+    const next = clampSidebarWidth(width)
+    sidebarWidthRef.current = next
+    document.documentElement.style.setProperty('--sidebar-width', `${next}px`)
+  }
+
+  const persistSidebarWidth = (): void => {
+    document.body.classList.remove('is-resizing-sidebar')
+    resizeState.current = null
+    if (sidebarWidthRef.current !== settings.sidebarWidth) {
+      void updateSettings({ sidebarWidth: sidebarWidthRef.current })
+    }
+  }
+
+  const handleResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 0 || resizeState.current) return
+    resizeState.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: sidebarWidthRef.current
+    }
+    event.currentTarget.setPointerCapture(event.pointerId)
+    document.body.classList.add('is-resizing-sidebar')
+  }
+
+  const handleResizePointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    const resize = resizeState.current
+    if (!resize || resize.pointerId !== event.pointerId) return
+    previewSidebarWidth(resize.startWidth + event.clientX - resize.startX)
+    event.currentTarget.setAttribute('aria-valuenow', String(sidebarWidthRef.current))
+  }
+
+  const handleResizePointerEnd = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (resizeState.current?.pointerId !== event.pointerId) return
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    persistSidebarWidth()
+  }
+
+  const handleResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    let next: number | undefined
+    if (event.key === 'ArrowLeft') next = sidebarWidthRef.current - 16
+    if (event.key === 'ArrowRight') next = sidebarWidthRef.current + 16
+    if (event.key === 'Home') next = SIDEBAR_MIN_WIDTH
+    if (event.key === 'End') next = SIDEBAR_MAX_WIDTH
+    if (next === undefined) return
+    event.preventDefault()
+    previewSidebarWidth(next)
+    event.currentTarget.setAttribute('aria-valuenow', String(sidebarWidthRef.current))
+    void updateSettings({ sidebarWidth: sidebarWidthRef.current })
+  }
+
+  const openSidebar = (): void => {
+    if (window.matchMedia('(max-width: 959px)').matches) setSidebarOpen(true)
+    else void updateSettings({ sidebarCollapsed: false })
+  }
+
   return (
     <div className="app-shell">
-      <TopBar sidebarVisible={sidebarVisible} onToggleSidebar={() => setSidebarVisible((value) => !value)} />
-      <div className={`workspace-grid ${sidebarVisible ? '' : 'sidebar-collapsed'}`}>
+      <div className={`workspace-grid ${settings.sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
         <div className="desktop-sidebar"><Sidebar /></div>
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          aria-valuemin={SIDEBAR_MIN_WIDTH}
+          aria-valuemax={SIDEBAR_MAX_WIDTH}
+          aria-valuenow={settings.sidebarWidth}
+          tabIndex={0}
+          onDoubleClick={() => {
+            previewSidebarWidth(SIDEBAR_DEFAULT_WIDTH)
+            void updateSettings({ sidebarWidth: SIDEBAR_DEFAULT_WIDTH })
+          }}
+          onKeyDown={handleResizeKeyDown}
+          onPointerDown={handleResizePointerDown}
+          onPointerMove={handleResizePointerMove}
+          onPointerUp={handleResizePointerEnd}
+          onPointerCancel={handleResizePointerEnd}
+        />
         <main className="content-shell">
           <TabBar />
           <DocumentView />
+          <button className="sidebar-launcher" onClick={openSidebar} aria-label="Show sidebar" title="Show sidebar">
+            <PanelLeftOpen size={17} />
+          </button>
         </main>
       </div>
 
