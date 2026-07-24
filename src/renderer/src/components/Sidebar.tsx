@@ -35,7 +35,33 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { IndexedFileSummary, ProjectSummary, ProjectTreePage, TrackedFileSummary, WorkspaceTreeNode } from '@shared/contracts'
+import { cn } from '@renderer/lib/cn'
 import { markdownDisplayName, trackedFileDisplayLocation } from '@renderer/lib/display'
+import {
+  buttonClasses,
+  dialogActionsClasses,
+  dialogContentClasses,
+  dialogDescriptionClasses,
+  dialogIconClasses,
+  dialogInputClasses,
+  dialogOverlayClasses,
+  dialogTitleClasses,
+  dropdownContentClasses,
+  dropdownItemClasses,
+  dropdownLabelClasses,
+  dropdownSeparatorClasses,
+  environmentTreeRowClasses,
+  menuCheckClasses,
+  projectRowClasses,
+  rowMoreClasses,
+  sectionAddClasses,
+  sidebarClasses,
+  sidebarFooterButtonClasses,
+  sidebarIconButtonClasses,
+  sidebarQuickActionClasses,
+  trackedFileRowClasses,
+  treeLoadMoreClasses
+} from '@renderer/lib/ui-styles'
 import { themeOptions, useAppStore } from '@renderer/store/app-store'
 import { SettingsDialog } from './SettingsDialog'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
@@ -235,41 +261,41 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
     const projectOpen = !project.archived && !query && expandedProjects.has(project.id)
     const rootPage = treePages[treeKey(project.id, '')]
     return (
-      <div className={`project-group ${project.archived ? 'is-archived' : ''}`} key={project.id}>
-        <div className={`project-row ${selectedProjectId === project.id && selectedFolderPath === '' ? 'is-selected' : ''}`}>
+      <div className={cn('project-group [&+.project-group]:mt-px', project.archived && 'opacity-70')} key={project.id}>
+        <div className={projectRowClasses(selectedProjectId === project.id && selectedFolderPath === '')}>
           <button
-            className="project-main"
+            className="flex h-[29px] min-w-0 flex-1 items-center gap-[6px] border-0 bg-transparent px-1 text-left text-[12px] text-inherit [&>svg:nth-child(2)]:text-[color-mix(in_oklab,var(--accent)_55%,var(--text-soft))] [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap"
             onClick={() => project.archived ? setManageProjectTarget(project) : toggleProject(project.id)}
             title={`${project.displayPath}\n${project.fileCount.toLocaleString()} indexed files`}
           >
             {project.archived ? <Archive size={13} /> : projectOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             {projectOpen ? <FolderOpen size={15} /> : <Folder size={15} />}
             <span>{project.name}</span>
-            {project.pinned && <Pin className="project-pin" size={10} aria-label="Favorite" />}
-            <small>{project.indexStatus === 'indexing' ? '…' : project.fileCount.toLocaleString()}</small>
+            {project.pinned && <Pin className="shrink-0 fill-[color-mix(in_oklab,var(--accent)_28%,transparent)] text-accent" size={10} aria-label="Favorite" />}
+            <small className="shrink-0 text-[9px] font-medium text-foreground-muted">{project.indexStatus === 'indexing' ? '…' : project.fileCount.toLocaleString()}</small>
           </button>
           <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild><button className="row-more" aria-label={`Actions for ${project.name}`}><MoreHorizontal size={14} /></button></DropdownMenu.Trigger>
+            <DropdownMenu.Trigger asChild><button className={rowMoreClasses} aria-label={`Actions for ${project.name}`}><MoreHorizontal size={14} /></button></DropdownMenu.Trigger>
             <DropdownMenu.Portal>
-              <DropdownMenu.Content className="dropdown-content" sideOffset={4} align="start">
+              <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
                 {!project.archived && <>
-                  <DropdownMenu.Item className="dropdown-item" onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('file') }}><FilePlus2 size={14} /> New file</DropdownMenu.Item>
-                  <DropdownMenu.Item className="dropdown-item" onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('folder') }}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
+                  <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('file') }}><FilePlus2 size={14} /> New file</DropdownMenu.Item>
+                  <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('folder') }}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
                 </>}
-                <DropdownMenu.Item className="dropdown-item" onSelect={() => setManageProjectTarget(project)}><SlidersHorizontal size={14} /> Manage project</DropdownMenu.Item>
-                <DropdownMenu.Item className="dropdown-item" onSelect={() => void window.aladdeen.files.revealProjectEntry(project.id, '')}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
-                <DropdownMenu.Separator className="dropdown-separator" />
-                <DropdownMenu.Item className="dropdown-item destructive-item" onSelect={() => setRemoveProjectTarget(project)}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
+                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setManageProjectTarget(project)}><SlidersHorizontal size={14} /> Manage project</DropdownMenu.Item>
+                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.aladdeen.files.revealProjectEntry(project.id, '')}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
+                <DropdownMenu.Separator className={dropdownSeparatorClasses} />
+                <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={() => setRemoveProjectTarget(project)}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
               </DropdownMenu.Content>
             </DropdownMenu.Portal>
           </DropdownMenu.Root>
         </div>
         {projectOpen && (
-          <div className="project-tree" role="tree">
+          <div className="min-w-0" role="tree">
             {loadingTreeKeys.has(treeKey(project.id, '')) && !rootPage ? (
-              <div className="project-empty"><LoaderCircle className="spinner" size={12} /> Indexing…</div>
+              <div className="pt-[6px] pr-[10px] pb-2 pl-9 text-[10px] text-foreground-muted"><LoaderCircle className="spinner" size={12} /> Indexing…</div>
             ) : !rootPage || rootPage.entries.length === 0 ? (
-              <div className="project-empty">{project.indexStatus === 'indexing' ? 'Indexing Markdown files…' : 'No Markdown files in this scope'}</div>
+              <div className="pt-[6px] pr-[10px] pb-2 pl-9 text-[10px] text-foreground-muted">{project.indexStatus === 'indexing' ? 'Indexing Markdown files…' : 'No Markdown files in this scope'}</div>
             ) : rootPage.entries.map((node) => (
               <ProjectTreeItem
                 key={node.path}
@@ -291,7 +317,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
               />
             ))}
             {rootPage?.nextCursor !== undefined && (
-              <button className="tree-load-more" onClick={() => void loadChildren(project.id, '', rootPage.nextCursor)}>Show more</button>
+              <button className={treeLoadMoreClasses()} onClick={() => void loadChildren(project.id, '', rootPage.nextCursor)}>Show more</button>
             )}
           </div>
         )}
@@ -299,18 +325,18 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
     )
   }
 
-  if (!environment) return <aside className={`sidebar environment-sidebar ${compact ? 'is-compact' : ''}`} aria-label="Environment files" />
+  if (!environment) return <aside className={cn(sidebarClasses, compact && 'is-compact w-full shadow-[12px_0_38px_rgb(0_0_0/.18)]')} aria-label="Environment files" />
 
   return (
-    <aside className={`sidebar environment-sidebar ${compact ? 'is-compact' : ''}`} aria-label="Environment files">
-      <div className="sidebar-brand-row">
-        <div className="sidebar-brand" aria-label="Aladdeen">
-          <BrandMark className="brand-mark sidebar-brand-mark" />
-          <strong>Aladdeen</strong>
+    <aside className={cn(sidebarClasses, compact && 'is-compact w-full shadow-[12px_0_38px_rgb(0_0_0/.18)]')} aria-label="Environment files">
+      <div className="flex min-h-11 shrink-0 items-center justify-between pt-2 pr-[9px] pb-1 pl-[11px]">
+        <div className="flex min-w-0 items-center gap-2" aria-label="Aladdeen">
+          <BrandMark className="block h-[25px] w-[25px] shrink-0 drop-shadow-[0_3px_7px_rgb(0_0_0/.16)]" />
+          <strong className="overflow-hidden text-[13px] font-[720] tracking-[-.015em] text-ellipsis whitespace-nowrap text-foreground">Aladdeen</strong>
         </div>
-        <div className="environment-header-actions">
+        <div className="flex items-center gap-0.5">
           <button
-            className="sidebar-icon-button"
+            className={sidebarIconButtonClasses}
             onClick={() => {
               if (compact) setSidebarOpen(false)
               setGlobalSearchOpen(true)
@@ -321,7 +347,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
             <FileSearch2 size={15} />
           </button>
           <button
-            className="sidebar-icon-button"
+            className={sidebarIconButtonClasses}
             onClick={() => setSearchOpen((value) => !value)}
             aria-label={searchOpen ? 'Close file filter' : 'Filter projects and files'}
             title={searchOpen ? 'Close file filter' : 'Filter projects and files'}
@@ -329,7 +355,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
             {searchOpen ? <X size={15} /> : <Search size={15} />}
           </button>
           <button
-            className="sidebar-icon-button"
+            className={sidebarIconButtonClasses}
             onClick={() => compact ? setSidebarOpen(false) : void updateSettings({ sidebarCollapsed: true })}
             aria-label={compact ? 'Close sidebar' : 'Collapse sidebar'}
             title={compact ? 'Close sidebar' : 'Collapse sidebar'}
@@ -339,98 +365,98 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
         </div>
       </div>
 
-      <div className={`sidebar-document-context ${activeDocument ? '' : 'is-empty'}`} title={activeDocument?.fullPath}>
-        <strong>{activeDocument?.name ?? 'No file selected'}</strong>
-        <span>{activeDocument?.location ?? 'Open or create a Markdown file'}</span>
+      <div className="mx-[10px] mt-0.5 mb-[5px] grid min-w-0 shrink-0 gap-0.5 rounded-lg border border-border bg-[color-mix(in_oklab,var(--surface-elevated)_72%,transparent)] px-[9px] py-2" title={activeDocument?.fullPath}>
+        <strong className={cn('overflow-hidden text-[12px] font-[630] leading-4 text-ellipsis whitespace-nowrap text-foreground', !activeDocument && 'text-foreground-soft')}>{activeDocument?.name ?? 'No file selected'}</strong>
+        <span className="overflow-hidden text-[9px] leading-[13px] text-ellipsis whitespace-nowrap text-foreground-muted">{activeDocument?.location ?? 'Open or create a Markdown file'}</span>
       </div>
 
-      <div className="environment-header">
+      <div className="flex min-h-[35px] shrink-0 items-center justify-between pt-0 pr-[9px] pb-0.5 pl-[11px]">
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
-            <button className="environment-trigger" aria-label="Switch environment">
-              <span>{environment.environment.name}</span><ChevronDown size={14} />
+            <button className="flex h-[29px] min-w-0 max-w-full items-center gap-[5px] rounded-[7px] border-0 bg-transparent px-[5px] text-[12px] font-[650] tracking-[-.015em] text-foreground transition-transform duration-[140ms] ease-fluid-out active:scale-[.97] hover:bg-surface-hover" aria-label="Switch environment">
+              <span className="overflow-hidden text-ellipsis whitespace-nowrap">{environment.environment.name}</span><ChevronDown size={14} />
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content className="dropdown-content environment-menu" sideOffset={6} align="start">
-              <DropdownMenu.Label className="dropdown-label">Environments</DropdownMenu.Label>
+            <DropdownMenu.Content className={cn(dropdownContentClasses, 'w-56')} sideOffset={6} align="start">
+              <DropdownMenu.Label className={dropdownLabelClasses}>Environments</DropdownMenu.Label>
               {environment.environments.map((item) => (
-                <DropdownMenu.Item key={item.id} className="dropdown-item" onSelect={() => void switchEnvironment(item.id)}>
-                  <span className="menu-check">{item.id === environment.environment.id && <Check size={14} />}</span>
-                  <span className="environment-menu-name">{item.name}</span>
+                <DropdownMenu.Item key={item.id} className={dropdownItemClasses()} onSelect={() => void switchEnvironment(item.id)}>
+                  <span className={menuCheckClasses}>{item.id === environment.environment.id && <Check size={14} />}</span>
+                  <span className="overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
                 </DropdownMenu.Item>
               ))}
-              <DropdownMenu.Separator className="dropdown-separator" />
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => setFormKind('environment')}><Plus size={14} /> New environment</DropdownMenu.Item>
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => setFormKind('rename-environment')}><Pencil size={14} /> Rename environment</DropdownMenu.Item>
-              <DropdownMenu.Item className="dropdown-item destructive-item" onSelect={() => setDeleteEnvironmentOpen(true)}><Trash2 size={14} /> Delete environment</DropdownMenu.Item>
+              <DropdownMenu.Separator className={dropdownSeparatorClasses} />
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setFormKind('environment')}><Plus size={14} /> New environment</DropdownMenu.Item>
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setFormKind('rename-environment')}><Pencil size={14} /> Rename environment</DropdownMenu.Item>
+              <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={() => setDeleteEnvironmentOpen(true)}><Trash2 size={14} /> Delete environment</DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
       </div>
 
       {searchOpen && (
-        <label className="environment-search">
+        <label className="mx-[9px] mt-0.5 mb-[5px] flex h-8 shrink-0 items-center gap-[7px] rounded-[7px] border border-border bg-surface-elevated px-2 text-foreground-muted focus-within:border-accent-muted focus-within:shadow-[0_0_0_2px_var(--accent-soft)]">
           <Search size={14} />
-          <input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search files and projects" />
-          {query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
+          <input className="min-w-0 flex-1 select-text border-0 bg-transparent text-[11px] text-foreground outline-0" autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search files and projects" />
+          {query && <button className="grid h-[18px] w-[18px] place-items-center rounded border-0 bg-transparent p-0 text-foreground-muted" onClick={() => setQuery('')} aria-label="Clear search"><X size={12} /></button>}
         </label>
       )}
 
-      <div className="environment-quick-actions">
-        <button onClick={() => selectedProjectId ? setFormKind('file') : void createFile()}><FilePlus2 size={15} /> New file</button>
-        <button onClick={() => setFormKind('project')}><FolderPlus size={15} /> New folder</button>
+      <div className="flex shrink-0 flex-col items-stretch gap-px px-[9px] pt-[3px] pb-[10px]">
+        <button className={sidebarQuickActionClasses} onClick={() => selectedProjectId ? setFormKind('file') : void createFile()}><FilePlus2 size={15} /> New file</button>
+        <button className={sidebarQuickActionClasses} onClick={() => setFormKind('project')}><FolderPlus size={15} /> New folder</button>
       </div>
 
-      <ScrollArea.Root className="environment-scroll">
-        <ScrollArea.Viewport className="environment-viewport">
+      <ScrollArea.Root className="min-h-0 flex-1 overflow-hidden">
+        <ScrollArea.Viewport className="h-full w-full px-[10px] pb-[22px]">
           <section className="sidebar-section" aria-labelledby="projects-heading">
-            <div className="section-heading-row">
-              <h2 id="projects-heading">Projects</h2>
+            <div className="flex min-h-7 items-center justify-between pr-1 pl-[3px]">
+              <h2 className="m-0 text-[11px] font-[560] tracking-[.01em] text-foreground-muted" id="projects-heading">Projects</h2>
               <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild><button className="section-add" aria-label="Add project"><Plus size={14} /></button></DropdownMenu.Trigger>
+                <DropdownMenu.Trigger asChild><button className={sectionAddClasses} aria-label="Add project"><Plus size={14} /></button></DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
-                  <DropdownMenu.Content className="dropdown-content" sideOffset={4} align="end">
-                    <DropdownMenu.Item className="dropdown-item" onSelect={() => setFormKind('project')}><FolderPlus size={14} /> Create new folder</DropdownMenu.Item>
-                    <DropdownMenu.Item className="dropdown-item" onSelect={() => void addProject()}><FolderOpen size={14} /> Add existing folder</DropdownMenu.Item>
+                  <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="end">
+                    <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setFormKind('project')}><FolderPlus size={14} /> Create new folder</DropdownMenu.Item>
+                    <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void addProject()}><FolderOpen size={14} /> Add existing folder</DropdownMenu.Item>
                   </DropdownMenu.Content>
                 </DropdownMenu.Portal>
               </DropdownMenu.Root>
             </div>
 
             {query && searchResults.length > 0 && (
-              <div className="indexed-search-results">
-                <span>Indexed files</span>
+              <div className="mb-[9px] grid gap-px border-b border-border pb-2">
+                <span className="px-[5px] pt-0.5 pb-1 text-[9px] font-[650] text-foreground-muted uppercase">Indexed files</span>
                 {searchResults.map((file) => (
-                  <button key={`${file.projectId}:${file.relativePath}`} onClick={() => void openDocument({ kind: 'project', projectId: file.projectId, relativePath: file.relativePath })}>
-                    <FileText size={13} />
-                    <span><strong>{file.name}</strong><small>{file.location}</small></span>
+                  <button className="flex min-h-[39px] min-w-0 items-center gap-[7px] rounded-[7px] border-0 bg-transparent px-[6px] py-1 text-left text-foreground-soft hover:bg-surface-hover hover:text-foreground" key={`${file.projectId}:${file.relativePath}`} onClick={() => void openDocument({ kind: 'project', projectId: file.projectId, relativePath: file.relativePath })}>
+                    <FileText className="shrink-0 text-foreground-muted" size={13} />
+                    <span className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"><strong className="block min-w-0 overflow-hidden text-[11px] font-[590] text-ellipsis whitespace-nowrap text-foreground">{file.name}</strong><small className="block min-w-0 overflow-hidden text-[9px] text-ellipsis whitespace-nowrap text-foreground-muted">{file.location}</small></span>
                   </button>
                 ))}
               </div>
             )}
 
             {groupedProjects.length === 0 && (!query || searchResults.length === 0) ? (
-              <div className="section-empty"><FolderKanban size={16} /><span>{query ? 'No indexed files or projects match' : 'Create or add a folder project'}</span></div>
+              <div className="flex items-center gap-[7px] pt-[9px] pr-[6px] pb-3 pl-[6px] text-[10px] text-foreground-muted"><FolderKanban size={16} /><span>{query ? 'No indexed files or projects match' : 'Create or add a folder project'}</span></div>
             ) : groupedProjects.map((group) => (
-              <div className="project-library-group" key={group.name}>
-                {(groupedProjects.length > 1 || group.name !== 'Ungrouped') && <div className="project-group-label">{group.name}</div>}
+              <div className="project-library-group [&+.project-library-group]:mt-2" key={group.name}>
+                {(groupedProjects.length > 1 || group.name !== 'Ungrouped') && <div className="px-[5px] pt-[5px] pb-[3px] pl-5 text-[9px] font-[650] tracking-[.025em] text-foreground-muted uppercase">{group.name}</div>}
                 {group.projects.map(renderProject)}
               </div>
             ))}
 
             {!query && archivedProjects.length > 0 && (
-              <details className="archived-projects">
-                <summary><Archive size={12} /> Archived <span>{archivedProjects.length}</span></summary>
+              <details className="mt-2 border-t border-border pt-[6px] [&>summary::-webkit-details-marker]:hidden">
+                <summary className="flex h-[27px] cursor-default list-none items-center gap-[6px] rounded-md px-[5px] text-[10px] text-foreground-muted hover:bg-surface-hover hover:text-foreground"><Archive size={12} /> Archived <span className="ml-auto">{archivedProjects.length}</span></summary>
                 {archivedProjects.map(renderProject)}
               </details>
             )}
           </section>
 
-          <section className="sidebar-section individual-files" aria-labelledby="files-heading">
-            <div className="section-heading-row"><h2 id="files-heading">Individual files</h2><span className="section-count">{environment.files.length}</span></div>
+          <section className="sidebar-section mt-5" aria-labelledby="files-heading">
+            <div className="flex min-h-7 items-center justify-between pr-1 pl-[3px]"><h2 className="m-0 text-[11px] font-[560] tracking-[.01em] text-foreground-muted" id="files-heading">Individual files</h2><span className="h-[18px] min-w-[19px] rounded-[9px] bg-surface-muted px-[5px] text-center text-[9px] leading-[18px] text-foreground-muted">{environment.files.length}</span></div>
             {visibleFiles.length === 0 ? (
-              <div className="section-empty"><FileText size={16} /><span>{query ? 'No matching files' : 'Opened files stay here'}</span></div>
+              <div className="flex items-center gap-[7px] pt-[9px] pr-[6px] pb-3 pl-[6px] text-[10px] text-foreground-muted"><FileText size={16} /><span>{query ? 'No matching files' : 'Opened files stay here'}</span></div>
             ) : visibleFiles.map((file) => (
               <TrackedFileRow
                 key={file.id}
@@ -443,44 +469,44 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
               />
             ))}
             {!query && environment.files.length > 8 && (
-              <button className="show-all-button" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show less' : `Show all ${environment.files.length}`}</button>
+              <button className="h-7 rounded-md border-0 bg-transparent px-[6px] text-[10px] text-foreground-muted transition-transform duration-[140ms] ease-fluid-out active:scale-[.97] hover:bg-surface-hover hover:text-foreground" onClick={() => setShowAll((value) => !value)}>{showAll ? 'Show less' : `Show all ${environment.files.length}`}</button>
             )}
           </section>
         </ScrollArea.Viewport>
-        <ScrollArea.Scrollbar className="scrollbar" orientation="vertical"><ScrollArea.Thumb className="scrollbar-thumb" /></ScrollArea.Scrollbar>
+        <ScrollArea.Scrollbar className="flex w-2 touch-none select-none p-0.5" orientation="vertical"><ScrollArea.Thumb className="flex-1 rounded-full bg-border-strong" /></ScrollArea.Scrollbar>
       </ScrollArea.Root>
 
-      <footer className="environment-footer">
+      <footer className="flex min-h-[46px] shrink-0 items-center justify-between gap-[5px] border-t border-border bg-[color-mix(in_oklab,var(--surface)_96%,transparent)] px-[9px] py-[7px]">
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
-            <button className="sidebar-footer-button" aria-label="Appearance">
+            <button className={sidebarFooterButtonClasses} aria-label="Appearance">
               <ThemeIcon size={15} />
               <span>{themeOptions.find((option) => option.value === settings.theme)?.label ?? 'Appearance'}</span>
               <ChevronDown size={12} />
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content className="dropdown-content appearance-menu" side="top" sideOffset={7} align="start">
-              <DropdownMenu.Label className="dropdown-label">Appearance</DropdownMenu.Label>
+            <DropdownMenu.Content className={cn(dropdownContentClasses, 'min-w-[178px]')} side="top" sideOffset={7} align="start">
+              <DropdownMenu.Label className={dropdownLabelClasses}>Appearance</DropdownMenu.Label>
               {themeOptions.map((option) => (
                 <DropdownMenu.Item
                   key={option.value}
-                  className="dropdown-item"
+                  className={dropdownItemClasses()}
                   onSelect={() => void updateSettings({ theme: option.value })}
                 >
-                  <span className="menu-check">{settings.theme === option.value && <Check size={14} />}</span>
+                  <span className={menuCheckClasses}>{settings.theme === option.value && <Check size={14} />}</span>
                   {option.label}
                 </DropdownMenu.Item>
               ))}
-              <DropdownMenu.Separator className="dropdown-separator" />
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => setSettingsOpen(true)}>
+              <DropdownMenu.Separator className={dropdownSeparatorClasses} />
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setSettingsOpen(true)}>
                 <Settings2 size={14} />
                 More appearance settings
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <button className="sidebar-footer-button settings-button" onClick={() => setSettingsOpen(true)}>
+        <button className={cn(sidebarFooterButtonClasses, 'ml-auto')} onClick={() => setSettingsOpen(true)}>
           <Settings2 size={15} />
           <span>Settings</span>
         </button>
@@ -577,34 +603,34 @@ function ProjectTreeItem({
   const tracked = node.kind === 'file' ? trackedFiles.find((file) => file.projectId === projectId && file.relativePath === node.path) : undefined
   return (
     <div role="treeitem" aria-expanded={node.kind === 'directory' ? isExpanded : undefined}>
-      <div className={`environment-tree-row ${tracked?.id === activeFileId ? 'is-active' : ''}`} style={{ '--tree-depth': depth } as React.CSSProperties}>
-        <button className="tree-main" onClick={() => {
+      <div className={environmentTreeRowClasses(tracked?.id === activeFileId)} style={{ '--tree-depth': depth } as React.CSSProperties}>
+        <button className="flex h-7 min-w-0 flex-1 items-center gap-[6px] border-0 bg-transparent px-[3px] text-left text-inherit [&>svg]:shrink-0 [&>svg]:text-foreground-muted [&>span:last-child]:overflow-hidden [&>span:last-child]:text-ellipsis [&>span:last-child]:whitespace-nowrap" onClick={() => {
           if (node.kind === 'directory') { onSelectFolder(node.path); onToggle(projectId, node.path) }
           else onOpen(node.path)
         }}>
-          <span className="tree-chevron">{node.kind === 'directory' && (isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />)}</span>
+          <span className="grid w-3 shrink-0 basis-3 place-items-center text-foreground-muted">{node.kind === 'directory' && (isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />)}</span>
           {node.kind === 'directory' ? (isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />) : <FileText size={14} />}
           <span>{node.name}</span>
         </button>
         <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild><button className="row-more" aria-label={`Actions for ${node.name}`}><MoreHorizontal size={13} /></button></DropdownMenu.Trigger>
+          <DropdownMenu.Trigger asChild><button className={rowMoreClasses} aria-label={`Actions for ${node.name}`}><MoreHorizontal size={13} /></button></DropdownMenu.Trigger>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content className="dropdown-content" sideOffset={4} align="start">
+            <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
               {node.kind === 'directory' && <>
-                <DropdownMenu.Item className="dropdown-item" onSelect={() => onCreate(node.path, 'file')}><FilePlus2 size={14} /> New file</DropdownMenu.Item>
-                <DropdownMenu.Item className="dropdown-item" onSelect={() => onCreate(node.path, 'folder')}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
+                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onCreate(node.path, 'file')}><FilePlus2 size={14} /> New file</DropdownMenu.Item>
+                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onCreate(node.path, 'folder')}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
               </>}
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => onRename(node)}><Pencil size={14} /> Rename</DropdownMenu.Item>
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => void window.aladdeen.files.revealProjectEntry(projectId, node.path)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
-              <DropdownMenu.Separator className="dropdown-separator" />
-              <DropdownMenu.Item className="dropdown-item destructive-item" onSelect={() => onTrash(node)}><Trash2 size={14} /> Move to Trash</DropdownMenu.Item>
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onRename(node)}><Pencil size={14} /> Rename</DropdownMenu.Item>
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.aladdeen.files.revealProjectEntry(projectId, node.path)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
+              <DropdownMenu.Separator className={dropdownSeparatorClasses} />
+              <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={() => onTrash(node)}><Trash2 size={14} /> Move to Trash</DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
       </div>
       {node.kind === 'directory' && isExpanded && (
         <>
-          {loading && !page && <div className="tree-loading" style={{ '--tree-depth': depth + 1 } as React.CSSProperties}><LoaderCircle className="spinner" size={11} /> Loading…</div>}
+          {loading && !page && <div className="flex min-h-[25px] items-center gap-[5px] pl-[calc(35px+var(--tree-depth,0)*14px)] text-[9px] text-foreground-muted" style={{ '--tree-depth': depth + 1 } as React.CSSProperties}><LoaderCircle className="spinner" size={11} /> Loading…</div>}
           {page?.entries.map((child) => (
             <ProjectTreeItem
               key={child.path}
@@ -625,8 +651,8 @@ function ProjectTreeItem({
               onLoadMore={onLoadMore}
             />
           ))}
-          {page?.nextCursor !== undefined && <button className="tree-load-more nested" onClick={() => onLoadMore(node.path, page.nextCursor!)}>Show more</button>}
-          {page && page.entries.length === 0 && <div className="tree-loading" style={{ '--tree-depth': depth + 1 } as React.CSSProperties}>No Markdown files</div>}
+          {page?.nextCursor !== undefined && <button className={treeLoadMoreClasses(true)} onClick={() => onLoadMore(node.path, page.nextCursor!)}>Show more</button>}
+          {page && page.entries.length === 0 && <div className="flex min-h-[25px] items-center gap-[5px] pl-[calc(35px+var(--tree-depth,0)*14px)] text-[9px] text-foreground-muted" style={{ '--tree-depth': depth + 1 } as React.CSSProperties}>No Markdown files</div>}
         </>
       )}
     </div>
@@ -637,21 +663,21 @@ function TrackedFileRow({ file, active, onOpen, onLocate, onRemove, onTrash }: {
   const displayName = markdownDisplayName(file.name)
   const displayLocation = trackedFileDisplayLocation(file)
   return (
-    <div className={`tracked-file-row ${active ? 'is-active' : ''} ${file.missing ? 'is-missing' : ''}`} title={file.fullPath}>
-      <button className="tracked-file-main" onClick={onOpen} aria-label={`Open ${file.name}`}>
-        {file.missing ? <FileQuestion size={15} /> : <FileText size={15} />}
-        <span className="tracked-file-copy"><strong>{displayName}</strong><small>{displayLocation}</small></span>
-        {file.missing && <span className="missing-badge">Missing</span>}
+    <div className={trackedFileRowClasses(active, file.missing)} title={file.fullPath}>
+      <button className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent py-[6px] pr-[7px] pl-2 text-left text-inherit" onClick={onOpen} aria-label={`Open ${file.name}`}>
+        {file.missing ? <FileQuestion className="shrink-0 text-foreground-muted" size={15} /> : <FileText className="shrink-0 text-foreground-muted" size={15} />}
+        <span className="tracked-file-copy block min-w-0 flex-1"><strong className="block overflow-hidden text-[12px] font-[580] leading-[17px] text-ellipsis whitespace-nowrap text-inherit">{displayName}</strong><small className="block overflow-hidden text-[10px] leading-[15px] text-ellipsis whitespace-nowrap text-foreground-muted">{displayLocation}</small></span>
+        {file.missing && <span className="shrink-0 rounded-[5px] bg-danger-soft px-[5px] py-0.5 text-[8px] font-bold text-danger">Missing</span>}
       </button>
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild><button className="row-more" aria-label={`Actions for ${file.name}`}><MoreHorizontal size={13} /></button></DropdownMenu.Trigger>
+        <DropdownMenu.Trigger asChild><button className={rowMoreClasses} aria-label={`Actions for ${file.name}`}><MoreHorizontal size={13} /></button></DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content className="dropdown-content" sideOffset={4} align="start">
-            {file.missing && <DropdownMenu.Item className="dropdown-item" onSelect={onLocate}><LocateFixed size={14} /> Locate file</DropdownMenu.Item>}
-            <DropdownMenu.Item className="dropdown-item" disabled={file.missing} onSelect={() => void window.aladdeen.files.revealTracked(file.id)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
-            <DropdownMenu.Separator className="dropdown-separator" />
-            <DropdownMenu.Item className="dropdown-item destructive-item" disabled={file.missing} onSelect={onTrash}><Trash2 size={14} /> Move to Trash</DropdownMenu.Item>
-            <DropdownMenu.Item className="dropdown-item destructive-item" onSelect={onRemove}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
+          <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
+            {file.missing && <DropdownMenu.Item className={dropdownItemClasses()} onSelect={onLocate}><LocateFixed size={14} /> Locate file</DropdownMenu.Item>}
+            <DropdownMenu.Item className={dropdownItemClasses()} disabled={file.missing} onSelect={() => void window.aladdeen.files.revealTracked(file.id)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
+            <DropdownMenu.Separator className={dropdownSeparatorClasses} />
+            <DropdownMenu.Item className={dropdownItemClasses(true)} disabled={file.missing} onSelect={onTrash}><Trash2 size={14} /> Move to Trash</DropdownMenu.Item>
+            <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={onRemove}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -687,15 +713,15 @@ function SidebarForm({ kind, title, initialValue = '', locationLabel, submitLabe
   return (
     <Dialog.Root open={Boolean(kind)} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content compact-dialog">
-          <div className="dialog-icon">{kind === 'file' ? <FilePlus2 size={18} /> : kind?.includes('environment') ? <FolderKanban size={18} /> : <FolderPlus size={18} />}</div>
-          <Dialog.Title className="dialog-title">{title ?? (kind ? labels[kind] : '')}</Dialog.Title>
-          <Dialog.Description className="dialog-description">
+        <Dialog.Overlay className={dialogOverlayClasses} />
+        <Dialog.Content className={cn(dialogContentClasses, 'compact-dialog')}>
+          <div className={dialogIconClasses()}>{kind === 'file' ? <FilePlus2 size={18} /> : kind?.includes('environment') ? <FolderKanban size={18} /> : <FolderPlus size={18} />}</div>
+          <Dialog.Title className={dialogTitleClasses}>{title ?? (kind ? labels[kind] : '')}</Dialog.Title>
+          <Dialog.Description className={dialogDescriptionClasses}>
             {kind === 'project' ? 'You’ll choose where to create it next.' : locationLabel && (kind === 'file' || kind === 'folder') ? `Create inside ${locationLabel}` : kind?.includes('environment') ? 'Environment names are unique in Aladdeen.' : 'Choose a clear, portable name.'}
           </Dialog.Description>
-          <input className="dialog-input" value={value} autoFocus onFocus={(event) => kind?.includes('rename') && event.currentTarget.select()} placeholder={kind === 'file' ? 'Untitled.md' : kind === 'project' || kind === 'folder' ? 'Folder name' : 'Environment name'} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void submit()} />
-          <div className="dialog-actions"><Dialog.Close className="secondary-button">Cancel</Dialog.Close><button className="primary-button" disabled={!value.trim() || busy} onClick={() => void submit()}>{busy ? 'Working…' : submitLabel ?? (kind?.includes('rename') ? 'Rename' : 'Create')}</button></div>
+          <input className={dialogInputClasses} value={value} autoFocus onFocus={(event) => kind?.includes('rename') && event.currentTarget.select()} placeholder={kind === 'file' ? 'Untitled.md' : kind === 'project' || kind === 'folder' ? 'Folder name' : 'Environment name'} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void submit()} />
+          <div className={dialogActionsClasses}><Dialog.Close className={buttonClasses({ variant: 'secondary' })}>Cancel</Dialog.Close><button className={buttonClasses()} disabled={!value.trim() || busy} onClick={() => void submit()}>{busy ? 'Working…' : submitLabel ?? (kind?.includes('rename') ? 'Rename' : 'Create')}</button></div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -706,12 +732,12 @@ function ConfirmDialog({ open, title, description, confirmLabel, destructive = f
   return (
     <AlertDialog.Root open={open} onOpenChange={(value) => !value && onCancel()}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="dialog-overlay" />
-        <AlertDialog.Content className="dialog-content">
-          <div className={`dialog-icon ${destructive ? 'destructive' : ''}`}>{destructive ? <Trash2 size={18} /> : <Unlink size={18} />}</div>
-          <AlertDialog.Title className="dialog-title">{title}</AlertDialog.Title>
-          <AlertDialog.Description className="dialog-description">{description}</AlertDialog.Description>
-          <div className="dialog-actions"><AlertDialog.Cancel className="secondary-button">Cancel</AlertDialog.Cancel><AlertDialog.Action className={destructive ? 'danger-button' : 'primary-button'} onClick={() => void onConfirm()}>{confirmLabel}</AlertDialog.Action></div>
+        <AlertDialog.Overlay className={dialogOverlayClasses} />
+        <AlertDialog.Content className={dialogContentClasses}>
+          <div className={dialogIconClasses(destructive ? 'destructive' : 'default')}>{destructive ? <Trash2 size={18} /> : <Unlink size={18} />}</div>
+          <AlertDialog.Title className={dialogTitleClasses}>{title}</AlertDialog.Title>
+          <AlertDialog.Description className={dialogDescriptionClasses}>{description}</AlertDialog.Description>
+          <div className={dialogActionsClasses}><AlertDialog.Cancel className={buttonClasses({ variant: 'secondary' })}>Cancel</AlertDialog.Cancel><AlertDialog.Action className={buttonClasses({ variant: destructive ? 'danger' : 'primary' })} onClick={() => void onConfirm()}>{confirmLabel}</AlertDialog.Action></div>
         </AlertDialog.Content>
       </AlertDialog.Portal>
     </AlertDialog.Root>

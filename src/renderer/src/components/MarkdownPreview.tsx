@@ -14,8 +14,8 @@ export function MarkdownPreview({ document }: { document: OpenDocument }): React
   const articleRef = useRef<HTMLElement>(null)
 
   return (
-    <div className="preview-pane">
-      <div ref={scrollRef} className="preview-scroll">
+    <div className="preview-pane relative h-full min-h-0 min-w-0 [container-type:inline-size]">
+      <div ref={scrollRef} className="preview-scroll h-full select-text overflow-auto bg-surface-elevated">
         <MarkdownContent
           articleRef={articleRef}
           content={document.content}

@@ -20,6 +20,8 @@ import type {
   GlobalSearchScope,
   GlobalSearchSummary
 } from '@shared/contracts'
+import { cn } from '@renderer/lib/cn'
+import { dialogOverlayClasses } from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
 
 interface SearchProgress {
@@ -209,7 +211,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay global-search-overlay" />
+        <Dialog.Overlay className={cn(dialogOverlayClasses, 'global-search-overlay')} />
         <Dialog.Content className="global-search-dialog">
           <Dialog.Title className="sr-only">Search Markdown contents</Dialog.Title>
           <Dialog.Description className="sr-only">
@@ -324,9 +326,9 @@ export function GlobalSearchDialog(): React.JSX.Element {
             ))}
 
             {results.length === 0 && status !== 'searching' && (
-              <div className="global-search-empty">
+              <div className="flex min-h-[210px] flex-col items-center justify-center gap-[9px] text-center text-[10px] text-foreground-muted">
                 {status === 'error' ? <AlertTriangle size={20} /> : <FileSearch2 size={20} />}
-                <span>
+                <span className="max-w-[390px] leading-[1.5]">
                   {status === 'error'
                     ? 'Search could not be completed.'
                     : query.trim().length === 1

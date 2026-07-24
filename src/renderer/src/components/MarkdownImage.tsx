@@ -33,7 +33,7 @@ export function MarkdownImage({
     return (
       <span
         {...sourceAttributes}
-        className="blocked-image"
+        className="inline-flex items-center gap-2 rounded-[7px] border border-dashed border-border-strong bg-surface-muted px-[10px] py-2 text-[12px] text-foreground-muted"
         role="img"
         aria-label={`${message}${alt ? `: ${alt}` : ''}`}
         title={message}

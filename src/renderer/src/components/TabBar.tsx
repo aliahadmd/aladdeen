@@ -1,4 +1,11 @@
 import { FileText, X } from 'lucide-react'
+import {
+  documentTabClasses,
+  tabBarClasses,
+  tabCloseClasses,
+  tabNameClasses,
+  tabStateClasses
+} from '@renderer/lib/ui-styles'
 import { isDocumentDirty, useAppStore } from '@renderer/store/app-store'
 
 export function TabBar(): React.JSX.Element | null {
@@ -11,52 +18,55 @@ export function TabBar(): React.JSX.Element | null {
   if (documents.length === 0) return null
 
   return (
-    <div className="tabbar" role="tablist" aria-label="Open documents">
-      {documents.map((document) => (
-        <button
-          key={document.id}
-          className={`document-tab ${activeFileId === document.id ? 'is-active' : ''}`}
-          role="tab"
-          aria-selected={activeFileId === document.id}
-          draggable
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = 'move'
-            event.dataTransfer.setData('text/aladdeen-tab', document.id)
-          }}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault()
-            const source = event.dataTransfer.getData('text/aladdeen-tab')
-            if (source) reorderDocument(source, document.id)
-          }}
-          onClick={() => setActiveFileId(document.id)}
-          title={document.fullPath}
-        >
-          <FileText size={14} />
-          <span className="tab-name">{document.name}</span>
-          <span className={`tab-state state-${document.status}`} aria-label={document.status}>
-            {isDocumentDirty(document) ? '•' : ''}
-          </span>
-          <span
-            className="tab-close"
-            role="button"
-            tabIndex={0}
-            aria-label={`Close ${document.name}`}
-            onClick={(event) => {
-              event.stopPropagation()
-              void closeDocument(document.id)
+    <div className={tabBarClasses} role="tablist" aria-label="Open documents">
+      {documents.map((document) => {
+        const active = activeFileId === document.id
+        return (
+          <button
+            key={document.id}
+            className={documentTabClasses(active)}
+            role="tab"
+            aria-selected={active}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'move'
+              event.dataTransfer.setData('text/aladdeen-tab', document.id)
             }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault()
+              const source = event.dataTransfer.getData('text/aladdeen-tab')
+              if (source) reorderDocument(source, document.id)
+            }}
+            onClick={() => setActiveFileId(document.id)}
+            title={document.fullPath}
+          >
+            <FileText size={14} />
+            <span className={tabNameClasses}>{document.name}</span>
+            <span className={tabStateClasses(document.status)} aria-label={document.status}>
+              {isDocumentDirty(document) ? '•' : ''}
+            </span>
+            <span
+              className={tabCloseClasses(active)}
+              role="button"
+              tabIndex={0}
+              aria-label={`Close ${document.name}`}
+              onClick={(event) => {
                 event.stopPropagation()
                 void closeDocument(document.id)
-              }
-            }}
-          >
-            <X size={13} />
-          </span>
-        </button>
-      ))}
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.stopPropagation()
+                  void closeDocument(document.id)
+                }
+              }}
+            >
+              <X size={13} />
+            </span>
+          </button>
+        )
+      })}
     </div>
   )
 }

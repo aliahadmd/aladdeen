@@ -3,6 +3,17 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { Archive, LoaderCircle, Pin, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProjectScopeMode, ProjectScopePreview, ProjectSummary } from '@shared/contracts'
+import { cn } from '@renderer/lib/cn'
+import {
+  buttonClasses,
+  centeredEmptyClasses,
+  dialogActionsClasses,
+  dialogCloseClasses,
+  dialogContentClasses,
+  dialogDescriptionClasses,
+  dialogOverlayClasses,
+  dialogTitleClasses
+} from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
 import { ProjectScopeTree } from './ProjectScopeTree'
 
@@ -68,20 +79,20 @@ export function ProjectSettingsDialog({ project, onOpenChange }: ProjectSettings
   return (
     <Dialog.Root open={Boolean(project)} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content project-settings-dialog">
+        <Dialog.Overlay className={dialogOverlayClasses} />
+        <Dialog.Content className={cn(dialogContentClasses, 'project-settings-dialog')}>
           <div className="project-dialog-header">
             <div>
-              <Dialog.Title className="dialog-title">Manage {project?.name ?? 'project'}</Dialog.Title>
-              <Dialog.Description className="dialog-description">
+              <Dialog.Title className={dialogTitleClasses}>Manage {project?.name ?? 'project'}</Dialog.Title>
+              <Dialog.Description className={dialogDescriptionClasses}>
                 Change what Aladdeen indexes. Existing files stay untouched on disk.
               </Dialog.Description>
             </div>
-            <Dialog.Close className="dialog-close" aria-label="Close"><X size={16} /></Dialog.Close>
+            <Dialog.Close className={dialogCloseClasses} aria-label="Close"><X size={16} /></Dialog.Close>
           </div>
 
           {!preview ? (
-            <div className="project-settings-loading"><LoaderCircle className="spinner" size={20} /> Scanning Markdown files…</div>
+            <div className={cn(centeredEmptyClasses, 'min-h-[330px]')}><LoaderCircle className="spinner" size={20} /> Scanning Markdown files…</div>
           ) : (
             <div className="project-settings-body">
               <div className="scope-mode-grid">
@@ -106,9 +117,9 @@ export function ProjectSettingsDialog({ project, onOpenChange }: ProjectSettings
             </div>
           )}
 
-          <div className="dialog-actions project-dialog-actions">
-            <Dialog.Close className="secondary-button">Cancel</Dialog.Close>
-            <button className="primary-button" disabled={!preview || saving || (mode === 'selected' && selected.size === 0)} onClick={() => void save()}>
+          <div className={cn(dialogActionsClasses, 'project-dialog-actions')}>
+            <Dialog.Close className={buttonClasses({ variant: 'secondary' })}>Cancel</Dialog.Close>
+            <button className={buttonClasses()} disabled={!preview || saving || (mode === 'selected' && selected.size === 0)} onClick={() => void save()}>
               {saving ? 'Saving…' : 'Save changes'}
             </button>
           </div>

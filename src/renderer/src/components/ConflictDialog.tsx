@@ -1,6 +1,17 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
 import { Copy, DownloadCloud, GitMerge, UploadCloud } from 'lucide-react'
+import { cn } from '@renderer/lib/cn'
+import {
+  dialogContentClasses,
+  dialogDescriptionClasses,
+  dialogIconClasses,
+  dialogOverlayClasses,
+  dialogTitleClasses
+} from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
+
+const conflictOptionClasses =
+  'grid grid-cols-[22px_minmax(0,1fr)] items-start gap-[9px] rounded-[9px] border border-border bg-surface p-[10px] text-left text-foreground-soft hover:border-accent-muted hover:bg-accent-soft'
 
 export function ConflictDialog(): React.JSX.Element {
   const conflictPath = useAppStore((state) => state.conflictFileId)
@@ -11,35 +22,35 @@ export function ConflictDialog(): React.JSX.Element {
   return (
     <AlertDialog.Root open={Boolean(conflictPath)}>
       <AlertDialog.Portal>
-        <AlertDialog.Overlay className="dialog-overlay" />
-        <AlertDialog.Content className="dialog-content conflict-dialog">
-          <div className="dialog-icon warning">
+        <AlertDialog.Overlay className={dialogOverlayClasses} />
+        <AlertDialog.Content className={cn(dialogContentClasses, 'conflict-dialog w-[min(calc(100vw-32px),450px)]')}>
+          <div className={dialogIconClasses('warning')}>
             <GitMerge size={19} />
           </div>
-          <AlertDialog.Title className="dialog-title">{document?.name ?? 'This file'} changed on disk</AlertDialog.Title>
-          <AlertDialog.Description className="dialog-description">
+          <AlertDialog.Title className={dialogTitleClasses}>{document?.name ?? 'This file'} changed on disk</AlertDialog.Title>
+          <AlertDialog.Description className={dialogDescriptionClasses}>
             Aladdeen paused autosave so neither version is lost. Choose which copy should become the active document.
           </AlertDialog.Description>
-          <div className="conflict-options">
-            <button onClick={() => void resolveConflict('reload')}>
+          <div className="mt-[18px] grid gap-[7px]">
+            <button className={conflictOptionClasses} onClick={() => void resolveConflict('reload')}>
               <DownloadCloud size={17} />
               <span>
-                <strong>Reload external</strong>
-                <small>Discard local edits and use the file on disk.</small>
+                <strong className="mb-0.5 block text-[12px] text-foreground">Reload external</strong>
+                <small className="block text-[10px] leading-[1.4] text-foreground-muted">Discard local edits and use the file on disk.</small>
               </span>
             </button>
-            <button onClick={() => void resolveConflict('keep')}>
+            <button className={conflictOptionClasses} onClick={() => void resolveConflict('keep')}>
               <UploadCloud size={17} />
               <span>
-                <strong>Keep mine</strong>
-                <small>Overwrite the external change with this tab.</small>
+                <strong className="mb-0.5 block text-[12px] text-foreground">Keep mine</strong>
+                <small className="block text-[10px] leading-[1.4] text-foreground-muted">Overwrite the external change with this tab.</small>
               </span>
             </button>
-            <button onClick={() => void resolveConflict('copy')}>
+            <button className={conflictOptionClasses} onClick={() => void resolveConflict('copy')}>
               <Copy size={17} />
               <span>
-                <strong>Save local copy</strong>
-                <small>Save your edits elsewhere, then reload disk.</small>
+                <strong className="mb-0.5 block text-[12px] text-foreground">Save local copy</strong>
+                <small className="block text-[10px] leading-[1.4] text-foreground-muted">Save your edits elsewhere, then reload disk.</small>
               </span>
             </button>
           </div>

@@ -3,6 +3,16 @@ import * as Dialog from '@radix-ui/react-dialog'
 import { FolderOpen, LoaderCircle, Pin, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ProjectImportPreview, ProjectImportSelection, ProjectScopeMode } from '@shared/contracts'
+import { cn } from '@renderer/lib/cn'
+import {
+  buttonClasses,
+  dialogActionsClasses,
+  dialogCloseClasses,
+  dialogContentClasses,
+  dialogDescriptionClasses,
+  dialogOverlayClasses,
+  dialogTitleClasses
+} from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
 import { ProjectScopeTree } from './ProjectScopeTree'
 
@@ -86,23 +96,23 @@ export function AddProjectsDialog(): React.JSX.Element {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay" />
-        <Dialog.Content className="dialog-content project-import-dialog">
+        <Dialog.Overlay className={dialogOverlayClasses} />
+        <Dialog.Content className={cn(dialogContentClasses, 'project-import-dialog')}>
           <div className="project-dialog-header">
             <div>
-              <Dialog.Title className="dialog-title">Add project folders</Dialog.Title>
-              <Dialog.Description className="dialog-description">
+              <Dialog.Title className={dialogTitleClasses}>Add project folders</Dialog.Title>
+              <Dialog.Description className={dialogDescriptionClasses}>
                 Link folders in place, then choose whether Aladdeen indexes every Markdown file or only selected areas.
               </Dialog.Description>
             </div>
-            <Dialog.Close className="dialog-close" aria-label="Close"><X size={16} /></Dialog.Close>
+            <Dialog.Close className={dialogCloseClasses} aria-label="Close"><X size={16} /></Dialog.Close>
           </div>
 
           {previews.length === 0 ? (
-            <button className="project-picker-empty" type="button" onClick={() => void chooseFolders()} disabled={choosing}>
-              {choosing ? <LoaderCircle className="spinner" size={20} /> : <FolderOpen size={22} />}
-              <strong>{choosing ? 'Scanning selected folders…' : 'Choose one or more folders'}</strong>
-              <span>Aladdeen stores references and metadata only. Files stay in their original locations.</span>
+            <button className="m-[22px] flex min-h-[310px] flex-col items-center justify-center gap-[9px] rounded-xl border border-dashed border-border-strong bg-surface text-foreground-soft" type="button" onClick={() => void chooseFolders()} disabled={choosing}>
+              {choosing ? <LoaderCircle className="spinner text-accent" size={20} /> : <FolderOpen className="text-accent" size={22} />}
+              <strong className="text-[14px] text-foreground">{choosing ? 'Scanning selected folders…' : 'Choose one or more folders'}</strong>
+              <span className="max-w-[420px] text-center text-[11px] leading-[1.5] text-foreground-muted">Aladdeen stores references and metadata only. Files stay in their original locations.</span>
             </button>
           ) : (
             <div className="project-import-layout">
@@ -163,10 +173,10 @@ export function AddProjectsDialog(): React.JSX.Element {
             </div>
           )}
 
-          <div className="dialog-actions project-dialog-actions">
-            <Dialog.Close className="secondary-button">Cancel</Dialog.Close>
+          <div className={cn(dialogActionsClasses, 'project-dialog-actions')}>
+            <Dialog.Close className={buttonClasses({ variant: 'secondary' })}>Cancel</Dialog.Close>
             {previews.length > 0 && (
-              <button className="primary-button" disabled={!valid || saving} onClick={() => void addProjects()}>
+              <button className={buttonClasses()} disabled={!valid || saving} onClick={() => void addProjects()}>
                 {saving ? 'Adding…' : `Add ${previews.length} project${previews.length === 1 ? '' : 's'}`}
               </button>
             )}

@@ -1,6 +1,15 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Tooltip from '@radix-ui/react-tooltip'
 import { ChevronDown, Download, Edit3, Eye, FileDown } from 'lucide-react'
+import {
+  documentActionButtonClasses,
+  documentActionsClasses,
+  dropdownContentClasses,
+  dropdownItemClasses,
+  itemHintClasses,
+  tooltipArrowClasses,
+  tooltipContentClasses
+} from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
 
 export function DocumentActions(): React.JSX.Element {
@@ -10,10 +19,10 @@ export function DocumentActions(): React.JSX.Element {
 
   return (
     <Tooltip.Provider delayDuration={500} skipDelayDuration={100}>
-      <div className="document-actions" aria-label="Document actions">
+      <div className={documentActionsClasses} aria-label="Document actions">
         <ActionTip label={editing ? 'Return to preview' : 'Edit Markdown'}>
           <button
-            className={`document-action-button ${editing ? 'is-active' : ''}`}
+            className={documentActionButtonClasses(editing)}
             onClick={() => setEditing(!editing)}
             aria-label={editing ? 'Preview' : 'Edit'}
             aria-pressed={editing}
@@ -26,24 +35,24 @@ export function DocumentActions(): React.JSX.Element {
         <DropdownMenu.Root>
           <ActionTip label="Export document">
             <DropdownMenu.Trigger asChild>
-              <button className="document-action-button export-action" aria-label="Export">
+              <button className={documentActionButtonClasses()} aria-label="Export">
                 <Download size={15} />
                 <span>Export</span>
-                <ChevronDown className="action-chevron" size={12} />
+                <ChevronDown className="action-chevron -ml-0.5" size={12} />
               </button>
             </DropdownMenu.Trigger>
           </ActionTip>
           <DropdownMenu.Portal>
-            <DropdownMenu.Content className="dropdown-content" sideOffset={7} align="end">
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => void exportActive('pdf')}>
+            <DropdownMenu.Content className={dropdownContentClasses} sideOffset={7} align="end">
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void exportActive('pdf')}>
                 <FileDown size={15} />
                 Export as PDF
-                <span className="item-hint">A4</span>
+                <span className={itemHintClasses}>A4</span>
               </DropdownMenu.Item>
-              <DropdownMenu.Item className="dropdown-item" onSelect={() => void exportActive('docx')}>
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void exportActive('docx')}>
                 <FileDown size={15} />
                 Export as DOCX
-                <span className="item-hint">Word</span>
+                <span className={itemHintClasses}>Word</span>
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
@@ -58,9 +67,9 @@ function ActionTip({ label, children }: { label: string; children: React.ReactNo
     <Tooltip.Root>
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
-        <Tooltip.Content className="tooltip-content" sideOffset={7}>
+        <Tooltip.Content className={tooltipContentClasses} sideOffset={7}>
           {label}
-          <Tooltip.Arrow className="tooltip-arrow" />
+          <Tooltip.Arrow className={tooltipArrowClasses} />
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>

@@ -12,6 +12,7 @@ import { QuickOpenDialog } from './components/QuickOpenDialog'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { useEffectiveDarkMode } from './hooks/use-effective-dark-mode'
+import { cn } from './lib/cn'
 import { useAppStore } from './store/app-store'
 
 const SIDEBAR_MIN_WIDTH = 248
@@ -110,8 +111,11 @@ export default function App(): React.JSX.Element {
 
   if (!initialized) {
     return (
-      <div className="loading-screen">
-        <BrandMark className="brand-mark large-mark" title="Aladdeen" />
+      <div className="flex h-full items-center justify-center gap-[13px] bg-background text-foreground-muted">
+        <BrandMark
+          className="block h-[38px] w-[38px] shrink-0 drop-shadow-[0_3px_7px_rgb(0_0_0/.16)]"
+          title="Aladdeen"
+        />
         <LoaderCircle className="spinner" size={18} />
       </div>
     )
@@ -174,11 +178,17 @@ export default function App(): React.JSX.Element {
   }
 
   return (
-    <div className="app-shell">
-      <div className={`workspace-grid ${settings.sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-        <div className="desktop-sidebar"><Sidebar /></div>
+    <div className="grid h-full grid-rows-[minmax(0,1fr)] bg-background">
+      <div className={cn(
+        'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
+        settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]'
+      )}>
+        <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><Sidebar /></div>
         <div
-          className="sidebar-resizer"
+          className={cn(
+            "sidebar-resizer absolute inset-y-0 left-[calc(var(--sidebar-width)-3px)] z-40 w-[6px] touch-none cursor-col-resize outline-0 after:absolute after:inset-y-0 after:left-0.5 after:w-px after:bg-transparent after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent max-[959px]:hidden",
+            settings.sidebarCollapsed && 'hidden'
+          )}
           role="separator"
           aria-label="Resize sidebar"
           aria-orientation="vertical"
@@ -196,19 +206,22 @@ export default function App(): React.JSX.Element {
           onPointerUp={handleResizePointerEnd}
           onPointerCancel={handleResizePointerEnd}
         />
-        <main className="content-shell">
+        <main className="relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] bg-surface-elevated">
           <TabBar />
           <DocumentView />
-          <button className="sidebar-launcher" onClick={openSidebar} aria-label="Show sidebar" title="Show sidebar">
+          <button className={cn(
+            'sidebar-launcher absolute top-[47px] left-[10px] z-[35] hidden h-[33px] w-[33px] place-items-center rounded-[9px] border border-border bg-[color-mix(in_oklab,var(--surface-elevated)_92%,transparent)] p-0 text-foreground-soft shadow-[0_5px_18px_rgb(0_0_0/.09)] backdrop-blur-[12px] transition-[transform,background-color,color] duration-[140ms] ease-fluid-out active:scale-[.97] hover:bg-surface-hover hover:text-foreground max-[959px]:grid',
+            settings.sidebarCollapsed && 'grid'
+          )} onClick={openSidebar} aria-label="Show sidebar" title="Show sidebar">
             <PanelLeftOpen size={17} />
           </button>
         </main>
       </div>
 
       {sidebarOpen && (
-        <div className="compact-sidebar-layer" role="dialog" aria-modal="true" aria-label="Environment files">
-          <button className="sheet-backdrop" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />
-          <div className="sheet-panel"><Sidebar compact /></div>
+        <div className="compact-sidebar-layer hidden max-[959px]:block" role="dialog" aria-modal="true" aria-label="Environment files">
+          <button className="sheet-backdrop fixed inset-0 z-[150] h-full w-full border-0 bg-[rgb(10_10_15/.38)] p-0 opacity-100 transition-opacity duration-[170ms] ease-[ease]" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />
+          <div className="sheet-panel fixed inset-y-0 left-0 z-[151] w-[min(88vw,320px)] translate-x-0 transition-transform duration-[210ms] ease-fluid-out"><Sidebar compact /></div>
         </div>
       )}
 

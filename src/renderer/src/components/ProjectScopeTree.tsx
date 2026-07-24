@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, ChevronDown, ChevronRight, FileText, Folder, Minus, Search, X } from 'lucide-react'
 import type { ProjectScopeNode } from '@shared/contracts'
+import { centeredEmptyClasses } from '@renderer/lib/ui-styles'
 
 interface ProjectScopeTreeProps {
   nodes: ProjectScopeNode[]
@@ -98,7 +99,7 @@ export function ProjectScopeTree({ nodes, selected, onChange }: ProjectScopeTree
         )}
       </div>
       <div className="scope-tree-list">
-        {visibleNodes.length > 0 ? renderNodes(visibleNodes, 0) : <div className="scope-tree-empty">No matching Markdown files</div>}
+        {visibleNodes.length > 0 ? renderNodes(visibleNodes, 0) : <div className={centeredEmptyClasses}>No matching Markdown files</div>}
       </div>
     </div>
   )

@@ -87,7 +87,7 @@ export function MarkdownEditor({ document, dark }: { document: OpenDocument; dar
   }
 
   return (
-    <div className="editor-pane" aria-label={`Editing ${document.name}`}>
+    <div className="editor-pane h-full min-h-0 min-w-0 overflow-hidden bg-surface" aria-label={`Editing ${document.name}`}>
       <CodeMirror
         key={document.id}
         value={document.content}

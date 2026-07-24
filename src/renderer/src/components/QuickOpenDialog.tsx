@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { FileText, Search } from 'lucide-react'
 import type { IndexedFileSummary } from '@shared/contracts'
+import { cn } from '@renderer/lib/cn'
+import { dialogOverlayClasses } from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
 
 export function QuickOpenDialog(): React.JSX.Element {
@@ -49,12 +51,13 @@ export function QuickOpenDialog(): React.JSX.Element {
       if (!value) setQuery('')
     }}>
       <Dialog.Portal>
-        <Dialog.Overlay className="dialog-overlay quick-open-overlay" />
-        <Dialog.Content className="quick-open-dialog">
+        <Dialog.Overlay className={cn(dialogOverlayClasses, 'quick-open-overlay backdrop-blur-[2px]')} />
+        <Dialog.Content className="quick-open-dialog fixed top-[min(18vh,150px)] left-1/2 z-[201] w-[min(calc(100vw-32px),640px)] -translate-x-1/2 overflow-hidden rounded-xl border border-border-strong bg-surface-elevated shadow-[0_28px_80px_rgb(0_0_0/.28)]">
           <Dialog.Title className="sr-only">Quick open Markdown file</Dialog.Title>
-          <label className="quick-open-search">
+          <label className="quick-open-search flex h-[51px] items-center gap-[10px] border-b border-border px-[14px] text-foreground-muted">
             <Search size={17} />
             <input
+              className="min-w-0 flex-1 select-text border-0 bg-transparent text-[14px] text-foreground outline-0"
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -72,26 +75,29 @@ export function QuickOpenDialog(): React.JSX.Element {
                 }
               }}
             />
-            <kbd>⌘P</kbd>
+            <kbd className="rounded-[5px] border border-border bg-surface px-[6px] py-[3px] text-[9px] text-foreground-muted">⌘P</kbd>
           </label>
-          <div className="quick-open-results" role="listbox" aria-label="Indexed Markdown files">
+          <div className="quick-open-results max-h-[min(430px,55vh)] overflow-y-auto p-[6px]" role="listbox" aria-label="Indexed Markdown files">
             {results.map((file, index) => (
               <button
                 key={`${file.projectId}:${file.relativePath}`}
                 type="button"
                 role="option"
                 aria-selected={index === activeIndex}
-                className={index === activeIndex ? 'is-active' : ''}
+                className={cn(
+                  'flex min-h-11 w-full min-w-0 items-center gap-[9px] rounded-[7px] border-0 bg-transparent px-[9px] py-[5px] text-left text-foreground-soft hover:bg-surface-hover hover:text-foreground',
+                  index === activeIndex && 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent'
+                )}
                 onPointerMove={() => setActiveIndex(index)}
                 onClick={() => choose(file)}
               >
                 <FileText size={15} />
-                <span><strong>{file.name}</strong><small>{file.location}</small></span>
+                <span className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"><strong className="block min-w-0 overflow-hidden text-[12px] font-semibold text-ellipsis whitespace-nowrap text-foreground">{file.name}</strong><small className="mt-0.5 block min-w-0 overflow-hidden text-[9px] text-ellipsis whitespace-nowrap text-foreground-muted">{file.location}</small></span>
               </button>
             ))}
-            {results.length === 0 && <div className="quick-open-empty">{query ? 'No indexed files match your search.' : 'No project files are indexed yet.'}</div>}
+            {results.length === 0 && <div className="grid min-h-[120px] place-items-center text-[11px] text-foreground-muted">{query ? 'No indexed files match your search.' : 'No project files are indexed yet.'}</div>}
           </div>
-          <div className="quick-open-footer"><span>↑↓ Navigate</span><span>↵ Open</span><span>Esc Close</span></div>
+          <div className="quick-open-footer flex h-[29px] items-center gap-[13px] border-t border-border bg-surface px-3 text-[8px] text-foreground-muted"><span>↑↓ Navigate</span><span>↵ Open</span><span>Esc Close</span></div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
