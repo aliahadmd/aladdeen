@@ -87,4 +87,3 @@ export function MarkdownDocument({ document }: DocumentAdapterProps): React.JSX.
     </div>
   )
 }
-

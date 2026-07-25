@@ -10,7 +10,6 @@ import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 export interface DocumentAdapterProps {
   document: OpenDocument
 }
-
 export interface DocumentAdapterDefinition {
   kind: DocumentKind
   capabilities: DocumentCapabilities
@@ -52,4 +51,3 @@ export const DocumentAdapterRegistry: Readonly<Record<DocumentKind, DocumentAdap
     component: PdfDocument
   }
 }
-
