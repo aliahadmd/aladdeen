@@ -247,6 +247,9 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
     await visibleProjectRow.getByRole('button', { name: `Actions for ${basename(projectPath)}` }).click()
     await window.getByRole('menuitem', { name: 'Project settings' }).click()
     await expect(window.getByRole('heading', { name: 'Project settings' })).toBeVisible()
+    await window.locator('.project-settings-context span').evaluate((location) => {
+      location.textContent = '~/Research/library'
+    })
     await window.locator('[data-sonner-toast]').evaluateAll((toasts) => toasts.forEach((toast) => toast.remove()))
     for (const size of [
       { width: 640, height: 480, name: '640' },
@@ -255,6 +258,9 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
     ]) {
       await window.setViewportSize(size)
       await expect(window.locator('.project-dialog-actions')).toBeInViewport()
+      await expect.poll(() => window.locator('.project-settings-body').evaluate(
+        (body) => body.getBoundingClientRect().width
+      )).toBeGreaterThan(Math.min(500, size.width - 100))
       await expect(window).toHaveScreenshot(`project-settings-${size.name}-light.png`, {
         animations: 'disabled',
         maxDiffPixelRatio: 0.01
@@ -270,6 +276,9 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
       { width: 1440, height: 900, name: '1440' }
     ]) {
       await window.setViewportSize(size)
+      await expect.poll(() => window.locator('.project-settings-body').evaluate(
+        (body) => body.getBoundingClientRect().width
+      )).toBeGreaterThan(Math.min(500, size.width - 100))
       await expect(window).toHaveScreenshot(`project-settings-${size.name}-dark.png`, {
         animations: 'disabled',
         maxDiffPixelRatio: 0.01
@@ -766,6 +775,9 @@ test('renders extended Markdown safely and responsively', async () => {
       { width: 640, height: 480 }
     ]) {
       await window.setViewportSize(viewport)
+      await expect.poll(() => window.locator('.markdown-body').evaluate(
+        (body) => body.getBoundingClientRect().width
+      )).toBeGreaterThan(Math.min(500, viewport.width - 100))
       for (const theme of ['light', 'dark'] as const) {
         await window.evaluate((nextTheme) => {
           document.documentElement.classList.toggle('dark', nextTheme === 'dark')
