@@ -788,7 +788,8 @@ test('renders extended Markdown safely and responsively', async () => {
         await expect(window).toHaveScreenshot(`markdown-${viewport.width}-${theme}.png`, {
           animations: 'disabled',
           maxDiffPixelRatio: 0.01,
-          threshold: 0.3
+          // CoreText edge colors vary across macOS hosts; solid geometry still uses the strict 1% cap.
+          threshold: 0.4
         })
       }
     }
