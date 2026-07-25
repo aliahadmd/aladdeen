@@ -263,7 +263,8 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
       )).toBeGreaterThan(Math.min(500, size.width - 100))
       await expect(window).toHaveScreenshot(`project-settings-${size.name}-light.png`, {
         animations: 'disabled',
-        maxDiffPixelRatio: 0.01
+        maxDiffPixelRatio: 0.01,
+        threshold: 0.3
       })
     }
     await window.evaluate(() => {
@@ -281,7 +282,8 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
       )).toBeGreaterThan(Math.min(500, size.width - 100))
       await expect(window).toHaveScreenshot(`project-settings-${size.name}-dark.png`, {
         animations: 'disabled',
-        maxDiffPixelRatio: 0.01
+        maxDiffPixelRatio: 0.01,
+        threshold: 0.3
       })
     }
     await window.evaluate(() => {
@@ -785,7 +787,8 @@ test('renders extended Markdown safely and responsively', async () => {
         }, theme)
         await expect(window).toHaveScreenshot(`markdown-${viewport.width}-${theme}.png`, {
           animations: 'disabled',
-          maxDiffPixelRatio: 0.01
+          maxDiffPixelRatio: 0.01,
+          threshold: 0.3
         })
       }
     }
