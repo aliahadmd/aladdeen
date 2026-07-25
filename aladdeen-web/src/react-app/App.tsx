@@ -9,6 +9,8 @@ import {
 type Theme = "light" | "dark" | "system";
 
 const themeOrder: Theme[] = ["light", "dark", "system"];
+const usePolicy =
+	"Aladdeen must not be used in ways that harm people, society, or the environment. Individuals may use it without prior permission. Organizations must obtain permission before use: ali@aliahad.com.";
 
 const featureRows = [
 	{
@@ -138,6 +140,21 @@ function MenuIcon({ open }: { open: boolean }): ReactNode {
 	);
 }
 
+function AnnouncementControlIcon({ paused }: { paused: boolean }): ReactNode {
+	return (
+		<svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5">
+			{paused ? (
+				<path d="m5 3 7 5-7 5Z" fill="currentColor" />
+			) : (
+				<>
+					<rect x="4" y="3" width="2.5" height="10" rx="0.75" fill="currentColor" />
+					<rect x="9.5" y="3" width="2.5" height="10" rx="0.75" fill="currentColor" />
+				</>
+			)}
+		</svg>
+	);
+}
+
 function DownloadLink({
 	artifact,
 	primary = false,
@@ -209,6 +226,7 @@ function formatSize(byteSize: number): string {
 function App() {
 	const [theme, setTheme] = useState<Theme>(readTheme);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [policyPaused, setPolicyPaused] = useState(false);
 
 	useEffect(() => {
 		window.localStorage.setItem("theme", theme);
@@ -252,67 +270,105 @@ function App() {
 				Skip to content
 			</a>
 
-			<header className="sticky top-0 z-50 border-b border-neutral-100 bg-white/85 backdrop-blur-sm dark:border-neutral-900 dark:bg-neutral-950/85">
-				<div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-6">
-					<a href="#" className="flex items-center gap-2.5" aria-label="Aladdeen Research home">
-						<img src="/icon.svg" alt="" className="h-7 w-7 rounded-md" />
-						<span className="text-sm font-semibold tracking-tight">Aladdeen</span>
-						<span className="-ml-1 font-serif text-[15px] italic text-neutral-500 dark:text-neutral-400">Research</span>
-					</a>
-
-					<nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
-						<a href="#features" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Features</a>
-						<a href="#privacy" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Privacy</a>
-						<a href="#faq" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">FAQ</a>
-						<a href="#download" className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">Download</a>
-						<button
-							type="button"
-							onClick={cycleTheme}
-							className="rounded-full p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-900 dark:hover:text-neutral-300"
-							aria-label={`Theme: ${theme}. Switch theme`}
-							title={`Theme: ${theme}`}
+			<div className="sticky top-0 z-50">
+				<aside
+					className="announcement-bar flex h-8 items-stretch overflow-hidden border-b border-neutral-800 bg-neutral-950 text-neutral-100"
+					aria-labelledby="use-policy"
+				>
+					<p id="use-policy" className="sr-only">{usePolicy}</p>
+					<div className="announcement-viewport min-w-0 flex-1 overflow-hidden">
+						<div
+							className="announcement-track flex h-full w-max items-center"
+							data-paused={policyPaused}
+							aria-hidden="true"
 						>
-							<ThemeIcon theme={theme} />
-						</button>
+							{[0, 1].map((copy) => (
+								<span
+									key={copy}
+									className="announcement-segment flex shrink-0 items-center gap-3 px-6 text-[11px] font-medium tracking-[0.01em]"
+								>
+									<span className="rounded-sm bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-300">
+										Use policy
+									</span>
+									<span className="whitespace-nowrap text-neutral-200">{usePolicy}</span>
+								</span>
+							))}
+						</div>
+					</div>
+					<button
+						type="button"
+						className="announcement-toggle flex w-9 shrink-0 items-center justify-center border-l border-white/10 text-neutral-400 transition-colors hover:bg-white/10 hover:text-white active:bg-white/15"
+						onClick={() => setPolicyPaused((paused) => !paused)}
+						aria-label={policyPaused ? "Resume use policy announcement" : "Pause use policy announcement"}
+						aria-pressed={policyPaused}
+						title={policyPaused ? "Resume announcement" : "Pause announcement"}
+					>
+						<AnnouncementControlIcon paused={policyPaused} />
+					</button>
+				</aside>
+
+				<header className="border-b border-neutral-100 bg-white/85 backdrop-blur-sm dark:border-neutral-900 dark:bg-neutral-950/85">
+					<div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-6">
+						<a href="#" className="flex items-center gap-2.5" aria-label="Aladdeen Research home">
+							<img src="/icon.svg" alt="" className="h-7 w-7 rounded-md" />
+							<span className="text-sm font-semibold tracking-tight">Aladdeen</span>
+							<span className="-ml-1 font-serif text-[15px] italic text-neutral-500 dark:text-neutral-400">Research</span>
+						</a>
+
+						<nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
+							<a href="#features" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Features</a>
+							<a href="#privacy" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Privacy</a>
+							<a href="#faq" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">FAQ</a>
+							<a href="#download" className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">Download</a>
+							<button
+								type="button"
+								onClick={cycleTheme}
+								className="rounded-full p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-900 dark:hover:text-neutral-300"
+								aria-label={`Theme: ${theme}. Switch theme`}
+								title={`Theme: ${theme}`}
+							>
+								<ThemeIcon theme={theme} />
+							</button>
+						</nav>
+
+						<div className="flex items-center gap-1 md:hidden">
+							<button
+								type="button"
+								onClick={cycleTheme}
+								className="rounded-full p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-900 dark:hover:text-neutral-300"
+								aria-label={`Theme: ${theme}. Switch theme`}
+								title={`Theme: ${theme}`}
+							>
+								<ThemeIcon theme={theme} />
+							</button>
+							<button
+								type="button"
+								onClick={() => setMenuOpen((open) => !open)}
+								className="rounded-full p-2 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
+								aria-expanded={menuOpen}
+								aria-controls="mobile-navigation"
+								aria-label={menuOpen ? "Close menu" : "Open menu"}
+							>
+								<MenuIcon open={menuOpen} />
+							</button>
+						</div>
+					</div>
+				</header>
+
+				{menuOpen ? (
+					<nav id="mobile-navigation" aria-label="Mobile" className="absolute inset-x-0 top-full h-[calc(100dvh-5.5rem)] overflow-y-auto bg-white px-6 py-10 dark:bg-neutral-950 md:hidden">
+						<div className="mx-auto flex max-w-2xl flex-col gap-6">
+							<a onClick={closeMenu} href="#features" className="text-xl font-semibold">Features</a>
+							<a onClick={closeMenu} href="#privacy" className="text-xl font-semibold">Privacy</a>
+							<a onClick={closeMenu} href="#download" className="text-xl font-semibold">Download</a>
+							<a onClick={closeMenu} href="#faq" className="text-xl font-semibold">FAQ</a>
+							<p className="mt-6 border-t border-neutral-100 pt-6 text-sm text-neutral-400 dark:border-neutral-800 dark:text-neutral-400">
+								Free during beta, private, and offline-first.
+							</p>
+						</div>
 					</nav>
-
-					<div className="flex items-center gap-1 md:hidden">
-						<button
-							type="button"
-							onClick={cycleTheme}
-							className="rounded-full p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-900 dark:hover:text-neutral-300"
-							aria-label={`Theme: ${theme}. Switch theme`}
-							title={`Theme: ${theme}`}
-						>
-							<ThemeIcon theme={theme} />
-						</button>
-						<button
-							type="button"
-							onClick={() => setMenuOpen((open) => !open)}
-							className="rounded-full p-2 text-neutral-500 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-900 dark:hover:text-neutral-100"
-							aria-expanded={menuOpen}
-							aria-controls="mobile-navigation"
-							aria-label={menuOpen ? "Close menu" : "Open menu"}
-						>
-							<MenuIcon open={menuOpen} />
-						</button>
-					</div>
-				</div>
-			</header>
-
-			{menuOpen ? (
-				<nav id="mobile-navigation" aria-label="Mobile" className="fixed inset-x-0 bottom-0 top-14 z-40 bg-white px-6 py-10 dark:bg-neutral-950 md:hidden">
-					<div className="mx-auto flex max-w-2xl flex-col gap-6">
-						<a onClick={closeMenu} href="#features" className="text-xl font-semibold">Features</a>
-						<a onClick={closeMenu} href="#privacy" className="text-xl font-semibold">Privacy</a>
-						<a onClick={closeMenu} href="#download" className="text-xl font-semibold">Download</a>
-						<a onClick={closeMenu} href="#faq" className="text-xl font-semibold">FAQ</a>
-						<p className="mt-6 border-t border-neutral-100 pt-6 text-sm text-neutral-400 dark:border-neutral-800 dark:text-neutral-400">
-							Free during beta, private, and offline-first.
-						</p>
-					</div>
-				</nav>
-			) : null}
+				) : null}
+			</div>
 
 			<main id="main">
 				<section className="mx-auto w-full max-w-5xl px-6 pb-12 pt-20 md:pb-20 md:pt-28">

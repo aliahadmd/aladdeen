@@ -38,6 +38,27 @@ describe("Aladdeen landing page", () => {
 		expect(document.querySelector("#faq")).toBeInTheDocument();
 	});
 
+	it("shows the use policy and lets visitors pause its motion", () => {
+		render(<App />);
+
+		expect(
+			screen.getAllByText(
+				/Aladdeen must not be used in ways that harm people, society, or the environment/,
+			).length,
+		).toBeGreaterThan(0);
+
+		const pauseButton = screen.getByRole("button", {
+			name: "Pause use policy announcement",
+		});
+		fireEvent.click(pauseButton);
+
+		expect(
+			screen.getByRole("button", {
+				name: "Resume use policy announcement",
+			}),
+		).toHaveAttribute("aria-pressed", "true");
+	});
+
 	it("links only the macOS arm64 download to its versioned Worker route", () => {
 		render(<App />);
 

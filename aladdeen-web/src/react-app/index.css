@@ -61,11 +61,48 @@ summary::-webkit-details-marker {
 	display: none;
 }
 
+.announcement-track {
+	animation: announcement-scroll 38s linear infinite;
+	will-change: transform;
+}
+
+.announcement-track[data-paused="true"],
+.announcement-bar:hover .announcement-track,
+.announcement-bar:focus-within .announcement-track {
+	animation-play-state: paused;
+}
+
+@keyframes announcement-scroll {
+	to {
+		transform: translate3d(-50%, 0, 0);
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
 	*::after {
 		scroll-behavior: auto !important;
 		transition-duration: 0.01ms !important;
+	}
+
+	.announcement-viewport {
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	.announcement-viewport::-webkit-scrollbar {
+		display: none;
+	}
+
+	.announcement-track {
+		animation: none !important;
+		transform: none !important;
+		will-change: auto;
+	}
+
+	.announcement-segment:last-child,
+	.announcement-toggle {
+		display: none;
 	}
 }
