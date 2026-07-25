@@ -12,36 +12,103 @@ const themeOrder: Theme[] = ["light", "dark", "system"];
 const usePolicy =
 	"Aladdeen must not be used in ways that harm people, society, or the environment. Individuals may use it without prior permission. Organizations must obtain permission before use: ali@aliahad.com.";
 
-const featureRows = [
+const featureGroups = [
 	{
-		title: "Format-aware reading",
-		detail: "Markdown, HTML, Word, and PDF each open with tools designed for that document format.",
-		meta: "Read",
+		label: "Documents",
+		title: "Four formats, each with the right workspace.",
+		description:
+			"Aladdeen recognizes the source format and opens tools designed for it—without a conversion step.",
+		items: [
+			{
+				title: "Markdown",
+				detail:
+					"Edit beside a rich preview with GFM, math, Mermaid, callouts, local images, and source navigation.",
+			},
+			{
+				title: "HTML",
+				detail:
+					"Work in Source, Preview, or Split mode with a safe live preview and contained local assets.",
+			},
+			{
+				title: "Word",
+				detail:
+					"Open and edit DOCX files directly with document-aware formatting, comments, and tracked changes.",
+			},
+			{
+				title: "PDF",
+				detail:
+					"Read, search, annotate, fill forms, and organize pages while preserving the original document.",
+			},
+		],
 	},
 	{
-		title: "Files stay where they belong",
-		detail: "Connect project folders and individual sources without moving, copying, or converting them.",
-		meta: "Organize",
+		label: "Organization",
+		title: "Bring scattered research together without moving it.",
+		description:
+			"Environments provide one working set across projects and standalone files while every source stays at its original path.",
+		items: [
+			{
+				title: "Environments",
+				detail:
+					"Keep separate research contexts, tabs, recent files, and expanded folders without duplicating content.",
+			},
+			{
+				title: "Project policies",
+				detail:
+					"Choose document types, selected folders, exclusions, favorites, groups, and archived projects per folder.",
+			},
+			{
+				title: "Persistent context",
+				detail:
+					"Restore the last working set and keep independently opened files available in Individual Files.",
+			},
+		],
 	},
 	{
-		title: "Search across projects",
-		detail: "Find text throughout an environment and jump back into the relevant source.",
-		meta: "Find",
+		label: "Navigation",
+		title: "Find the document, heading, or exact source line.",
+		description:
+			"Fast navigation stays separate by intent: filenames, document structure, and full source content each have a focused path.",
+		items: [
+			{
+				title: "Global search",
+				detail:
+					"Search indexed projects and standalone files progressively, including current unsaved changes.",
+			},
+			{
+				title: "Quick Open",
+				detail:
+					"Jump to a file by name without adding noise to the sidebar or replacing the active project collection.",
+			},
+			{
+				title: "Outline and source",
+				detail:
+					"Navigate long documents by heading, or click rendered Markdown to reveal the matching editor range.",
+			},
+		],
 	},
 	{
-		title: "Atomic autosave",
-		detail: "Edits save quietly, with explicit recovery when a file changes outside Aladdeen.",
-		meta: "Protect",
-	},
-	{
-		title: "Rich Markdown",
-		detail: "GFM tables, tasks, code, math, diagrams, callouts, and local images render without lock-in.",
-		meta: "Render",
-	},
-	{
-		title: "Native document tools",
-		detail: "Edit HTML source, work directly with DOCX, and read or annotate PDFs without a conversion step.",
-		meta: "Work",
+		label: "Reliability",
+		title: "Quiet safeguards around every edit.",
+		description:
+			"Saving and conflict handling stay out of the way until attention is genuinely needed.",
+		items: [
+			{
+				title: "Atomic autosave",
+				detail:
+					"Save changes safely in place, flush pending edits on close, and never silently discard failed saves.",
+			},
+			{
+				title: "External changes",
+				detail:
+					"Detect changed, moved, or deleted files and offer clear reload, keep, copy, or relink recovery paths.",
+			},
+			{
+				title: "Portable output",
+				detail:
+					"Export Markdown to PDF or DOCX while every source remains readable by other applications.",
+			},
+		],
 	},
 ] as const;
 
@@ -176,49 +243,6 @@ function DownloadLink({
 	);
 }
 
-function Showcase({
-	label,
-	title,
-	description,
-	image,
-	alt,
-	caption,
-}: {
-	label: string;
-	title: string;
-	description: string;
-	image: string;
-	alt: string;
-	caption: string;
-}): ReactNode {
-	return (
-		<section className="mt-24 scroll-mt-24 md:mt-32">
-			<div className="max-w-2xl">
-				<p className="text-sm text-neutral-400 dark:text-neutral-400">{label}</p>
-				<h2 className="mt-5 text-2xl font-bold tracking-tight text-neutral-950 dark:text-neutral-100 md:text-[28px]">
-					{title}
-				</h2>
-				<p className="mt-4 max-w-xl text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-					{description}
-				</p>
-			</div>
-			<figure className="mt-8">
-				<div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
-					<img
-						src={image}
-						alt={alt}
-						loading="lazy"
-						className="block h-auto w-full"
-					/>
-				</div>
-				<figcaption className="mt-3 text-xs text-neutral-400 dark:text-neutral-400">
-					{caption}
-				</figcaption>
-			</figure>
-		</section>
-	);
-}
-
 function formatSize(byteSize: number): string {
 	return `${Math.round(byteSize / 1024 / 1024)} MB`;
 }
@@ -253,6 +277,39 @@ function App() {
 			window.removeEventListener("keydown", handleKeyDown);
 		};
 	}, [menuOpen]);
+
+	useEffect(() => {
+		const elements = Array.from(
+			document.querySelectorAll<HTMLElement>("[data-scroll-reveal]"),
+		);
+		const revealAll = () => {
+			elements.forEach((element) => {
+				element.dataset.revealed = "true";
+			});
+		};
+
+		if (
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+			!("IntersectionObserver" in window)
+		) {
+			revealAll();
+			return;
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				entries.forEach((entry) => {
+					if (!entry.isIntersecting) return;
+					(entry.target as HTMLElement).dataset.revealed = "true";
+					observer.unobserve(entry.target);
+				});
+			},
+			{ rootMargin: "0px 0px -8% 0px", threshold: 0.12 },
+		);
+
+		elements.forEach((element) => observer.observe(element));
+		return () => observer.disconnect();
+	}, []);
 
 	const cycleTheme = () => {
 		const currentIndex = themeOrder.indexOf(theme);
@@ -414,52 +471,61 @@ function App() {
 					</ul>
 				</section>
 
-				<div id="features" className="mx-auto w-full max-w-5xl scroll-mt-24 px-6">
-					<Showcase
-						label="Read"
-						title="Start with the source, not the software."
-						description="Each research format opens in a purpose-built workspace: rich Markdown preview, live HTML source and preview, direct Word editing, or focused PDF reading and annotation."
-						image="/screenshots/outline-light.png"
-						alt="A Markdown document in Aladdeen with its heading outline open"
-						caption="A document outline keeps long files navigable without adding permanent chrome."
-					/>
-
-					<Showcase
-						label="Find"
-						title="Search the environment, land on the line."
-						description="Search across indexed research projects and standalone files. Results stream in as they are found, and selecting one returns you to the relevant source."
-						image="/screenshots/search-dark.png"
-						alt="Aladdeen global content search in dark mode"
-						caption="Environment-wide search is cancellable, keyboard-friendly, and exact."
-					/>
-
-					<Showcase
-						label="Organize"
-						title="Bring folders together without moving them."
-						description="Create named environments, link full projects or selected folders, choose which document formats each project includes, and keep independent sources beside them. Aladdeen remembers the working set while every file remains where it belongs."
-						image="/screenshots/sidebar-light.png"
-						alt="Aladdeen responsive project sidebar open over a compact window"
-						caption="The responsive sidebar keeps projects available without crowding smaller windows."
-					/>
-
-					<section className="mt-24 md:mt-32">
-						<p className="text-sm text-neutral-400 dark:text-neutral-400">Details</p>
+				<section
+					id="features"
+					className="mx-auto mt-24 w-full max-w-5xl scroll-mt-24 px-6 md:mt-32"
+				>
+					<div data-scroll-reveal>
+						<p className="text-sm text-neutral-400 dark:text-neutral-400">Features</p>
 						<h2 className="mt-5 max-w-2xl text-2xl font-bold tracking-tight text-neutral-950 dark:text-neutral-100 md:text-[28px]">
-							The quiet features add up.
+							A research workspace that adapts to the source.
 						</h2>
-						<ul className="mt-8 divide-y divide-neutral-100 border-y border-neutral-100 dark:divide-neutral-800 dark:border-neutral-800">
-							{featureRows.map((feature) => (
-								<li key={feature.title} className="flex flex-col gap-2 py-5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-8">
-									<div className="min-w-0">
-										<h3 className="text-[15px] font-medium text-neutral-950 dark:text-neutral-100">{feature.title}</h3>
-										<p className="mt-1 max-w-2xl text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">{feature.detail}</p>
-									</div>
-									<span className="shrink-0 font-mono text-xs text-neutral-400 dark:text-neutral-400">{feature.meta}</span>
-								</li>
-							))}
-						</ul>
-					</section>
-				</div>
+						<p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
+							The interface changes with the document, while organization, search,
+							saving, and privacy remain consistent everywhere.
+						</p>
+					</div>
+
+					<div className="mt-10 divide-y divide-neutral-100 border-y border-neutral-100 dark:divide-neutral-800 dark:border-neutral-800">
+						{featureGroups.map((group, index) => (
+							<article
+								key={group.label}
+								data-scroll-reveal
+								className="grid gap-6 py-9 md:grid-cols-[9rem_minmax(0,1fr)] md:gap-10"
+							>
+								<div>
+									<p className="font-mono text-xs text-neutral-400 dark:text-neutral-500">
+										{String(index + 1).padStart(2, "0")}
+									</p>
+									<p className="mt-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+										{group.label}
+									</p>
+								</div>
+
+								<div className="min-w-0">
+									<h3 className="text-lg font-bold tracking-tight text-neutral-950 dark:text-neutral-100">
+										{group.title}
+									</h3>
+									<p className="mt-3 max-w-2xl text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+										{group.description}
+									</p>
+									<ul className="mt-7 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+										{group.items.map((item) => (
+											<li key={item.title}>
+												<h4 className="text-[15px] font-medium text-neutral-950 dark:text-neutral-100">
+													{item.title}
+												</h4>
+												<p className="mt-1.5 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+													{item.detail}
+												</p>
+											</li>
+										))}
+									</ul>
+								</div>
+							</article>
+						))}
+					</div>
+				</section>
 
 				<section id="privacy" className="mt-24 scroll-mt-24 border-y border-neutral-100 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/40 md:mt-32">
 					<div className="mx-auto w-full max-w-5xl px-6 py-20 md:py-28">

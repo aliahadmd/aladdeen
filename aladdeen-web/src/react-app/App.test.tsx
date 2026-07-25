@@ -25,7 +25,7 @@ describe("Aladdeen landing page", () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
-				name: "Search the environment, land on the line.",
+				name: "A research workspace that adapts to the source.",
 			}),
 		).toBeInTheDocument();
 		expect(
@@ -36,6 +36,17 @@ describe("Aladdeen landing page", () => {
 		expect(document.querySelector("#features")).toBeInTheDocument();
 		expect(document.querySelector("#privacy")).toBeInTheDocument();
 		expect(document.querySelector("#faq")).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", {
+				name: "Four formats, each with the right workspace.",
+			}),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", {
+				name: "Find the document, heading, or exact source line.",
+			}),
+		).toBeInTheDocument();
+		expect(document.querySelectorAll("#features img")).toHaveLength(0);
 	});
 
 	it("shows the use policy and lets visitors pause its motion", () => {
