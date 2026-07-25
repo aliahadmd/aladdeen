@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -13,6 +13,49 @@ afterEach(async () => {
 })
 
 describe('environment service', () => {
+  it('opens HTML, DOCX, and PDF in place with format-specific sessions', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
+    const documentsPath = await mkdtemp(join(tmpdir(), 'aladdeen-formats-'))
+    created.push(profile, documentsPath)
+    await writeFile(join(documentsPath, 'page.html'), '<!doctype html><h1>Local page</h1>', 'utf8')
+    await writeFile(join(documentsPath, 'proof.pdf'), '%PDF-1.4\n%%EOF\n', 'latin1')
+
+    const database = new AppDatabase(profile)
+    const environment = database.createEnvironment('Personal')
+    const service = new WorkspaceService(database, vi.fn())
+    await service.activateEnvironment(environment.id)
+    const html = await service.openAbsoluteDocument(join(documentsPath, 'page.html'))
+    const docx = await service.createStandaloneFile(join(documentsPath, 'proposal.docx'), 'docx')
+    const pdf = await service.openAbsoluteDocument(join(documentsPath, 'proof.pdf'))
+
+    expect(html).toMatchObject({
+      documentKind: 'html',
+      content: '<!doctype html><h1>Local page</h1>'
+    })
+    expect(docx).toMatchObject({
+      documentKind: 'docx',
+      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+    })
+    expect(pdf).toMatchObject({
+      documentKind: 'pdf',
+      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+    })
+    expect((await service.getSnapshot()).files.map((file) => file.documentKind).sort()).toEqual([
+      'docx',
+      'html',
+      'pdf'
+    ])
+
+    if (docx.documentKind === 'docx') {
+      expect((await service.resolveBinarySession(docx.session.id)).mimeType).toContain('wordprocessingml')
+    }
+    if (pdf.documentKind === 'pdf') {
+      expect((await service.resolveBinarySession(pdf.session.id)).mimeType).toBe('application/pdf')
+    }
+    await service.close()
+    database.close()
+  })
+
   it('opens project and standalone files together and keeps them tracked', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
     const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-project-'))
@@ -69,6 +112,127 @@ describe('environment service', () => {
     database.close()
   })
 
+  it('archives and removes only project metadata without touching disk content', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-safe-removal-'))
+    const documentPath = join(projectPath, 'README.md')
+    created.push(profile, projectPath)
+    await writeFile(documentPath, '# Keep me\n', 'utf8')
+
+    const database = new AppDatabase(profile)
+    const environment = database.createEnvironment('Personal')
+    const service = new WorkspaceService(database, vi.fn())
+    await service.activateEnvironment(environment.id)
+    const project = (await service.addProjectPath(projectPath)).projects[0]!
+    await service.updateProject({
+      projectId: project.id,
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown'],
+      pinned: false,
+      archived: true
+    })
+    await expect(access(documentPath)).resolves.toBeUndefined()
+
+    const removed = await service.removeProject(project.id)
+    expect(removed.projects).toEqual([])
+    await expect(access(documentPath)).resolves.toBeUndefined()
+
+    await service.close()
+    database.close()
+  })
+
+  it('discovers only enabled project formats while directly opened filtered files remain tracked', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-format-policy-'))
+    created.push(profile, projectPath)
+    await writeFile(join(projectPath, 'README.md'), '# Notes\n', 'utf8')
+    await writeFile(join(projectPath, 'page.html'), '<h1>Local page</h1>', 'utf8')
+    await writeFile(join(projectPath, 'report.docx'), 'not opened by this test')
+    await writeFile(join(projectPath, 'proof.pdf'), '%PDF-1.4\n%%EOF\n', 'latin1')
+
+    const database = new AppDatabase(profile)
+    const environment = database.createEnvironment('Personal')
+    const service = new WorkspaceService(database, vi.fn())
+    await service.activateEnvironment(environment.id)
+    const initial = await service.addProjectPath(projectPath)
+    const project = initial.projects[0]!
+
+    expect(project.enabledDocumentKinds).toEqual(['markdown'])
+    expect(project.fileCount).toBe(1)
+    expect(service.listProjectChildren(project.id, '').entries.map((entry) => entry.name)).toEqual(['README.md'])
+    expect(service.searchProjectFiles('page')).toEqual([])
+
+    const preview = await service.inspectProjectScope(project.id)
+    expect(preview.kindCounts).toEqual({ markdown: 1, html: 1, docx: 1, pdf: 1 })
+
+    const directlyOpened = await service.openAbsoluteDocument(join(projectPath, 'page.html'))
+    expect((await service.getSnapshot()).files.find((file) => file.id === directlyOpened.id)).toMatchObject({
+      projectId: project.id,
+      documentKind: 'html'
+    })
+    expect(service.searchProjectFiles('page')).toEqual([])
+
+    const withHtml = await service.updateProject({
+      projectId: project.id,
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown', 'html'],
+      pinned: false,
+      archived: false
+    })
+    expect(withHtml.projects[0]).toMatchObject({
+      enabledDocumentKinds: ['markdown', 'html'],
+      fileCount: 2
+    })
+    expect(service.searchProjectFiles('page')[0]?.documentKind).toBe('html')
+
+    const markdownOnly = await service.updateProject({
+      projectId: project.id,
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown'],
+      pinned: false,
+      archived: false
+    })
+    expect(markdownOnly.projects[0]?.fileCount).toBe(1)
+    expect(markdownOnly.files.find((file) => file.id === directlyOpened.id)).toMatchObject({
+      projectId: project.id,
+      documentKind: 'html'
+    })
+    expect(service.searchProjectFiles('page')).toEqual([])
+    await expect(service.createEntry({
+      projectId: project.id,
+      parentPath: '',
+      name: 'another.html',
+      documentKind: 'html'
+    })).rejects.toThrow(/Project settings/i)
+    await expect(service.renameEntry({
+      projectId: project.id,
+      path: 'README.md',
+      newName: 'README.html'
+    })).rejects.toThrow(/Project settings/i)
+
+    await rm(projectPath, { recursive: true, force: true })
+    await expect(service.updateProject({
+      projectId: project.id,
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['html'],
+      pinned: false,
+      archived: false
+    })).rejects.toThrow()
+    expect(database.getProject(project.id)?.enabledDocumentKinds).toEqual(['markdown'])
+    expect(database.listProjectIndex(project.id).map((file) => file.name)).toEqual(['README.md'])
+
+    await service.close()
+    database.close()
+  })
+
   it('bulk-adds a project with a selective metadata index and keeps unopened files out of recents', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
     const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-scoped-project-'))
@@ -92,6 +256,7 @@ describe('environment service', () => {
       scopeMode: 'selected',
       includePaths: ['docs'],
       excludePatterns: ['**/nested/**'],
+      enabledDocumentKinds: ['markdown'],
       groupName: 'Writing',
       pinned: true
     }])
@@ -115,6 +280,7 @@ describe('environment service', () => {
       scopeMode: 'all',
       includePaths: [],
       excludePatterns: ['archive/**'],
+      enabledDocumentKinds: ['markdown'],
       groupName: 'Writing',
       pinned: true,
       archived: false

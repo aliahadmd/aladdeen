@@ -1,6 +1,6 @@
-# Aladdeen Web
+# Aladdeen Research Web
 
-The official landing page and private R2-backed macOS arm64 (M-series Apple silicon) download service for Aladdeen.
+The official website and private R2-backed macOS arm64 (M-series Apple silicon) download service for Aladdeen Research.
 
 ## Stack
 

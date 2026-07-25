@@ -57,11 +57,35 @@ const api: AladdeenApi = {
   document: {
     open: (target) => ipcRenderer.invoke(IPC.openDocument, target),
     openFile: () => ipcRenderer.invoke(IPC.openFile),
-    openDropped: (file) => ipcRenderer.invoke(IPC.openDroppedFile, webUtils.getPathForFile(file)),
+    openDropped: (files) => ipcRenderer.invoke(
+      IPC.openDroppedFile,
+      files.map((file) => webUtils.getPathForFile(file))
+    ),
     openRelative: (fileId, target) => ipcRenderer.invoke(IPC.openRelativeDocument, { fileId, target }),
     acceptOpenFile: (token) => ipcRenderer.invoke(IPC.acceptSystemOpenFile, token),
     read: (fileId) => ipcRenderer.invoke(IPC.readDocument, fileId),
     save: (request) => ipcRenderer.invoke(IPC.saveDocument, request),
+    saveAs: (request) => ipcRenderer.invoke(IPC.saveDocumentAs, request),
+    saveBinary: (request, data) => new Promise((resolve) => {
+      const requestId = crypto.randomUUID()
+      const channel = new MessageChannel()
+      const bytes = new Uint8Array(data)
+      channel.port1.onmessage = (event): void => {
+        channel.port1.close()
+        resolve(event.data)
+      }
+      channel.port1.start()
+      ipcRenderer.postMessage(IPC.saveBinaryDocument, {
+        ...request,
+        requestId,
+        byteLength: bytes.byteLength
+      }, [channel.port2])
+      // MessagePortMain does not reliably deserialize a transferred bare
+      // ArrayBuffer from an isolated preload world. A structured byte view is
+      // copied through the dedicated port consistently across the V8 realms.
+      channel.port1.postMessage({ bytes })
+    }),
+    releaseSession: (sessionId) => ipcRenderer.invoke(IPC.releaseDocumentSession, sessionId),
     saveCopy: (fileId, content) => ipcRenderer.invoke(IPC.saveCopy, { fileId, content }),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, environmentEvent: EnvironmentEvent): void => callback(environmentEvent)
@@ -72,6 +96,19 @@ const api: AladdeenApi = {
       const listener = (_event: Electron.IpcRendererEvent, request: OpenFileRequest): void => callback(request)
       ipcRenderer.on(IPC.systemOpenFileRequest, listener)
       return () => ipcRenderer.removeListener(IPC.systemOpenFileRequest, listener)
+    },
+    onOpenDocumentRequest: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on(IPC.openDocumentRequest, listener)
+      return () => ipcRenderer.removeListener(IPC.openDocumentRequest, listener)
+    },
+    onCreateDocumentRequest: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        kind: 'markdown' | 'html' | 'docx'
+      ): void => callback(kind)
+      ipcRenderer.on(IPC.createDocumentRequest, listener)
+      return () => ipcRenderer.removeListener(IPC.createDocumentRequest, listener)
     }
   },
   files: {

@@ -1,6 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import * as Tooltip from '@radix-ui/react-tooltip'
-import { ChevronDown, Download, Edit3, Eye, FileDown } from 'lucide-react'
+import { ChevronDown, Download, Edit3, Eye, FileDown, SaveAll } from 'lucide-react'
 import {
   documentActionButtonClasses,
   documentActionsClasses,
@@ -13,9 +13,16 @@ import {
 import { useAppStore } from '@renderer/store/app-store'
 
 export function DocumentActions(): React.JSX.Element {
+  const activeFileId = useAppStore((state) => state.activeFileId)
+  const documentKind = useAppStore((state) => (
+    state.documents.find((document) => document.id === activeFileId)?.documentKind
+  ))
   const editing = useAppStore((state) => state.editing)
   const setEditing = useAppStore((state) => state.setEditing)
   const exportActive = useAppStore((state) => state.exportActive)
+  const saveDocumentAs = useAppStore((state) => state.saveDocumentAs)
+
+  if (documentKind !== 'markdown') return <></>
 
   return (
     <Tooltip.Provider delayDuration={500} skipDelayDuration={100}>
@@ -44,6 +51,14 @@ export function DocumentActions(): React.JSX.Element {
           </ActionTip>
           <DropdownMenu.Portal>
             <DropdownMenu.Content className={dropdownContentClasses} sideOffset={7} align="end">
+              <DropdownMenu.Item
+                className={dropdownItemClasses()}
+                onSelect={() => activeFileId && void saveDocumentAs(activeFileId)}
+              >
+                <SaveAll size={15} />
+                Save As…
+                <span className={itemHintClasses}>Copy</span>
+              </DropdownMenu.Item>
               <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void exportActive('pdf')}>
                 <FileDown size={15} />
                 Export as PDF

@@ -1,5 +1,14 @@
-import { basename } from 'node:path'
-import { dialog, ipcMain, nativeTheme, shell, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { basename, extname } from 'node:path'
+import { isAnyArrayBuffer } from 'node:util/types'
+import {
+  dialog,
+  ipcMain,
+  nativeTheme,
+  shell,
+  type BrowserWindow,
+  type IpcMainEvent,
+  type IpcMainInvokeEvent
+} from 'electron'
 import { z, type ZodType } from 'zod'
 import { asResult, DesktopError } from '@main/errors'
 import type { AppDatabase } from '@main/services/database'
@@ -7,8 +16,10 @@ import type { ExportService } from '@main/services/export'
 import type { GlobalSearchService } from '@main/services/global-search'
 import type { WorkspaceService } from '@main/services/workspace'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
+import { defaultNameForKind, DOCUMENT_EXTENSIONS } from '@shared/documents'
 import {
   createEntrySchema,
+  createStandaloneDocumentSchema,
   documentContentSchema,
   documentTargetSchema,
   environmentNameSchema,
@@ -21,6 +32,7 @@ import {
   relativePathSchema,
   renameEntrySchema,
   saveDocumentSchema,
+  saveBinaryDocumentSchema,
   settingsSchema,
   updateProjectSchema
 } from '@shared/schemas'
@@ -42,7 +54,10 @@ function parse<T>(schema: ZodType<T>, input: unknown): T {
   return result.data
 }
 
-function requireTrustedSender(event: IpcMainInvokeEvent, window: BrowserWindow | null): void {
+function requireTrustedSender(
+  event: IpcMainInvokeEvent | IpcMainEvent,
+  window: BrowserWindow | null
+): void {
   if (!window || window.isDestroyed() || event.sender.id !== window.webContents.id) {
     throw new DesktopError('PERMISSION_DENIED', 'The request did not come from the Aladdeen window.')
   }
@@ -135,7 +150,7 @@ export function registerIpc({
 
   handle(IPC.chooseProjects, async () => {
     const result = await showOpenDialog(getWindow(), {
-      title: 'Choose Markdown project folders',
+      title: 'Choose document project folders',
       buttonLabel: 'Review projects',
       properties: ['openDirectory', 'createDirectory', 'multiSelections']
     })
@@ -171,7 +186,6 @@ export function registerIpc({
   })
   handle(IPC.startGlobalSearch, async (_event, input) => search.start(parse(globalSearchRequestSchema, input)))
   handle(IPC.cancelGlobalSearch, async (_event, input) => search.cancel(parse(idSchema, input)))
-
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))
   handle(IPC.openRelativeDocument, async (_event, input) => {
@@ -180,30 +194,73 @@ export function registerIpc({
   })
   handle(IPC.openFile, async () => {
     const result = await showOpenDialog(getWindow(), {
-      title: 'Open Markdown file',
+      title: 'Open document',
       properties: ['openFile'],
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+      filters: [{ name: 'Aladdeen documents', extensions: [...DOCUMENT_EXTENSIONS] }]
     })
     if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'Open file was cancelled.')
     return workspace.openAbsoluteDocument(result.filePaths[0])
   })
-  handle(IPC.openDroppedFile, async (_event, input) => workspace.openAbsoluteDocument(parse(z.string().min(1).max(16_384), input)))
+  handle(IPC.openDroppedFile, async (_event, input) => {
+    const paths = parse(z.array(z.string().min(1).max(16_384)).min(1).max(20), input)
+    const documents: DocumentSnapshot[] = []
+    for (const path of paths) documents.push(await workspace.openAbsoluteDocument(path))
+    return documents
+  })
   handle(IPC.acceptSystemOpenFile, async (_event, input) => acceptSystemOpenFile(parse(idSchema, input)))
   handle(IPC.saveDocument, async (_event, input) => workspace.saveDocument(parse(saveDocumentSchema, input)))
+  handle(IPC.saveDocumentAs, async (_event, input) => {
+    const request = parse(saveDocumentSchema, input)
+    const currentPath = workspace.getTrackedFilePath(request.fileId)
+    const kind = workspace.getTrackedDocumentKind(request.fileId)
+    if (kind !== 'markdown' && kind !== 'html') {
+      throw new DesktopError('INVALID_FILE', 'Binary documents use their own Save As workflow.')
+    }
+    const extension = extname(currentPath)
+    const result = await showSaveDialog(getWindow(), {
+      title: `Save ${kind === 'html' ? 'HTML' : 'Markdown'} as`,
+      defaultPath: `${basename(currentPath, extension)} copy${extension}`,
+      filters: [{
+        name: kind === 'html' ? 'HTML document' : 'Markdown document',
+        extensions: kind === 'html' ? ['html', 'htm'] : ['md', 'markdown']
+      }]
+    })
+    if (result.canceled || !result.filePath) {
+      throw new DesktopError('CANCELLED', 'Save As was cancelled.')
+    }
+    return workspace.saveTextDocumentAs(request, result.filePath)
+  })
+  handle(IPC.releaseDocumentSession, async (_event, input) => {
+    workspace.releaseBinarySession(parse(idSchema, input))
+  })
   handle(IPC.saveCopy, async (_event, input) => {
     const request = parse(z.object({ fileId: idSchema, content: documentContentSchema }), input)
     return exports.saveCopy(request.fileId, request.content)
   })
 
   handle(IPC.createEntry, async (_event, input) => {
-    if (input) return workspace.createEntry(parse(createEntrySchema, input))
+    if ('projectId' in (input as Record<string, unknown>)) {
+      return workspace.createEntry(parse(createEntrySchema, input))
+    }
+    const request = parse(createStandaloneDocumentSchema, input)
     const result = await showSaveDialog(getWindow(), {
-      title: 'Create Markdown file',
-      defaultPath: 'Untitled.md',
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+      title: 'Create document',
+      defaultPath: defaultNameForKind(request.documentKind),
+      filters: [{
+        name: request.documentKind === 'markdown'
+          ? 'Markdown'
+          : request.documentKind === 'html'
+            ? 'HTML'
+            : 'Word document',
+        extensions: request.documentKind === 'markdown'
+          ? ['md', 'markdown']
+          : request.documentKind === 'html'
+            ? ['html', 'htm']
+            : ['docx']
+      }]
     })
     if (result.canceled || !result.filePath) throw new DesktopError('CANCELLED', 'New file was cancelled.')
-    return workspace.createStandaloneFile(result.filePath)
+    return workspace.createStandaloneFile(result.filePath, request.documentKind)
   })
 
   handle(IPC.createFolder, async (_event, input) => workspace.createFolder(parse(createEntrySchema, input)))
@@ -233,7 +290,7 @@ export function registerIpc({
     const result = await showOpenDialog(getWindow(), {
       title: `Locate ${basename(currentPath)}`,
       properties: ['openFile'],
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+      filters: [{ name: 'Aladdeen documents', extensions: [...DOCUMENT_EXTENSIONS] }]
     })
     if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'Locate file was cancelled.')
     return workspace.locateTrackedFile(fileId, result.filePaths[0])
@@ -247,6 +304,38 @@ export function registerIpc({
   })
   handle(IPC.exportDocument, async (_event, input) => exports.exportDocument(parse(exportRequestSchema, input)))
   handle(IPC.openExternal, async (_event, input) => shell.openExternal(parse(externalUrlSchema, input)))
+
+  ipcMain.on(IPC.saveBinaryDocument, (event, input) => {
+    const port = event.ports[0]
+    if (!port) return
+    void asResult(async () => {
+      requireTrustedSender(event, getWindow())
+      const request = parse(saveBinaryDocumentSchema, input)
+      const data = await receiveBinaryPayload(port, request.byteLength)
+      let destinationPath: string | undefined
+      if (request.saveAs) {
+        const currentPath = workspace.getTrackedFilePath(request.fileId)
+        const kind = workspace.getTrackedDocumentKind(request.fileId)
+        const extension = kind === 'docx' ? 'docx' : 'pdf'
+        const result = await showSaveDialog(getWindow(), {
+          title: `Save ${kind.toUpperCase()} as`,
+          defaultPath: `${basename(currentPath, `.${extension}`)} copy.${extension}`,
+          filters: [{
+            name: kind === 'docx' ? 'Word document' : 'PDF document',
+            extensions: [extension]
+          }]
+        })
+        if (result.canceled || !result.filePath) {
+          throw new DesktopError('CANCELLED', 'Save As was cancelled.')
+        }
+        destinationPath = result.filePath
+      }
+      return workspace.saveBinaryDocument(request, data, destinationPath)
+    }).then((result) => {
+      port.postMessage(result)
+      port.close()
+    })
+  })
 }
 
 function showOpenDialog(window: BrowserWindow | null, options: Electron.OpenDialogOptions): Promise<Electron.OpenDialogReturnValue> {
@@ -255,4 +344,49 @@ function showOpenDialog(window: BrowserWindow | null, options: Electron.OpenDial
 
 function showSaveDialog(window: BrowserWindow | null, options: Electron.SaveDialogOptions): Promise<Electron.SaveDialogReturnValue> {
   return window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options)
+}
+
+function receiveBinaryPayload(
+  port: Electron.MessagePortMain,
+  expectedBytes: number
+): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error('The binary save transfer timed out.')), 30_000)
+    port.once('message', (event) => {
+      clearTimeout(timeout)
+      const data = binaryPayload(event.data)
+      if (!data || data.byteLength !== expectedBytes) {
+        reject(new Error(
+          `The binary save transfer was incomplete (expected ${expectedBytes} bytes, received ${data?.byteLength ?? binaryPayloadDescription(event.data)}).`
+        ))
+        return
+      }
+      resolve(data)
+    })
+    port.start()
+  })
+}
+
+function binaryPayloadDescription(value: unknown): string {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  if (typeof value !== 'object') return typeof value
+  return Object.prototype.toString.call(value)
+}
+
+function binaryPayload(value: unknown): Uint8Array | null {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    'bytes' in value
+  ) {
+    return binaryPayload((value as { bytes?: unknown }).bytes)
+  }
+  if (isAnyArrayBuffer(value)) {
+    return new Uint8Array(value as ArrayBuffer)
+  }
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+  return null
 }

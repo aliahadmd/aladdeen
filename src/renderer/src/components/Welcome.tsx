@@ -22,15 +22,15 @@ export function Welcome(): React.JSX.Element {
           {environment?.environment.name.toLocaleUpperCase() ?? 'ALADDEEN'}
         </p>
         <h1 className="m-0 text-[clamp(34px,5vw,51px)] leading-[1.05] font-[680] tracking-[-.045em]">
-          Your Markdown, one calm place.
+          Your research, one calm workspace.
         </h1>
         <p className="mx-auto mt-[19px] mb-[27px] max-w-[480px] text-[15px] leading-[1.6] text-foreground-soft">
-          Add a project folder or open any Markdown file. Aladdeen remembers its location without moving or importing it.
+          Read, write, organize, and search Markdown, HTML, Word, and PDF sources in place. Aladdeen keeps your research connected without copying or converting it.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <button className={buttonClasses({ size: 'large' })} onClick={() => void addProject()}><FolderOpen size={16} /> Add folder</button>
           <button className={buttonClasses({ variant: 'secondary', size: 'large' })} onClick={() => void openFile()}><FileText size={16} /> Open file</button>
-          <button className={buttonClasses({ variant: 'ghost', size: 'large' })} onClick={() => void createFile()}><FilePlus2 size={16} /> Create file</button>
+          <button className={buttonClasses({ variant: 'ghost', size: 'large' })} onClick={() => void createFile()}><FilePlus2 size={16} /> New document</button>
         </div>
         <div className={cn(privacyNoteClasses, 'mt-[27px]')}>
           <ShieldCheck size={14} />

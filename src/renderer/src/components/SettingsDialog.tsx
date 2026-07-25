@@ -168,7 +168,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
         >
           <Dialog.Title className="sr-only">Settings</Dialog.Title>
           <Dialog.Description className="sr-only">
-            Personalize Aladdeen without changing your Markdown files.
+            Personalize Aladdeen without changing your documents.
           </Dialog.Description>
 
           <aside className="flex min-h-0 flex-col border-r border-border bg-surface max-[720px]:border-r-0 max-[720px]:border-b">
@@ -359,22 +359,22 @@ function AboutSettings(): React.JSX.Element {
       <div className="flex items-center gap-3 border-b border-border pb-5">
         <BrandMark className="h-10 w-10 shrink-0" title="Aladdeen" />
         <div className="min-w-0">
-          <h3 className="m-0 text-[15px] font-[680] text-foreground">Aladdeen</h3>
+          <h3 className="m-0 text-[15px] font-[680] text-foreground">Aladdeen Research</h3>
           <p className="mt-1 mb-0 text-[12px] text-foreground-muted">Version {packageMetadata.version}</p>
         </div>
       </div>
 
       <div className="divide-y divide-border">
         <section className="py-5">
-          <h3 className="m-0 text-[13px] font-[620] text-foreground">A calm Markdown workspace</h3>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground">A private research workspace</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Aladdeen is an offline-first Markdown workspace made only for macOS arm64 on M-series Apple silicon.
+            Aladdeen Research brings Markdown, HTML, Word, and PDF documents into one offline-first workspace for reading, organizing, searching, and writing on M-series Apple silicon.
           </p>
         </section>
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">Your files stay yours</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Markdown documents remain at their original disk locations. Aladdeen stores workspace references and preferences locally, without copying document contents into its settings database.
+            Documents remain at their original disk locations. Aladdeen stores workspace references and preferences locally, without copying document contents into its settings database.
           </p>
         </section>
         <section className="py-5">

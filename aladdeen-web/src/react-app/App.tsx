@@ -12,18 +12,18 @@ const themeOrder: Theme[] = ["light", "dark", "system"];
 
 const featureRows = [
 	{
-		title: "Preview-first reading",
-		detail: "Open Markdown in a calm rendered view, then reveal the editor only when you need it.",
+		title: "Format-aware reading",
+		detail: "Markdown, HTML, Word, and PDF each open with tools designed for that document format.",
 		meta: "Read",
 	},
 	{
-		title: "Folders stay folders",
-		detail: "Link projects and individual files without moving or importing the source Markdown.",
+		title: "Files stay where they belong",
+		detail: "Connect project folders and individual sources without moving, copying, or converting them.",
 		meta: "Organize",
 	},
 	{
 		title: "Search across projects",
-		detail: "Find source text throughout an environment and jump directly to the exact match.",
+		detail: "Find text throughout an environment and jump back into the relevant source.",
 		meta: "Find",
 	},
 	{
@@ -32,27 +32,27 @@ const featureRows = [
 		meta: "Protect",
 	},
 	{
-		title: "Markdown that travels",
+		title: "Rich Markdown",
 		detail: "GFM tables, tasks, code, math, diagrams, callouts, and local images render without lock-in.",
 		meta: "Render",
 	},
 	{
-		title: "Clean handoff",
-		detail: "Export finished documents to PDF or DOCX locally, without sending the source anywhere.",
-		meta: "Export",
+		title: "Native document tools",
+		detail: "Edit HTML source, work directly with DOCX, and read or annotate PDFs without a conversion step.",
+		meta: "Work",
 	},
 ] as const;
 
 const faqItems = [
 	{
-		question: "Where are my Markdown files stored?",
+		question: "Where are my research files stored?",
 		answer:
-			"Exactly where you already keep them. Aladdeen reads and writes ordinary .md files on disk; it does not copy your document content into its database.",
+			"Exactly where you already keep them. Aladdeen opens ordinary Markdown, HTML, Word, and PDF files in place; it does not copy document content into its settings database.",
 	},
 	{
 		question: "Does Aladdeen need an internet connection?",
 		answer:
-			"No. Reading, editing, searching, local images, and PDF or DOCX export work offline. Aladdeen does not provide cloud sync or fetch remote images.",
+			"No. Opening, editing, searching, local assets, and Markdown export work offline. Aladdeen does not provide cloud sync or fetch remote resources.",
 	},
 	{
 		question: "Which Mac does Aladdeen support?",
@@ -67,12 +67,12 @@ const faqItems = [
 	{
 		question: "Can I leave Aladdeen later?",
 		answer:
-			"Yes. Your work remains plain Markdown in your folders, so any text editor can open it. There is no proprietary document format to export from.",
+			"Yes. Your work remains in its original Markdown, HTML, DOCX, or PDF format at its original location. Aladdeen does not place your research inside a proprietary library.",
 	},
 	{
 		question: "Is Aladdeen free?",
 		answer:
-			"Yes. Aladdeen is completely free to download and use. Its source repository is private, and official downloads are available only from this website.",
+			"Aladdeen is free during the current beta-testing period. It is proprietary, closed-source software, and future releases may be offered as a paid product. Official downloads are available only from this website.",
 	},
 ] as const;
 
@@ -254,9 +254,10 @@ function App() {
 
 			<header className="sticky top-0 z-50 border-b border-neutral-100 bg-white/85 backdrop-blur-sm dark:border-neutral-900 dark:bg-neutral-950/85">
 				<div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-6">
-					<a href="#" className="flex items-center gap-2.5" aria-label="Aladdeen home">
+					<a href="#" className="flex items-center gap-2.5" aria-label="Aladdeen Research home">
 						<img src="/icon.svg" alt="" className="h-7 w-7 rounded-md" />
 						<span className="text-sm font-semibold tracking-tight">Aladdeen</span>
+						<span className="-ml-1 font-serif text-[15px] italic text-neutral-500 dark:text-neutral-400">Research</span>
 					</a>
 
 					<nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
@@ -307,7 +308,7 @@ function App() {
 						<a onClick={closeMenu} href="#download" className="text-xl font-semibold">Download</a>
 						<a onClick={closeMenu} href="#faq" className="text-xl font-semibold">FAQ</a>
 						<p className="mt-6 border-t border-neutral-100 pt-6 text-sm text-neutral-400 dark:border-neutral-800 dark:text-neutral-400">
-							Free, private, and offline-first.
+							Free during beta, private, and offline-first.
 						</p>
 					</div>
 				</nav>
@@ -317,13 +318,13 @@ function App() {
 				<section className="mx-auto w-full max-w-5xl px-6 pb-12 pt-20 md:pb-20 md:pt-28">
 					<div className="max-w-3xl">
 						<p className="text-sm text-neutral-400 dark:text-neutral-400">
-							Aladdeen for macOS arm64 · M-series Apple silicon · Preview {CURRENT_RELEASE}
+							Aladdeen Research · macOS arm64 · M-series Apple silicon · Preview {CURRENT_RELEASE}
 						</p>
 						<h1 className="mt-5 max-w-2xl text-4xl font-bold tracking-[-0.035em] text-balance text-neutral-950 dark:text-neutral-50 md:text-6xl md:leading-[1.03]">
-							All your Markdown, one calm place.
+							Your research, one calm workspace.
 						</h1>
 						<p className="mt-6 max-w-xl text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Made only for macOS arm64 on M-series Apple silicon. A responsive, offline-first workspace for reading, editing, finding, and exporting the files you already own.
+							Read, write, organize, and search Markdown, HTML, Word, and PDF sources in place. No account, no conversion, and no cloud between you and your work.
 						</p>
 						<div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
@@ -339,20 +340,20 @@ function App() {
 						<div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
 							<img
 								src="/screenshots/markdown-light.png"
-								alt="Aladdeen displaying a Markdown document with a project sidebar and reading view"
+								alt="Aladdeen Research displaying a document with a project sidebar and reading view"
 								fetchPriority="high"
 								className="block h-auto w-full"
 							/>
 						</div>
 						<figcaption className="mt-3 text-xs text-neutral-400 dark:text-neutral-400">
-							Preview-first reading with files, projects, outline, editing, and export close at hand.
+							Research sources, projects, outline, editing, and export close at hand.
 						</figcaption>
 					</figure>
 
 					<ul className="mt-12 grid border-y border-neutral-100 py-5 text-sm text-neutral-500 dark:border-neutral-800 dark:text-neutral-400 sm:grid-cols-2 lg:grid-cols-4">
 						<li className="py-2 lg:py-0">Files stay on disk</li>
 						<li className="py-2 lg:py-0">Works offline</li>
-						<li className="py-2 lg:py-0">PDF and DOCX export</li>
+						<li className="py-2 lg:py-0">Four document formats</li>
 						<li className="py-2 lg:py-0">Free to use</li>
 					</ul>
 				</section>
@@ -360,8 +361,8 @@ function App() {
 				<div id="features" className="mx-auto w-full max-w-5xl scroll-mt-24 px-6">
 					<Showcase
 						label="Read"
-						title="Start with the document, not the editor."
-						description="Aladdeen opens into a clean rendered page. Toggle editing when the words need work, keep a live preview beside the source, then return to reading without rearranging your workspace."
+						title="Start with the source, not the software."
+						description="Each research format opens in a purpose-built workspace: rich Markdown preview, live HTML source and preview, direct Word editing, or focused PDF reading and annotation."
 						image="/screenshots/outline-light.png"
 						alt="A Markdown document in Aladdeen with its heading outline open"
 						caption="A document outline keeps long files navigable without adding permanent chrome."
@@ -370,7 +371,7 @@ function App() {
 					<Showcase
 						label="Find"
 						title="Search the environment, land on the line."
-						description="Search Markdown source across every indexed project and standalone file. Results stream in as they are found, and selecting one opens the document at the exact match."
+						description="Search across indexed research projects and standalone files. Results stream in as they are found, and selecting one returns you to the relevant source."
 						image="/screenshots/search-dark.png"
 						alt="Aladdeen global content search in dark mode"
 						caption="Environment-wide search is cancellable, keyboard-friendly, and exact."
@@ -379,7 +380,7 @@ function App() {
 					<Showcase
 						label="Organize"
 						title="Bring folders together without moving them."
-						description="Create named environments, link full projects or selected folders, and keep independent files beside them. Aladdeen remembers the working set while the Markdown remains where it belongs."
+						description="Create named environments, link full projects or selected folders, choose which document formats each project includes, and keep independent sources beside them. Aladdeen remembers the working set while every file remains where it belongs."
 						image="/screenshots/sidebar-light.png"
 						alt="Aladdeen responsive project sidebar open over a compact window"
 						caption="The responsive sidebar keeps projects available without crowding smaller windows."
@@ -412,7 +413,7 @@ function App() {
 								Local-first is the architecture, not a setting.
 							</h2>
 							<p className="mt-5 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-								Markdown content is read from your folders and saved back atomically. Aladdeen stores only workspace metadata—things like recent files and project indexes—in a local SQLite database. It does not import your writing, add cloud sync, fetch remote images, or require an account.
+								Document content is read from your folders and saved back in place. Aladdeen stores only workspace metadata—things like recent files and project indexes—in a local SQLite database. It does not import your research, add cloud sync, fetch remote resources, or require an account.
 							</p>
 							<p className="mt-4 text-[15px] font-semibold leading-relaxed text-neutral-700 dark:text-neutral-300">
 								Your files stay portable, inspectable, and under your control.
@@ -503,7 +504,7 @@ function App() {
 							Open a file. Keep the file.
 						</h2>
 						<p className="mt-4 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Aladdeen gives Markdown a comfortable desktop home without asking it to become anything else.
+							Aladdeen Research keeps different source formats together without asking them to become anything else.
 						</p>
 						<div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
@@ -516,7 +517,7 @@ function App() {
 
 			<footer className="border-t border-neutral-100 dark:border-neutral-800">
 				<div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-8 text-sm text-neutral-400 dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
-					<p>Aladdeen · Markdown stays yours.</p>
+					<p>Aladdeen Research · Your files stay yours.</p>
 					<div className="flex items-center gap-5">
 						<a href="#privacy" className="transition-colors hover:text-neutral-900 dark:hover:text-neutral-100">Privacy</a>
 						<a href="#download" className="transition-colors hover:text-neutral-900 dark:hover:text-neutral-100">Download</a>

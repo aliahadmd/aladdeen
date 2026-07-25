@@ -1,13 +1,18 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
-import { access, lstat, mkdir, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, writeFile } from 'node:fs/promises'
 import chokidar, { type FSWatcher } from 'chokidar'
 import writeFileAtomic from 'write-file-atomic'
+import { Document, Packer, Paragraph } from 'docx'
 import { DesktopError } from '@main/errors'
 import type { AppDatabase, ProjectIndexFileRecord, ProjectRecord, TrackedFileRecord } from './database'
 import type {
   CreateEntryRequest,
+  BinaryDocumentKind,
+  BinaryDocumentSnapshot,
+  DocumentKind,
   DocumentSnapshot,
   DocumentTarget,
   EnvironmentEvent,
@@ -23,24 +28,39 @@ import type {
   RenameEntryRequest,
   RenameEntryResult,
   SaveDocumentRequest,
+  SaveBinaryDocumentRequest,
+  TextDocumentSnapshot,
   TrackedFileSummary,
   UpdateProjectRequest,
   WorkspaceTreeNode
 } from '@shared/contracts'
+import {
+  ALL_PROJECT_DOCUMENT_KINDS,
+  DEFAULT_PROJECT_DOCUMENT_KINDS,
+  DOCUMENT_CAPABILITIES,
+  defaultExtensionForKind,
+  documentKindFromName,
+  isDocumentKind,
+  isSupportedDocumentName,
+  isTextDocumentKind
+} from '@shared/documents'
 import { toPosixPath } from '@shared/path'
-import { MAX_DOCUMENT_BYTES } from '@shared/limits'
+import { MAX_BINARY_DOCUMENT_BYTES, MAX_DOCUMENT_BYTES } from '@shared/limits'
 import { decodeMarkdown, encodeMarkdown, sha256 } from './file-format'
 import { isPathInside, resolveExistingPath, resolveNewPath, resolveSyntacticPath } from './path-guard'
+import { inspectDocxBuffer, inspectDocxPackage } from './zip-guard'
 
-const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
-const IMAGE_MIME_TYPES: Record<string, string> = {
+const LOCAL_ASSET_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
-  '.avif': 'image/avif'
+  '.avif': 'image/avif',
+  '.css': 'text/css; charset=utf-8',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2'
 }
 const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.hg', '.svn', '.cache', 'node_modules', 'dist', 'build', 'out'])
 const MAX_SCOPE_PREVIEW_FILES = 50_000
@@ -54,10 +74,6 @@ interface ProjectCandidate {
   files: ProjectIndexFileRecord[]
   tree: ProjectScopeNode[]
   truncated: boolean
-}
-
-function isMarkdown(path: string): boolean {
-  return MARKDOWN_EXTENSIONS.has(extname(path).toLowerCase())
 }
 
 export function validateEntryName(input: string): string {
@@ -76,6 +92,11 @@ export class WorkspaceService {
   private readonly projectCandidates = new Map<string, ProjectCandidate>()
   private readonly reindexTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private activationQueue: Promise<void> = Promise.resolve()
+  private readonly binarySessions = new Map<string, {
+    fileId: string
+    environmentId: string
+    documentKind: BinaryDocumentKind
+  }>()
 
   constructor(
     private readonly database: AppDatabase,
@@ -97,6 +118,7 @@ export class WorkspaceService {
     if (!environment) throw new DesktopError('NOT_FOUND', 'That environment no longer exists.')
     await this.stopWatchers()
     this.projectCandidates.clear()
+    this.binarySessions.clear()
     this.environmentId = environmentId
     this.database.setActiveEnvironmentId(environmentId)
     await this.refreshMissingFiles()
@@ -109,6 +131,7 @@ export class WorkspaceService {
 
   async deactivateEnvironment(): Promise<void> {
     await this.stopWatchers()
+    this.binarySessions.clear()
     this.environmentId = null
   }
 
@@ -139,6 +162,7 @@ export class WorkspaceService {
       scopeMode: 'all',
       includePaths: [],
       excludePatterns: [],
+      enabledDocumentKinds: [...DEFAULT_PROJECT_DOCUMENT_KINDS],
       pinned: false
     }
   ): Promise<EnvironmentSnapshot> {
@@ -150,7 +174,8 @@ export class WorkspaceService {
     const project = this.database.addProject(environmentId, canonical, basename(canonical), {
       ...options,
       includePaths: normalizeScopePaths(options.includePaths),
-      excludePatterns: normalizePatterns(options.excludePatterns)
+      excludePatterns: normalizePatterns(options.excludePatterns),
+      enabledDocumentKinds: normalizeDocumentKinds(options.enabledDocumentKinds)
     })
     await this.reindexProject(project)
     await this.startProjectWatcher(project)
@@ -195,6 +220,7 @@ export class WorkspaceService {
         name: candidate.name,
         displayPath: abbreviatePath(candidate.path),
         fileCount: candidate.files.length,
+        kindCounts: countDocumentKinds(candidate.files),
         tree: candidate.tree,
         truncated: candidate.truncated
       })
@@ -226,7 +252,8 @@ export class WorkspaceService {
       const project = this.database.addProject(environmentId, candidate.path, candidate.name, {
         ...selection,
         includePaths: normalizeScopePaths(selection.includePaths),
-        excludePatterns: normalizePatterns(selection.excludePatterns)
+        excludePatterns: normalizePatterns(selection.excludePatterns),
+        enabledDocumentKinds: normalizeDocumentKinds(selection.enabledDocumentKinds)
       })
       const included = filterIndexedFiles(candidate.files, project)
       this.database.replaceProjectIndex(project.id, included.map((file) => ({ ...file, projectId: project.id })))
@@ -243,27 +270,39 @@ export class WorkspaceService {
     return {
       project: await this.projectSummary(project),
       tree: buildScopeTree(scan.files.slice(0, MAX_SCOPE_PREVIEW_FILES)),
-      totalMarkdownFiles: scan.files.length,
+      totalDocuments: scan.files.length,
+      kindCounts: countDocumentKinds(scan.files),
       truncated: scan.truncated
     }
   }
 
   async updateProject(request: UpdateProjectRequest): Promise<EnvironmentSnapshot> {
     const current = this.requireProject(request.projectId)
-    const project = this.database.updateProject(current.id, {
+    const options = {
       scopeMode: request.scopeMode,
       includePaths: normalizeScopePaths(request.includePaths),
       excludePatterns: normalizePatterns(request.excludePatterns),
+      enabledDocumentKinds: normalizeDocumentKinds(request.enabledDocumentKinds),
       groupName: request.groupName,
       pinned: request.pinned,
       archived: request.archived
-    })
+    }
+    let project: ProjectRecord
+    if (options.archived) {
+      project = this.database.updateProject(current.id, options)
+    } else {
+      // Build the replacement before changing persisted settings. A failed scan
+      // leaves both the previous policy and its known-good index intact.
+      const scan = await this.scanProject(current.path, options.enabledDocumentKinds)
+      const included = filterIndexedFiles(scan.files, options)
+        .map((file) => ({ ...file, projectId: current.id }))
+      project = this.database.updateProjectWithIndex(current.id, options, included)
+    }
     await this.projectWatchers.get(project.id)?.close()
     this.projectWatchers.delete(project.id)
     if (project.archived) {
       this.database.setProjectIndexStatus(project.id, 'paused', project.fileCount, project.indexedAt)
     } else {
-      await this.reindexProject(project)
       await this.startProjectWatcher(this.database.getProject(project.id)!)
     }
     await this.reassociateTrackedFiles()
@@ -284,7 +323,8 @@ export class WorkspaceService {
         projectName: file.projectName,
         name: file.name,
         relativePath: file.relativePath,
-        location: `${file.projectName} › ${file.relativePath}`
+        location: `${file.projectName} › ${file.relativePath}`,
+        documentKind: file.documentKind
       }))
   }
 
@@ -339,17 +379,21 @@ export class WorkspaceService {
     if (originalStats.isSymbolicLink()) throw new DesktopError('INVALID_PATH', 'Symbolic-link documents are not available.')
     const canonical = await realpath(filePath)
     const fileStats = await stat(canonical)
-    if (!fileStats.isFile() || !isMarkdown(canonical)) throw new DesktopError('INVALID_FILE', 'Aladdeen opens .md and .markdown files.')
-    this.assertDocumentSize(fileStats.size)
+    const documentKind = documentKindFromName(canonical)
+    if (!fileStats.isFile() || !documentKind) {
+      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, and PDF documents.')
+    }
+    this.assertDocumentSize(fileStats.size, documentKind)
+    await this.validateDocumentSignature(canonical, documentKind)
     const project = this.findContainingProject(canonical)
-    const tracked = this.database.upsertTrackedFile(environmentId, canonical, project?.id)
+    const tracked = this.database.upsertTrackedFile(environmentId, canonical, project?.id, documentKind)
     await this.restartStandaloneWatcher()
     return this.readTracked(tracked)
   }
 
   async openRelativeDocument(fileId: string, target: string): Promise<DocumentSnapshot> {
     if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) {
-      throw new DesktopError('INVALID_PATH', 'That link is not a local Markdown file.')
+      throw new DesktopError('INVALID_PATH', 'That link is not a local document.')
     }
     const file = this.requireTrackedFile(fileId)
     const project = file.projectId ? this.database.getProject(file.projectId) : null
@@ -364,7 +408,12 @@ export class WorkspaceService {
     if (tracked.environmentId !== this.requireEnvironment()) throw new DesktopError('PERMISSION_DENIED', 'That file is not in this environment.')
     try {
       const current = touch
-        ? this.database.upsertTrackedFile(tracked.environmentId, tracked.path, tracked.projectId)
+        ? this.database.upsertTrackedFile(
+            tracked.environmentId,
+            tracked.path,
+            tracked.projectId,
+            tracked.documentKind
+          )
         : tracked
       return await this.readTracked(current)
     } catch (error) {
@@ -379,6 +428,9 @@ export class WorkspaceService {
   async saveDocument(request: SaveDocumentRequest): Promise<FileRevision> {
     const tracked = this.requireTrackedFile(request.fileId)
     if (tracked.environmentId !== this.requireEnvironment()) throw new DesktopError('PERMISSION_DENIED', 'That file is not in this environment.')
+    if (!isTextDocumentKind(tracked.documentKind)) {
+      throw new DesktopError('INVALID_FILE', 'Binary documents must be saved through their format adapter.')
+    }
     const safePath = await this.resolveTrackedDocumentPath(tracked).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') {
         this.database.setTrackedFileMissing(tracked.id, true)
@@ -386,19 +438,21 @@ export class WorkspaceService {
       }
       throw error
     })
-    const nextBuffer = encodeMarkdown(request.content, request.expectedRevision.lineEnding, request.expectedRevision.hasBom)
-    this.assertDocumentSize(nextBuffer.byteLength)
+    const lineEnding = request.expectedRevision.lineEnding ?? 'LF'
+    const hasBom = request.expectedRevision.hasBom ?? false
+    const nextBuffer = encodeMarkdown(request.content, lineEnding, hasBom)
+    this.assertDocumentSize(nextBuffer.byteLength, tracked.documentKind)
     const currentStats = await stat(safePath)
-    this.assertDocumentSize(currentStats.size)
+    this.assertDocumentSize(currentStats.size, tracked.documentKind)
     const currentBuffer = await readFile(safePath)
-    this.assertDocumentSize(currentBuffer.byteLength)
+    this.assertDocumentSize(currentBuffer.byteLength, tracked.documentKind)
     if (!request.force && sha256(currentBuffer) !== request.expectedRevision.sha256) {
       throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
     }
     await this.resolveTrackedDocumentPath(tracked)
     if (!request.force) {
       const latestBuffer = await readFile(safePath)
-      this.assertDocumentSize(latestBuffer.byteLength)
+      this.assertDocumentSize(latestBuffer.byteLength, tracked.documentKind)
       if (sha256(latestBuffer) !== request.expectedRevision.sha256) {
         throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
       }
@@ -412,23 +466,152 @@ export class WorkspaceService {
     }
     const nextStats = await stat(safePath)
     this.database.setTrackedFileMissing(tracked.id, false)
-    return this.createRevision(nextStats.mtimeMs, nextBuffer, request.expectedRevision.lineEnding, request.expectedRevision.hasBom)
+    return this.createRevision(nextStats.mtimeMs, nextBuffer, lineEnding, hasBom)
+  }
+
+  async saveTextDocumentAs(
+    request: SaveDocumentRequest,
+    destinationPath: string
+  ): Promise<FileRevision> {
+    const tracked = this.requireTrackedFile(request.fileId)
+    if (tracked.environmentId !== this.requireEnvironment()) {
+      throw new DesktopError('PERMISSION_DENIED', 'That file is not in this environment.')
+    }
+    if (!isTextDocumentKind(tracked.documentKind)) {
+      throw new DesktopError('INVALID_FILE', 'Binary documents use their own Save As workflow.')
+    }
+    if (documentKindFromName(destinationPath) !== tracked.documentKind) {
+      throw new DesktopError(
+        'INVALID_FILE',
+        `Save As must keep the ${tracked.documentKind === 'html' ? 'HTML' : 'Markdown'} document format.`
+      )
+    }
+    const canonicalParent = await realpath(dirname(destinationPath))
+    const targetPath = resolve(canonicalParent, basename(destinationPath))
+    const targetStats = await lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (targetStats?.isSymbolicLink() || (targetStats && !targetStats.isFile())) {
+      throw new DesktopError('INVALID_PATH', 'The Save As destination is not a regular file.')
+    }
+    const duplicate = this.database.findTrackedFile(this.requireEnvironment(), targetPath)
+    if (duplicate && duplicate.id !== tracked.id) {
+      throw new DesktopError('ALREADY_EXISTS', 'That destination is already open in this environment.')
+    }
+
+    const lineEnding = request.expectedRevision.lineEnding ?? 'LF'
+    const hasBom = request.expectedRevision.hasBom ?? false
+    const nextBuffer = encodeMarkdown(request.content, lineEnding, hasBom)
+    this.assertDocumentSize(nextBuffer.byteLength, tracked.documentKind)
+    this.suppressInternalWrite(targetPath)
+    try {
+      await writeFileAtomic(targetPath, nextBuffer, { fsync: true })
+    } catch (error) {
+      this.suppressedWrites.delete(targetPath)
+      throw error
+    }
+    const savedStats = await stat(targetPath)
+    const project = this.findContainingProject(targetPath)
+    this.database.updateTrackedFile(tracked.id, targetPath, project?.id, tracked.documentKind)
+    await this.restartStandaloneWatcher()
+    return this.createRevision(savedStats.mtimeMs, nextBuffer, lineEnding, hasBom)
+  }
+
+  async saveBinaryDocument(
+    request: SaveBinaryDocumentRequest,
+    data: Uint8Array,
+    destinationPath?: string
+  ): Promise<FileRevision> {
+    const tracked = this.requireTrackedFile(request.fileId)
+    if (isTextDocumentKind(tracked.documentKind)) {
+      throw new DesktopError('INVALID_FILE', 'Text documents must be saved through their text adapter.')
+    }
+    if (data.byteLength !== request.byteLength) {
+      throw new DesktopError('INVALID_FILE', 'The binary document transfer was incomplete.')
+    }
+    this.assertDocumentSize(data.byteLength, tracked.documentKind)
+    this.validateBinaryBuffer(data, tracked.documentKind)
+
+    const sourcePath = await this.resolveTrackedDocumentPath(tracked)
+    let targetPath = sourcePath
+    if (destinationPath) {
+      if (documentKindFromName(destinationPath) !== tracked.documentKind) {
+        throw new DesktopError('INVALID_FILE', `Save As must keep the .${tracked.documentKind} document format.`)
+      }
+      const canonicalParent = await realpath(dirname(destinationPath))
+      targetPath = resolve(canonicalParent, basename(destinationPath))
+      const targetStats = await lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return null
+        throw error
+      })
+      if (targetStats?.isSymbolicLink() || (targetStats && !targetStats.isFile())) {
+        throw new DesktopError('INVALID_PATH', 'The Save As destination is not a regular file.')
+      }
+      const duplicate = this.database.findTrackedFile(this.requireEnvironment(), targetPath)
+      if (duplicate && duplicate.id !== tracked.id) {
+        throw new DesktopError('ALREADY_EXISTS', 'That destination is already open in this environment.')
+      }
+    }
+    if (!destinationPath) {
+      const current = await readFile(sourcePath)
+      if (!request.force && sha256(current) !== request.expectedRevision.sha256) {
+        throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
+      }
+      await this.resolveTrackedDocumentPath(tracked)
+    }
+
+    this.suppressInternalWrite(targetPath)
+    try {
+      await writeFileAtomic(targetPath, Buffer.from(data), { fsync: true })
+    } catch (error) {
+      this.suppressedWrites.delete(targetPath)
+      throw error
+    }
+
+    const savedStats = await stat(targetPath)
+    const savedBuffer = Buffer.from(data)
+    const revision = this.createRevision(savedStats.mtimeMs, savedBuffer)
+    if (destinationPath) {
+      const project = this.findContainingProject(targetPath)
+      this.database.updateTrackedFile(tracked.id, targetPath, project?.id, tracked.documentKind)
+      await this.restartStandaloneWatcher()
+    } else {
+      this.database.setTrackedFileMissing(tracked.id, false)
+    }
+    return revision
   }
 
   async createEntry(request: CreateEntryRequest): Promise<DocumentSnapshot> {
     const project = this.requireProject(request.projectId)
+    const inferredKind = documentKindFromName(request.name)
+    const documentKind: Exclude<DocumentKind, 'pdf'> = request.documentKind
+      ?? (inferredKind === 'html' || inferredKind === 'docx' || inferredKind === 'markdown'
+        ? inferredKind
+        : 'markdown')
     let name = validateEntryName(request.name)
-    if (!isMarkdown(name)) name += '.md'
+    if (!documentKindFromName(name)) name += defaultExtensionForKind(documentKind)
+    if (documentKindFromName(name) !== documentKind) {
+      throw new DesktopError('INVALID_FILE', 'The filename extension does not match the selected document type.')
+    }
+    if (!project.enabledDocumentKinds.includes(documentKind)) {
+      throw new DesktopError('INVALID_FILE', 'Enable this document type in Project settings before creating it here.')
+    }
     const target = await resolveNewPath(project.path, request.parentPath, name)
-    await writeFile(target, `# ${basename(name, extname(name))}\n\n`, { flag: 'wx' })
+    await this.writeNewDocument(target, documentKind)
     return this.openAbsoluteDocument(target)
   }
 
-  async createStandaloneFile(filePath: string): Promise<DocumentSnapshot> {
+  async createStandaloneFile(
+    filePath: string,
+    documentKind: Exclude<DocumentKind, 'pdf'> = 'markdown'
+  ): Promise<DocumentSnapshot> {
     let target = filePath
-    if (!isMarkdown(target)) target += '.md'
-    const name = basename(target, extname(target))
-    await writeFile(target, `# ${name}\n\n`, { flag: 'wx' }).catch(async (error: NodeJS.ErrnoException) => {
+    if (!documentKindFromName(target)) target += defaultExtensionForKind(documentKind)
+    if (documentKindFromName(target) !== documentKind) {
+      throw new DesktopError('INVALID_FILE', 'The filename extension does not match the selected document type.')
+    }
+    await this.writeNewDocument(target, documentKind).catch(async (error: NodeJS.ErrnoException) => {
       if (error.code !== 'EEXIST') throw error
       throw new DesktopError('ALREADY_EXISTS', 'A file already exists at that location.')
     })
@@ -447,7 +630,14 @@ export class WorkspaceService {
     const source = await resolveExistingPath(project.path, request.path)
     const sourceStats = await stat(source)
     let name = validateEntryName(request.newName)
-    if (sourceStats.isFile() && !isMarkdown(name)) name += '.md'
+    if (sourceStats.isFile() && !documentKindFromName(name)) name += extname(source)
+    if (sourceStats.isFile() && !isSupportedDocumentName(name)) {
+      throw new DesktopError('INVALID_FILE', 'Use a Markdown, HTML, DOCX, or PDF filename.')
+    }
+    const renamedKind = sourceStats.isFile() ? documentKindFromName(name) : undefined
+    if (renamedKind && !project.enabledDocumentKinds.includes(renamedKind)) {
+      throw new DesktopError('INVALID_FILE', 'Enable this document type in Project settings before using that extension.')
+    }
     const target = await resolveNewPath(project.path, toPosixPath(relative(project.path, dirname(source))), name)
     try {
       await access(target)
@@ -522,8 +712,42 @@ export class WorkspaceService {
     return this.requireTrackedFile(fileId).path
   }
 
+  getTrackedDocumentKind(fileId: string): DocumentKind {
+    return this.requireTrackedFile(fileId).documentKind
+  }
+
   async resolveTrackedFilePath(fileId: string): Promise<string> {
     return this.resolveTrackedDocumentPath(this.requireTrackedFile(fileId))
+  }
+
+  async resolveBinarySession(sessionId: string): Promise<{
+    path: string
+    mimeType: string
+    size: number
+  }> {
+    const session = this.binarySessions.get(sessionId)
+    if (!session || session.environmentId !== this.requireEnvironment()) {
+      throw new DesktopError('NOT_FOUND', 'That document session has expired.')
+    }
+    const tracked = this.requireTrackedFile(session.fileId)
+    if (tracked.documentKind !== session.documentKind) {
+      throw new DesktopError('PERMISSION_DENIED', 'That document session no longer matches its file.')
+    }
+    const path = await this.resolveTrackedDocumentPath(tracked)
+    const fileStats = await stat(path)
+    this.assertDocumentSize(fileStats.size, tracked.documentKind)
+    await this.validateDocumentSignature(path, tracked.documentKind)
+    return {
+      path,
+      size: fileStats.size,
+      mimeType: tracked.documentKind === 'pdf'
+        ? 'application/pdf'
+        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+  }
+
+  releaseBinarySession(sessionId: string): void {
+    this.binarySessions.delete(sessionId)
   }
 
   markTrackedFileMissing(fileId: string): void {
@@ -543,11 +767,16 @@ export class WorkspaceService {
     const tracked = this.requireTrackedFile(fileId)
     const canonical = await realpath(replacementPath)
     const fileStats = await stat(canonical)
-    if (!fileStats.isFile() || !isMarkdown(canonical)) throw new DesktopError('INVALID_FILE', 'Choose a Markdown file.')
+    const documentKind = documentKindFromName(canonical)
+    if (!fileStats.isFile() || !documentKind) {
+      throw new DesktopError('INVALID_FILE', 'Choose a Markdown, HTML, DOCX, or PDF document.')
+    }
     const duplicate = this.database.findTrackedFile(this.requireEnvironment(), canonical)
-    if (duplicate && duplicate.id !== fileId) throw new DesktopError('ALREADY_EXISTS', 'That Markdown file is already tracked in this environment.')
+    if (duplicate && duplicate.id !== fileId) {
+      throw new DesktopError('ALREADY_EXISTS', 'That document is already tracked in this environment.')
+    }
     const project = this.findContainingProject(canonical)
-    this.database.updateTrackedFile(fileId, canonical, project?.id)
+    this.database.updateTrackedFile(fileId, canonical, project?.id, documentKind)
     if (!tracked.projectId || !project) await this.restartStandaloneWatcher()
     return this.readDocument(fileId, true)
   }
@@ -555,21 +784,22 @@ export class WorkspaceService {
   async readAsset(fileId: string, target: string): Promise<{ data: Buffer; mimeType: string }> {
     const tracked = this.requireTrackedFile(fileId)
     if (tracked.environmentId !== this.requireEnvironment()) throw new DesktopError('PERMISSION_DENIED', 'That asset is not available.')
-    if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) throw new DesktopError('INVALID_PATH', 'That image path is not local.')
+    if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) throw new DesktopError('INVALID_PATH', 'That asset path is not local.')
     const documentPath = await this.resolveTrackedDocumentPath(tracked)
     const project = tracked.projectId ? this.database.getProject(tracked.projectId) : null
     const authorityRoot = project?.path ?? dirname(documentPath)
     const candidate = resolve(dirname(documentPath), target.split(/[?#]/)[0] ?? '')
-    if (!isPathInside(authorityRoot, candidate)) throw new DesktopError('INVALID_PATH', 'That image points outside the allowed folder.')
+    if (!isPathInside(authorityRoot, candidate)) throw new DesktopError('INVALID_PATH', 'That asset points outside the allowed folder.')
     const canonical = await resolveExistingPath(authorityRoot, toPosixPath(relative(authorityRoot, candidate)))
-    const mimeType = IMAGE_MIME_TYPES[extname(canonical).toLowerCase()]
+    const mimeType = LOCAL_ASSET_MIME_TYPES[extname(canonical).toLowerCase()]
     if (!mimeType) throw new DesktopError('INVALID_FILE', 'That asset type is not supported.')
     const fileStats = await stat(canonical)
-    if (!fileStats.isFile() || fileStats.size > 30_000_000) throw new DesktopError('INVALID_FILE', 'That image is too large or is not a file.')
+    if (!fileStats.isFile() || fileStats.size > 30_000_000) throw new DesktopError('INVALID_FILE', 'That asset is too large or is not a file.')
     return { data: await readFile(canonical), mimeType }
   }
 
   async close(): Promise<void> {
+    this.binarySessions.clear()
     await this.stopWatchers()
   }
 
@@ -605,28 +835,73 @@ export class WorkspaceService {
   private async readTracked(tracked: TrackedFileRecord): Promise<DocumentSnapshot> {
     const safePath = await this.resolveTrackedDocumentPath(tracked)
     const fileStats = await stat(safePath)
-    this.assertDocumentSize(fileStats.size)
-    const buffer = await readFile(safePath)
-    this.assertDocumentSize(buffer.byteLength)
-    if (!fileStats.isFile() || !isMarkdown(safePath)) throw new DesktopError('INVALID_FILE', 'Aladdeen opens .md and .markdown files.')
-    const decoded = decodeMarkdown(buffer)
+    const documentKind = documentKindFromName(safePath)
+    if (!fileStats.isFile() || !documentKind) {
+      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, and PDF documents.')
+    }
+    this.assertDocumentSize(fileStats.size, documentKind)
+    await this.validateDocumentSignature(safePath, documentKind)
     this.database.setTrackedFileMissing(tracked.id, false)
-    const summary = this.trackedFileSummary({ ...tracked, missing: false })
-    return {
+    if (tracked.documentKind !== documentKind) {
+      this.database.updateTrackedFile(tracked.id, safePath, tracked.projectId, documentKind)
+    }
+    const current = { ...tracked, documentKind, missing: false }
+    const summary = this.trackedFileSummary(current)
+    const base = {
       id: tracked.id,
       environmentId: tracked.environmentId,
       projectId: summary.projectId,
       relativePath: summary.relativePath,
       name: summary.name,
       location: summary.location,
-      fullPath: summary.fullPath,
-      content: decoded.content,
-      revision: this.createRevision(fileStats.mtimeMs, buffer, decoded.lineEnding, decoded.hasBom)
+      fullPath: summary.fullPath
     }
+
+    if (isTextDocumentKind(documentKind)) {
+      const buffer = await readFile(safePath)
+      this.assertDocumentSize(buffer.byteLength, documentKind)
+      const decoded = decodeMarkdown(buffer)
+      return {
+        ...base,
+        documentKind,
+        content: decoded.content,
+        encoding: 'utf-8',
+        capabilities: DOCUMENT_CAPABILITIES[documentKind],
+        revision: this.createRevision(fileStats.mtimeMs, buffer, decoded.lineEnding, decoded.hasBom)
+      } satisfies TextDocumentSnapshot
+    }
+
+    const session = this.createBinarySession(tracked.id, tracked.environmentId, documentKind)
+    return {
+      ...base,
+      documentKind,
+      capabilities: DOCUMENT_CAPABILITIES[documentKind],
+      revision: {
+        mtimeMs: fileStats.mtimeMs,
+        size: fileStats.size,
+        sha256: await sha256File(safePath)
+      },
+      session: {
+        id: session,
+        url: `aladdeen-document://session/${encodeURIComponent(session)}`,
+        byteLength: fileStats.size,
+        signed: documentKind === 'pdf' ? await this.pdfAppearsSigned(safePath) : undefined
+      }
+    } satisfies BinaryDocumentSnapshot
   }
 
-  private createRevision(mtimeMs: number, buffer: Buffer, lineEnding: FileRevision['lineEnding'], hasBom: boolean): FileRevision {
-    return { mtimeMs, size: buffer.length, sha256: sha256(buffer), lineEnding, hasBom }
+  private createRevision(
+    mtimeMs: number,
+    buffer: Buffer,
+    lineEnding?: NonNullable<FileRevision['lineEnding']>,
+    hasBom?: boolean
+  ): FileRevision {
+    return {
+      mtimeMs,
+      size: buffer.length,
+      sha256: sha256(buffer),
+      ...(lineEnding ? { lineEnding, hasBom: Boolean(hasBom) } : {})
+    }
   }
 
   private async resolveTrackedDocumentPath(tracked: TrackedFileRecord): Promise<string> {
@@ -646,10 +921,141 @@ export class WorkspaceService {
     return canonical
   }
 
-  private assertDocumentSize(size: number): void {
-    if (size > MAX_DOCUMENT_BYTES) {
-      throw new DesktopError('INVALID_FILE', 'This Markdown file is larger than Aladdeen’s 20 MiB document limit.')
+  private assertDocumentSize(size: number, documentKind: DocumentKind): void {
+    const limit = isTextDocumentKind(documentKind) ? MAX_DOCUMENT_BYTES : MAX_BINARY_DOCUMENT_BYTES
+    if (size > limit) {
+      const label = isTextDocumentKind(documentKind) ? '20 MiB' : '512 MiB'
+      throw new DesktopError('INVALID_FILE', `This ${documentKind.toUpperCase()} document is larger than Aladdeen’s ${label} limit.`)
     }
+  }
+
+  private createBinarySession(
+    fileId: string,
+    environmentId: string,
+    documentKind: BinaryDocumentKind
+  ): string {
+    for (const [id, session] of this.binarySessions) {
+      if (session.fileId === fileId && session.environmentId === environmentId) return id
+    }
+    const id = randomUUID()
+    this.binarySessions.set(id, { fileId, environmentId, documentKind })
+    return id
+  }
+
+  private async validateDocumentSignature(
+    path: string,
+    documentKind: DocumentKind
+  ): Promise<void> {
+    if (documentKind === 'docx') {
+      try {
+        await inspectDocxPackage(path)
+      } catch (error) {
+        throw new DesktopError(
+          'INVALID_FILE',
+          'This file is not a safe, supported DOCX document.',
+          error instanceof Error ? error.message : undefined
+        )
+      }
+      return
+    }
+
+    const handle = await open(path, 'r')
+    try {
+      const header = Buffer.alloc(1024)
+      const { bytesRead } = await handle.read(header, 0, header.length, 0)
+      const bytes = header.subarray(0, bytesRead)
+      if (documentKind === 'pdf') {
+        const marker = bytes.indexOf(Buffer.from('%PDF-'))
+        if (marker < 0 || marker > 1019) {
+          throw new DesktopError('INVALID_FILE', 'This file does not contain a valid PDF signature.')
+        }
+        return
+      }
+      try {
+        const fileStats = await handle.stat()
+        this.assertDocumentSize(fileStats.size, documentKind)
+        const buffer = await readFile(path)
+        decodeMarkdown(buffer)
+      } catch (error) {
+        if (error instanceof DesktopError) throw error
+        throw new DesktopError(
+          'INVALID_FILE',
+          `This ${documentKind === 'html' ? 'HTML' : 'Markdown'} document is not valid UTF-8 text.`,
+          error instanceof Error ? error.message : undefined
+        )
+      }
+    } finally {
+      await handle.close()
+    }
+  }
+
+  private validateBinaryBuffer(
+    data: Uint8Array,
+    documentKind: BinaryDocumentKind
+  ): void {
+    if (documentKind === 'pdf') {
+      const header = new TextDecoder('latin1').decode(data.subarray(0, 1024))
+      if (!header.includes('%PDF-')) {
+        throw new DesktopError('INVALID_FILE', 'The PDF editor produced an invalid document.')
+      }
+      return
+    }
+    if (
+      data.byteLength < 4 ||
+      data[0] !== 0x50 ||
+      data[1] !== 0x4b ||
+      (data[2] !== 0x03 && data[2] !== 0x05 && data[2] !== 0x07)
+    ) {
+      throw new DesktopError('INVALID_FILE', 'The DOCX editor produced an invalid OOXML package.')
+    }
+    try {
+      inspectDocxBuffer(data)
+    } catch (error) {
+      throw new DesktopError(
+        'INVALID_FILE',
+        'The DOCX editor produced an unsafe or incomplete OOXML package.',
+        error instanceof Error ? error.message : undefined
+      )
+    }
+  }
+
+  private async pdfAppearsSigned(path: string): Promise<boolean> {
+    const fileStats = await stat(path)
+    const sampleSize = Math.min(fileStats.size, 8 * 1024 * 1024)
+    const handle = await open(path, 'r')
+    try {
+      const sample = Buffer.alloc(sampleSize)
+      await handle.read(sample, 0, sampleSize, 0)
+      const text = sample.toString('latin1')
+      return /\/ByteRange\s*\[|\/Type\s*\/Sig\b/.test(text)
+    } finally {
+      await handle.close()
+    }
+  }
+
+  private async writeNewDocument(
+    target: string,
+    documentKind: Exclude<DocumentKind, 'pdf'>
+  ): Promise<void> {
+    const title = basename(target, extname(target))
+    if (documentKind === 'markdown') {
+      await writeFile(target, `# ${title}\n\n`, { flag: 'wx' })
+      return
+    }
+    if (documentKind === 'html') {
+      await writeFile(
+        target,
+        `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>${escapeHtml(title)}</title>\n</head>\n<body>\n  <h1>${escapeHtml(title)}</h1>\n</body>\n</html>\n`,
+        { flag: 'wx' }
+      )
+      return
+    }
+    const document = new Document({
+      sections: [{
+        children: [new Paragraph({ text: title, heading: 'Title' })]
+      }]
+    })
+    await writeFile(target, await Packer.toBuffer(document), { flag: 'wx' })
   }
 
   private suppressInternalWrite(path: string): void {
@@ -671,6 +1077,7 @@ export class WorkspaceService {
       scopeMode: project.scopeMode,
       includePaths: project.includePaths,
       excludePatterns: project.excludePatterns,
+      enabledDocumentKinds: project.enabledDocumentKinds,
       groupName: project.groupName,
       pinned: project.pinned,
       archived: project.archived,
@@ -692,13 +1099,18 @@ export class WorkspaceService {
       fullPath: file.path,
       relativePath,
       lastOpenedAt: file.lastOpenedAt,
-      missing: file.missing
+      missing: file.missing,
+      documentKind: file.documentKind
     }
   }
 
-  private async scanProject(rootPath: string): Promise<{ files: ProjectIndexFileRecord[]; truncated: boolean }> {
+  private async scanProject(
+    rootPath: string,
+    enabledDocumentKinds: readonly DocumentKind[] = ALL_PROJECT_DOCUMENT_KINDS
+  ): Promise<{ files: ProjectIndexFileRecord[]; truncated: boolean }> {
     const files: ProjectIndexFileRecord[] = []
     const directories: Array<{ fullPath: string; relativePath: string }> = [{ fullPath: rootPath, relativePath: '' }]
+    const enabledKinds = new Set(enabledDocumentKinds)
 
     while (directories.length > 0) {
       const directory = directories.pop()!
@@ -714,7 +1126,8 @@ export class WorkspaceService {
           directories.push({ fullPath, relativePath: childRelative })
           continue
         }
-        if (!entry.isFile() || !isMarkdown(entry.name)) continue
+        const documentKind = documentKindFromName(entry.name)
+        if (!entry.isFile() || !documentKind || !enabledKinds.has(documentKind)) continue
         const fileStats = await stat(fullPath)
         if (!fileStats.isFile()) continue
         files.push({
@@ -723,7 +1136,8 @@ export class WorkspaceService {
           parentPath: toPosixPath(dirname(childRelative)) === '.' ? '' : toPosixPath(dirname(childRelative)),
           name: entry.name,
           mtimeMs: fileStats.mtimeMs,
-          size: fileStats.size
+          size: fileStats.size,
+          documentKind
         })
       }
     }
@@ -737,7 +1151,7 @@ export class WorkspaceService {
     }
     this.database.setProjectIndexStatus(project.id, 'indexing', project.fileCount)
     try {
-      const scan = await this.scanProject(project.path)
+      const scan = await this.scanProject(project.path, project.enabledDocumentKinds)
       const included = filterIndexedFiles(scan.files, project).map((file) => ({ ...file, projectId: project.id }))
       this.database.replaceProjectIndex(project.id, included)
     } catch (error) {
@@ -786,7 +1200,8 @@ export class WorkspaceService {
         if (!relation || !pathStats) return false
         const normalized = toPosixPath(relation)
         if (pathStats.isDirectory()) return normalizePatterns(project.excludePatterns).some((pattern) => matchesGlob(`${normalized}/`, pattern))
-        return !isMarkdown(normalized) || !isIncludedByScope(normalized, project)
+        const documentKind = documentKindFromName(normalized)
+        return !documentKind || !isIncludedByProjectPolicy(normalized, documentKind, project)
       }
     })
     watcher.on('all', (eventName, fullPath) => this.handleProjectEvent(project, eventName, fullPath))
@@ -801,7 +1216,11 @@ export class WorkspaceService {
       if (!file.projectId) return true
       const project = this.database.getProject(file.projectId)
       if (!project || project.archived || !isPathInside(project.path, file.path)) return true
-      return !isIncludedByScope(toPosixPath(relative(project.path, file.path)), project)
+      return !isIncludedByProjectPolicy(
+        toPosixPath(relative(project.path, file.path)),
+        file.documentKind,
+        project
+      )
     })
     if (exactFiles.length === 0) return
     const watchedEnvironmentId = this.environmentId
@@ -827,12 +1246,14 @@ export class WorkspaceService {
   private handleProjectEvent(project: ProjectRecord, eventName: string, fullPath: string): void {
     if (project.environmentId !== this.environmentId || !isPathInside(project.path, fullPath) || this.consumeSuppressed(fullPath)) return
     const isDirectory = eventName === 'addDir' || eventName === 'unlinkDir'
-    if (!isDirectory && !isMarkdown(fullPath)) return
+    const relativePath = toPosixPath(relative(project.path, fullPath))
+    const documentKind = documentKindFromName(fullPath)
+    if (!isDirectory && (!documentKind || !isIncludedByProjectPolicy(relativePath, documentKind, project))) return
     const file = this.database.listTrackedFiles(project.environmentId).find((candidate) => candidate.path === fullPath)
     const type: EnvironmentEvent['type'] = eventName === 'change' ? 'changed' : eventName.startsWith('unlink') ? 'removed' : 'added'
     if (file && type === 'removed') this.database.setTrackedFileMissing(file.id, true)
     if (file && type === 'added') this.database.setTrackedFileMissing(file.id, false)
-    this.onEvent({ type, projectId: project.id, fileId: file?.id, relativePath: toPosixPath(relative(project.path, fullPath)), isDirectory })
+    this.onEvent({ type, projectId: project.id, fileId: file?.id, relativePath, isDirectory })
     if (type !== 'changed' || isDirectory) this.scheduleProjectReindex(project)
   }
 
@@ -886,6 +1307,12 @@ function normalizePatterns(patterns: string[]): string[] {
   return [...new Set(patterns.map((pattern) => toPosixPath(pattern.trim()).replace(/^\//, '')).filter(Boolean))]
 }
 
+function normalizeDocumentKinds(kinds: readonly DocumentKind[]): DocumentKind[] {
+  const normalized = [...new Set(kinds.filter(isDocumentKind))]
+  if (normalized.length === 0) throw new DesktopError('INVALID_PATH', 'Choose at least one document type.')
+  return normalized
+}
+
 function isIncludedByScope(relativePath: string, project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns'>): boolean {
   const normalized = toPosixPath(relativePath)
   const included = project.scopeMode === 'all' || normalizeScopePaths(project.includePaths).some(
@@ -893,6 +1320,14 @@ function isIncludedByScope(relativePath: string, project: Pick<ProjectRecord, 's
   )
   if (!included) return false
   return !normalizePatterns(project.excludePatterns).some((pattern) => matchesGlob(normalized, pattern))
+}
+
+function isIncludedByProjectPolicy(
+  relativePath: string,
+  documentKind: DocumentKind,
+  project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'enabledDocumentKinds'>
+): boolean {
+  return project.enabledDocumentKinds.includes(documentKind) && isIncludedByScope(relativePath, project)
 }
 
 function matchesGlob(path: string, pattern: string): boolean {
@@ -910,9 +1345,15 @@ function matchesGlob(path: string, pattern: string): boolean {
 
 function filterIndexedFiles(
   files: ProjectIndexFileRecord[],
-  project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns'>
+  project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'enabledDocumentKinds'>
 ): ProjectIndexFileRecord[] {
-  return files.filter((file) => isIncludedByScope(file.relativePath, project))
+  return files.filter((file) => isIncludedByProjectPolicy(file.relativePath, file.documentKind, project))
+}
+
+function countDocumentKinds(files: readonly ProjectIndexFileRecord[]): Record<DocumentKind, number> {
+  const counts: Record<DocumentKind, number> = { markdown: 0, html: 0, docx: 0, pdf: 0 }
+  for (const file of files) counts[file.documentKind] += 1
+  return counts
 }
 
 function buildScopeTree(files: ProjectIndexFileRecord[]): ProjectScopeNode[] {
@@ -949,7 +1390,8 @@ function buildScopeTree(files: ProjectIndexFileRecord[]): ProjectScopeNode[] {
       name: file.name,
       path: file.relativePath,
       kind: 'file',
-      descendantCount: 1
+      descendantCount: 1,
+      documentKind: file.documentKind
     })
   }
 
@@ -982,4 +1424,19 @@ async function mapWithConcurrency<Input, Output>(
   })
   await Promise.all(workers)
   return outputs
+}
+
+async function sha256File(path: string): Promise<string> {
+  const hash = createHash('sha256')
+  const stream = createReadStream(path)
+  for await (const chunk of stream) hash.update(chunk as Buffer)
+  return hash.digest('hex')
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 }

@@ -2,8 +2,18 @@ import { useEffect, useMemo, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { FolderOpen, LoaderCircle, Pin, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
-import type { ProjectImportPreview, ProjectImportSelection, ProjectScopeMode } from '@shared/contracts'
+import type {
+  DocumentKind,
+  ProjectImportPreview,
+  ProjectImportSelection,
+  ProjectScopeMode
+} from '@shared/contracts'
+import { DEFAULT_PROJECT_DOCUMENT_KINDS } from '@shared/documents'
 import { cn } from '@renderer/lib/cn'
+import {
+  enabledDocumentCount,
+  filterProjectScopeTree
+} from '@renderer/lib/project-document-types'
 import {
   buttonClasses,
   dialogActionsClasses,
@@ -15,11 +25,13 @@ import {
 } from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
 import { ProjectScopeTree } from './ProjectScopeTree'
+import { ProjectDocumentTypes } from './ProjectDocumentTypes'
 
 interface DraftScope {
   mode: ProjectScopeMode
   selected: Set<string>
   excludePatterns: string
+  enabledDocumentKinds: Set<DocumentKind>
   groupName: string
   pinned: boolean
 }
@@ -35,6 +47,13 @@ export function AddProjectsDialog(): React.JSX.Element {
   const [saving, setSaving] = useState(false)
   const active = previews.find((preview) => preview.token === activeToken) ?? previews[0]
   const draft = active ? drafts[active.token] : undefined
+  const filteredTree = useMemo(
+    () => active && draft ? filterProjectScopeTree(active.tree, draft.enabledDocumentKinds) : [],
+    [active, draft]
+  )
+  const activeDocumentCount = active && draft
+    ? enabledDocumentCount(active.kindCounts, draft.enabledDocumentKinds)
+    : 0
 
   useEffect(() => {
     if (open) return
@@ -47,7 +66,7 @@ export function AddProjectsDialog(): React.JSX.Element {
 
   const valid = useMemo(() => previews.length > 0 && previews.every((preview) => {
     const value = drafts[preview.token]
-    return value && (value.mode === 'all' || value.selected.size > 0)
+    return value && value.enabledDocumentKinds.size > 0 && (value.mode === 'all' || value.selected.size > 0)
   }), [drafts, previews])
 
   const chooseFolders = async (): Promise<void> => {
@@ -64,6 +83,7 @@ export function AddProjectsDialog(): React.JSX.Element {
       mode: 'all' as const,
       selected: new Set<string>(),
       excludePatterns: '',
+      enabledDocumentKinds: new Set<DocumentKind>(DEFAULT_PROJECT_DOCUMENT_KINDS),
       groupName: '',
       pinned: false
     }])))
@@ -83,6 +103,7 @@ export function AddProjectsDialog(): React.JSX.Element {
         scopeMode: value.mode,
         includePaths: [...value.selected],
         excludePatterns: value.excludePatterns.split('\n').map((line) => line.trim()).filter(Boolean),
+        enabledDocumentKinds: [...value.enabledDocumentKinds],
         groupName: value.groupName.trim() || undefined,
         pinned: value.pinned
       }
@@ -102,7 +123,7 @@ export function AddProjectsDialog(): React.JSX.Element {
             <div>
               <Dialog.Title className={dialogTitleClasses}>Add project folders</Dialog.Title>
               <Dialog.Description className={dialogDescriptionClasses}>
-                Link folders in place, then choose whether Aladdeen indexes every Markdown file or only selected areas.
+                Link folders in place, then choose document types and locations to index.
               </Dialog.Description>
             </div>
             <Dialog.Close className={dialogCloseClasses} aria-label="Close"><X size={16} /></Dialog.Close>
@@ -123,10 +144,21 @@ export function AddProjectsDialog(): React.JSX.Element {
                     type="button"
                     className={preview.token === active?.token ? 'is-active' : ''}
                     onClick={() => setActiveToken(preview.token)}
-                    aria-label={`${preview.name}, ${preview.fileCount.toLocaleString()} Markdown files`}
+                    aria-label={`${preview.name}, ${enabledDocumentCount(
+                      preview.kindCounts,
+                      drafts[preview.token]?.enabledDocumentKinds ?? new Set(DEFAULT_PROJECT_DOCUMENT_KINDS)
+                    ).toLocaleString()} selected documents`}
                   >
                     <FolderOpen size={15} />
-                    <span><strong>{preview.name}</strong><small>{preview.fileCount.toLocaleString()} Markdown files</small></span>
+                    <span>
+                      <strong>{preview.name}</strong>
+                      <small>
+                        {enabledDocumentCount(
+                          preview.kindCounts,
+                          drafts[preview.token]?.enabledDocumentKinds ?? new Set(DEFAULT_PROJECT_DOCUMENT_KINDS)
+                        ).toLocaleString()} selected
+                      </small>
+                    </span>
                   </button>
                 ))}
                 <button className="add-more-projects" type="button" onClick={() => void chooseFolders()} disabled={choosing}>
@@ -141,10 +173,18 @@ export function AddProjectsDialog(): React.JSX.Element {
                     {active.truncated && <span className="scope-warning">Preview limited to 50,000 files</span>}
                   </div>
 
-                  <div className="scope-mode-grid">
+                  <div className="mt-4">
+                    <ProjectDocumentTypes
+                      enabled={draft.enabledDocumentKinds}
+                      counts={active.kindCounts}
+                      onChange={(enabledDocumentKinds) => updateDraft(active.token, { enabledDocumentKinds })}
+                    />
+                  </div>
+
+                  <div className="scope-mode-grid mt-4">
                     <label className={draft.mode === 'all' ? 'is-selected' : ''}>
                       <input type="radio" name={`scope-${active.token}`} checked={draft.mode === 'all'} onChange={() => updateDraft(active.token, { mode: 'all' })} />
-                      <span><strong>All Markdown files</strong><small>Best when the whole folder belongs in Aladdeen.</small></span>
+                      <span><strong>All enabled documents</strong><small>{activeDocumentCount.toLocaleString()} found in enabled formats.</small></span>
                     </label>
                     <label className={draft.mode === 'selected' ? 'is-selected' : ''}>
                       <input type="radio" name={`scope-${active.token}`} checked={draft.mode === 'selected'} onChange={() => updateDraft(active.token, { mode: 'selected' })} />
@@ -154,7 +194,7 @@ export function AddProjectsDialog(): React.JSX.Element {
 
                   {draft.mode === 'selected' && (
                     <ProjectScopeTree
-                      nodes={active.tree}
+                      nodes={filteredTree}
                       selected={draft.selected}
                       excludePatterns={parsePatterns(draft.excludePatterns)}
                       onChange={(selected) => updateDraft(active.token, { selected })}

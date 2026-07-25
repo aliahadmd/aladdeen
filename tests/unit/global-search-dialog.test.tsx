@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalSearchDialog } from '@renderer/components/GlobalSearchDialog'
 import { useAppStore } from '@renderer/store/app-store'
 import type { AladdeenApi, GlobalSearchEvent, OpenDocument } from '@shared/contracts'
+import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const environmentId = '11111111-1111-4111-8111-111111111111'
 const fileId = '22222222-2222-4222-8222-222222222222'
@@ -13,6 +14,9 @@ const document: OpenDocument = {
   name: 'draft.md',
   location: '~/Notes',
   fullPath: '/Users/test/Notes/draft.md',
+  documentKind: 'markdown',
+  encoding: 'utf-8',
+  capabilities: DOCUMENT_CAPABILITIES.markdown,
   content: 'draft needle',
   savedContent: 'draft',
   status: 'editing',
@@ -68,7 +72,8 @@ describe('global content search dialog', () => {
           location: '~/Notes',
           fullPath: '/Users/test/Notes/draft.md',
           lastOpenedAt: 1,
-          missing: false
+          missing: false,
+          documentKind: 'markdown'
         }],
         openFileIds: [fileId],
         activeFileId: fileId
@@ -89,7 +94,7 @@ describe('global content search dialog', () => {
   it('debounces dirty-buffer search and reveals a streamed result in the editor', async () => {
     render(<GlobalSearchDialog />)
     fireEvent.keyDown(window, { key: 'f', ctrlKey: true, shiftKey: true })
-    const input = await screen.findByLabelText('Search Markdown source')
+    const input = await screen.findByRole('textbox', { name: 'Search document contents' })
     fireEvent.change(input, { target: { value: 'needle' } })
 
     await waitFor(() => {

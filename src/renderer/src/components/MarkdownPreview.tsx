@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from 'react'
-import type { OpenDocument } from '@shared/contracts'
+import type { TextOpenDocument } from '@shared/contracts'
 import { useEffectiveDarkMode } from '@renderer/hooks/use-effective-dark-mode'
 import { useAppStore } from '@renderer/store/app-store'
 import { HeadingOutline } from './HeadingOutline'
@@ -9,7 +9,7 @@ export function MarkdownPreview({
   document,
   sourceNavigationReady = true
 }: {
-  document: OpenDocument
+  document: TextOpenDocument
   sourceNavigationReady?: boolean
 }): React.JSX.Element {
   const openRelativeDocument = useAppStore((state) => state.openRelativeDocument)

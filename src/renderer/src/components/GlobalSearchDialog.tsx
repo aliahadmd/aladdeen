@@ -23,6 +23,8 @@ import type {
 import { cn } from '@renderer/lib/cn'
 import { dialogOverlayClasses } from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
+import { getDocumentRuntime } from '@renderer/document-adapters/runtime'
+import { DocumentKindIcon } from './DocumentKindIcon'
 
 interface SearchProgress {
   scannedFiles: number
@@ -151,14 +153,26 @@ export function GlobalSearchDialog(): React.JSX.Element {
     activeSearchKey.current = searchKey
     completedSearchKey.current = null
 
+    const bufferOverrides = (await Promise.all(documents.map(async (document) => {
+      if (document.deleted) return null
+      if ('content' in document) {
+        return document.content !== document.savedContent
+          ? { fileId: document.id, content: document.content }
+          : null
+      }
+      if (!document.binaryDirty) return null
+      const content = await getDocumentRuntime(document.id)?.extractText?.()
+      return content === undefined || content === null
+        ? null
+        : { fileId: document.id, content }
+    }))).filter((override): override is { fileId: string; content: string } => override !== null)
+
     const result = await window.aladdeen.search.start({
       query: normalizedQuery,
       matchCase,
       wholeWord,
       scope,
-      bufferOverrides: documents
-        .filter((document) => !document.deleted && document.content !== document.savedContent)
-        .map((document) => ({ fileId: document.id, content: document.content }))
+      bufferOverrides
     })
     if (currentRequest !== requestId.current) {
       if (result.ok) void window.aladdeen.search.cancel(result.value.sessionId)
@@ -213,9 +227,9 @@ export function GlobalSearchDialog(): React.JSX.Element {
       <Dialog.Portal>
         <Dialog.Overlay className={cn(dialogOverlayClasses, 'global-search-overlay')} />
         <Dialog.Content className="global-search-dialog">
-          <Dialog.Title className="sr-only">Search Markdown contents</Dialog.Title>
+          <Dialog.Title className="sr-only">Search document contents</Dialog.Title>
           <Dialog.Description className="sr-only">
-            Search Markdown source across the active environment.
+            Search visible document text across the active environment.
           </Dialog.Description>
 
           <header className="global-search-header">
@@ -233,8 +247,8 @@ export function GlobalSearchDialog(): React.JSX.Element {
                 autoFocus
                 value={query}
                 onChange={(event) => setQuery(event.target.value.replace(/[\r\n]/g, ''))}
-                placeholder="Search Markdown source…"
-                aria-label="Search Markdown source"
+                placeholder="Search document contents…"
+                aria-label="Search document contents"
                 onKeyDown={(event) => {
                   if (event.key === 'ArrowDown' && results.length > 0) {
                     event.preventDefault()
@@ -298,7 +312,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
             {groups.map((group) => (
               <section className="global-search-group" key={group.key} aria-label={group.name}>
                 <div className="global-search-group-heading">
-                  <FileText size={14} />
+                  <DocumentKindIcon kind={group.matches[0]?.match.documentKind} size={14} />
                   <span><strong>{group.name}</strong><small>{group.location}</small></span>
                   <b>{group.matches.length}{group.truncated ? '+' : ''}</b>
                 </div>
@@ -334,8 +348,8 @@ export function GlobalSearchDialog(): React.JSX.Element {
                     : query.trim().length === 1
                       ? 'Press Enter to search for one character.'
                       : query.trim().length > 1
-                        ? 'No Markdown source matches this search.'
-                        : 'Search every selected Markdown file without importing its content.'}
+                        ? 'No document text matches this search.'
+                        : 'Search every selected document without storing its content.'}
                 </span>
               </div>
             )}

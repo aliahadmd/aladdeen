@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { MAX_DOCUMENT_BYTES, MAX_SEARCH_DOCUMENT_BYTES } from './limits'
+import {
+  MAX_DOCUMENT_BYTES,
+  MAX_SEARCH_DOCUMENT_BYTES
+} from './limits'
 
 const searchBufferSchema = z.string()
   .max(MAX_SEARCH_DOCUMENT_BYTES)
@@ -28,8 +31,8 @@ export const fileRevisionSchema = z.object({
   mtimeMs: z.number().finite().nonnegative(),
   size: z.number().int().nonnegative(),
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
-  lineEnding: z.enum(['LF', 'CRLF']),
-  hasBom: z.boolean()
+  lineEnding: z.enum(['LF', 'CRLF']).optional(),
+  hasBom: z.boolean().optional()
 })
 
 export const documentTargetSchema = z.discriminatedUnion('kind', [
@@ -77,7 +80,12 @@ export const saveDocumentSchema = z.object({
 export const createEntrySchema = z.object({
   projectId: idSchema,
   parentPath: relativePathSchema,
-  name: z.string().trim().min(1).max(255)
+  name: z.string().trim().min(1).max(255),
+  documentKind: z.enum(['markdown', 'html', 'docx']).optional()
+})
+
+export const createStandaloneDocumentSchema = z.object({
+  documentKind: z.enum(['markdown', 'html', 'docx'])
 })
 
 export const renameEntrySchema = z.object({
@@ -92,6 +100,12 @@ export const environmentStateSchema = z.object({
 })
 
 const projectScopeModeSchema = z.enum(['all', 'selected'])
+const projectDocumentKindSchema = z.enum(['markdown', 'html', 'docx', 'pdf'])
+const enabledDocumentKindsSchema = z
+  .array(projectDocumentKindSchema)
+  .min(1, 'Choose at least one document type.')
+  .max(4)
+  .refine((kinds) => new Set(kinds).size === kinds.length, 'Document types must be unique.')
 const projectIncludePathsSchema = z.array(relativePathSchema).max(20_000)
 const projectExcludePatternsSchema = z
   .array(z.string().trim().min(1).max(500).refine((value) => !value.includes('\0'), 'Pattern contains an invalid character'))
@@ -102,10 +116,11 @@ export const projectImportSelectionSchema = z.object({
   scopeMode: projectScopeModeSchema,
   includePaths: projectIncludePathsSchema,
   excludePatterns: projectExcludePatternsSchema,
+  enabledDocumentKinds: enabledDocumentKindsSchema,
   groupName: z.string().trim().max(60).optional(),
   pinned: z.boolean()
 }).refine((value) => value.scopeMode === 'all' || value.includePaths.length > 0, {
-  message: 'Choose at least one folder or Markdown file for a selective project.'
+  message: 'Choose at least one folder or document for a selective project.'
 })
 
 export const updateProjectSchema = z.object({
@@ -113,11 +128,12 @@ export const updateProjectSchema = z.object({
   scopeMode: projectScopeModeSchema,
   includePaths: projectIncludePathsSchema,
   excludePatterns: projectExcludePatternsSchema,
+  enabledDocumentKinds: enabledDocumentKindsSchema,
   groupName: z.string().trim().max(60).optional(),
   pinned: z.boolean(),
   archived: z.boolean()
 }).refine((value) => value.scopeMode === 'all' || value.includePaths.length > 0, {
-  message: 'Choose at least one folder or Markdown file for a selective project.'
+  message: 'Choose at least one folder or document for a selective project.'
 })
 
 export const settingsSchema = z.object({
@@ -132,6 +148,15 @@ export const exportRequestSchema = z.object({
   title: z.string().trim().min(1).max(255),
   content: documentContentSchema,
   format: z.enum(['pdf', 'docx'])
+})
+
+export const saveBinaryDocumentSchema = z.object({
+  requestId: idSchema,
+  fileId: idSchema,
+  expectedRevision: fileRevisionSchema,
+  byteLength: z.number().int().positive().max(512 * 1024 * 1024),
+  force: z.boolean().optional(),
+  saveAs: z.boolean().optional()
 })
 
 export const externalUrlSchema = z

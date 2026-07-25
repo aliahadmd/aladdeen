@@ -3,7 +3,18 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { DesktopError } from '@main/errors'
-import type { AppSettings, EnvironmentSummary, WorkspaceTreeNode } from '@shared/contracts'
+import type {
+  AppSettings,
+  DocumentKind,
+  EnvironmentSummary,
+  WorkspaceTreeNode
+} from '@shared/contracts'
+import {
+  ALL_PROJECT_DOCUMENT_KINDS,
+  DEFAULT_PROJECT_DOCUMENT_KINDS,
+  documentKindFromName,
+  isDocumentKind
+} from '@shared/documents'
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
@@ -45,6 +56,7 @@ export interface ProjectRecord {
   scopeMode: 'all' | 'selected'
   includePaths: string[]
   excludePatterns: string[]
+  enabledDocumentKinds: DocumentKind[]
   groupName?: string
   pinned: boolean
   archived: boolean
@@ -60,7 +72,13 @@ export interface ProjectIndexFileRecord {
   name: string
   mtimeMs: number
   size: number
+  documentKind: DocumentKind
 }
+
+type ProjectUpdateOptions = Pick<
+  ProjectRecord,
+  'scopeMode' | 'includePaths' | 'excludePatterns' | 'enabledDocumentKinds' | 'groupName' | 'pinned' | 'archived'
+>
 
 export interface TrackedFileRecord {
   id: string
@@ -69,6 +87,7 @@ export interface TrackedFileRecord {
   path: string
   lastOpenedAt: number
   missing: boolean
+  documentKind: DocumentKind
 }
 
 export interface EnvironmentStateRecord {
@@ -219,7 +238,7 @@ export class AppDatabase {
       `)
       try {
         for (const project of this.listProjectsForDirectoryBackfill()) {
-          this.insertProjectDirectories(project.id, this.listProjectIndex(project.id))
+          this.insertProjectDirectories(project.id, this.listProjectIndexForDirectoryBackfill(project.id))
         }
         this.db.exec('PRAGMA user_version = 4; COMMIT;')
       } catch (error) {
@@ -227,10 +246,74 @@ export class AppDatabase {
         throw error
       }
     }
+
+    if (row.user_version < 5) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE environment_files
+          ADD COLUMN document_kind TEXT NOT NULL DEFAULT 'markdown';
+        ALTER TABLE project_index_files
+          ADD COLUMN document_kind TEXT NOT NULL DEFAULT 'markdown';
+        UPDATE environment_files
+          SET document_kind = CASE
+            WHEN lower(path) LIKE '%.html' OR lower(path) LIKE '%.htm' THEN 'html'
+            WHEN lower(path) LIKE '%.docx' THEN 'docx'
+            WHEN lower(path) LIKE '%.pdf' THEN 'pdf'
+            ELSE 'markdown'
+          END;
+        UPDATE project_index_files
+          SET document_kind = CASE
+            WHEN lower(relative_path) LIKE '%.html' OR lower(relative_path) LIKE '%.htm' THEN 'html'
+            WHEN lower(relative_path) LIKE '%.docx' THEN 'docx'
+            WHEN lower(relative_path) LIKE '%.pdf' THEN 'pdf'
+            ELSE 'markdown'
+          END;
+        CREATE INDEX project_index_kind
+          ON project_index_files(project_id, document_kind, relative_path COLLATE NOCASE);
+        PRAGMA user_version = 5;
+        COMMIT;
+      `)
+    }
+
+    if (row.user_version < 6) {
+      this.db.exec(`
+        BEGIN;
+        ALTER TABLE environment_projects
+          ADD COLUMN enabled_document_kinds TEXT NOT NULL
+          DEFAULT '["markdown","html","docx","pdf"]';
+        UPDATE environment_projects
+          SET indexed_at = NULL,
+              index_status = CASE WHEN archived = 1 THEN 'paused' ELSE 'indexing' END;
+        PRAGMA user_version = 6;
+        COMMIT;
+      `)
+    }
   }
 
   private listProjectsForDirectoryBackfill(): Array<{ id: string }> {
     return this.db.prepare('SELECT id FROM environment_projects').all() as Array<{ id: string }>
+  }
+
+  private listProjectIndexForDirectoryBackfill(projectId: string): ProjectIndexFileRecord[] {
+    return (this.db.prepare(`
+      SELECT project_id, relative_path, parent_path, name, mtime_ms, size
+      FROM project_index_files WHERE project_id = ?
+    `).all(projectId) as Array<{
+      project_id: string
+      relative_path: string
+      parent_path: string
+      name: string
+      mtime_ms: number
+      size: number
+    }>).map((file) => ({
+      projectId: file.project_id,
+      relativePath: file.relative_path,
+      parentPath: file.parent_path,
+      name: file.name,
+      mtimeMs: file.mtime_ms,
+      size: file.size,
+      documentKind: documentKindFromName(file.name) ?? 'markdown'
+    }))
   }
 
   private importLegacyWorkspaceHistory(): void {
@@ -378,7 +461,7 @@ export class AppDatabase {
   listProjects(environmentId: string): ProjectRecord[] {
     return (this.db
       .prepare(`SELECT id, environment_id, path, name, last_opened_at, scope_mode, include_paths,
-        exclude_patterns, group_name, pinned, archived, file_count, index_status, indexed_at
+        exclude_patterns, enabled_document_kinds, group_name, pinned, archived, file_count, index_status, indexed_at
         FROM environment_projects WHERE environment_id = ?
         ORDER BY pinned DESC, COALESCE(group_name, '') COLLATE NOCASE, name COLLATE NOCASE`)
       .all(environmentId) as unknown as ProjectRow[]).map(projectFromRow)
@@ -387,7 +470,7 @@ export class AppDatabase {
   getProject(id: string): ProjectRecord | null {
     const row = this.db
       .prepare(`SELECT id, environment_id, path, name, last_opened_at, scope_mode, include_paths,
-        exclude_patterns, group_name, pinned, archived, file_count, index_status, indexed_at
+        exclude_patterns, enabled_document_kinds, group_name, pinned, archived, file_count, index_status, indexed_at
         FROM environment_projects WHERE id = ?`)
       .get(id) as ProjectRow | undefined
     return row ? projectFromRow(row) : null
@@ -401,6 +484,7 @@ export class AppDatabase {
       scopeMode?: ProjectRecord['scopeMode']
       includePaths?: string[]
       excludePatterns?: string[]
+      enabledDocumentKinds?: DocumentKind[]
       groupName?: string
       pinned?: boolean
     } = {}
@@ -414,8 +498,8 @@ export class AppDatabase {
     this.db
       .prepare(`INSERT INTO environment_projects (
         id, environment_id, path, name, last_opened_at, scope_mode, include_paths,
-        exclude_patterns, group_name, pinned, archived, file_count, index_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'indexing')`)
+        exclude_patterns, enabled_document_kinds, group_name, pinned, archived, file_count, index_status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, 'indexing')`)
       .run(
         id,
         environmentId,
@@ -425,6 +509,7 @@ export class AppDatabase {
         options.scopeMode ?? 'all',
         JSON.stringify(options.includePaths ?? []),
         JSON.stringify(options.excludePatterns ?? []),
+        JSON.stringify(options.enabledDocumentKinds ?? DEFAULT_PROJECT_DOCUMENT_KINDS),
         normalizeOptionalText(options.groupName),
         options.pinned ? 1 : 0
       )
@@ -434,16 +519,39 @@ export class AppDatabase {
 
   updateProject(
     id: string,
-    options: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'groupName' | 'pinned' | 'archived'>
+    options: ProjectUpdateOptions
   ): ProjectRecord {
+    this.updateProjectRow(id, options)
+    return this.getProject(id)!
+  }
+
+  updateProjectWithIndex(
+    id: string,
+    options: ProjectUpdateOptions,
+    files: ProjectIndexFileRecord[]
+  ): ProjectRecord {
+    this.db.exec('BEGIN')
+    try {
+      this.updateProjectRow(id, options)
+      this.replaceProjectIndexRows(id, files)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+    return this.getProject(id)!
+  }
+
+  private updateProjectRow(id: string, options: ProjectUpdateOptions): void {
     const result = this.db
       .prepare(`UPDATE environment_projects SET scope_mode = ?, include_paths = ?, exclude_patterns = ?,
-        group_name = ?, pinned = ?, archived = ?, index_status = ?
+        enabled_document_kinds = ?, group_name = ?, pinned = ?, archived = ?, index_status = ?
         WHERE id = ?`)
       .run(
         options.scopeMode,
         JSON.stringify(options.includePaths),
         JSON.stringify(options.excludePatterns),
+        JSON.stringify(options.enabledDocumentKinds),
         normalizeOptionalText(options.groupName),
         options.pinned ? 1 : 0,
         options.archived ? 1 : 0,
@@ -451,7 +559,6 @@ export class AppDatabase {
         id
       )
     if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That project no longer exists.')
-    return this.getProject(id)!
   }
 
   setProjectIndexStatus(
@@ -470,22 +577,35 @@ export class AppDatabase {
   replaceProjectIndex(projectId: string, files: ProjectIndexFileRecord[]): void {
     this.db.exec('BEGIN')
     try {
-      this.db.prepare('DELETE FROM project_index_files WHERE project_id = ?').run(projectId)
-      this.db.prepare('DELETE FROM project_index_directories WHERE project_id = ?').run(projectId)
-      const insert = this.db.prepare(`INSERT INTO project_index_files
-        (project_id, relative_path, parent_path, name, mtime_ms, size) VALUES (?, ?, ?, ?, ?, ?)`)
-      for (const file of files) {
-        insert.run(projectId, file.relativePath, file.parentPath, file.name, file.mtimeMs, file.size)
-      }
-      this.insertProjectDirectories(projectId, files)
-      this.db
-        .prepare("UPDATE environment_projects SET file_count = ?, index_status = 'ready', indexed_at = ? WHERE id = ?")
-        .run(files.length, Date.now(), projectId)
+      this.replaceProjectIndexRows(projectId, files)
       this.db.exec('COMMIT')
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
     }
+  }
+
+  private replaceProjectIndexRows(projectId: string, files: ProjectIndexFileRecord[]): void {
+    this.db.prepare('DELETE FROM project_index_files WHERE project_id = ?').run(projectId)
+    this.db.prepare('DELETE FROM project_index_directories WHERE project_id = ?').run(projectId)
+    const insert = this.db.prepare(`INSERT INTO project_index_files
+      (project_id, relative_path, parent_path, name, mtime_ms, size, document_kind)
+      VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    for (const file of files) {
+      insert.run(
+        projectId,
+        file.relativePath,
+        file.parentPath,
+        file.name,
+        file.mtimeMs,
+        file.size,
+        file.documentKind
+      )
+    }
+    this.insertProjectDirectories(projectId, files)
+    this.db
+      .prepare("UPDATE environment_projects SET file_count = ?, index_status = 'ready', indexed_at = ? WHERE id = ?")
+      .run(files.length, Date.now(), projectId)
   }
 
   private insertProjectDirectories(projectId: string, files: ProjectIndexFileRecord[]): void {
@@ -557,14 +677,15 @@ export class AppDatabase {
         path: row.relative_path,
         name: row.name,
         kind: row.kind,
-        descendantCount: row.descendant_count ?? undefined
+        descendantCount: row.descendant_count ?? undefined,
+        documentKind: row.kind === 'file' ? documentKindFromName(row.name) ?? undefined : undefined
       }))
     }
   }
 
   listProjectIndex(projectId: string): ProjectIndexFileRecord[] {
     return (this.db
-      .prepare(`SELECT project_id, relative_path, parent_path, name, mtime_ms, size
+      .prepare(`SELECT project_id, relative_path, parent_path, name, mtime_ms, size, document_kind
         FROM project_index_files WHERE project_id = ? ORDER BY relative_path COLLATE NOCASE`)
       .all(projectId) as Array<{
         project_id: string
@@ -573,13 +694,15 @@ export class AppDatabase {
         name: string
         mtime_ms: number
         size: number
+        document_kind: string
       }>).map((row) => ({
       projectId: row.project_id,
       relativePath: row.relative_path,
       parentPath: row.parent_path,
       name: row.name,
       mtimeMs: row.mtime_ms,
-      size: row.size
+      size: row.size,
+      documentKind: normalizeDocumentKind(row.document_kind, row.name)
     }))
   }
 
@@ -589,6 +712,7 @@ export class AppDatabase {
     const pattern = `%${escapeLike(query)}%`
     return (this.db
       .prepare(`SELECT f.project_id, f.relative_path, f.parent_path, f.name, f.mtime_ms, f.size,
+          f.document_kind,
           p.name AS project_name
         FROM project_index_files f
         JOIN environment_projects p ON p.id = f.project_id
@@ -603,6 +727,7 @@ export class AppDatabase {
         name: string
         mtime_ms: number
         size: number
+        document_kind: string
         project_name: string
       }>).map((row) => ({
       projectId: row.project_id,
@@ -611,7 +736,8 @@ export class AppDatabase {
       name: row.name,
       mtimeMs: row.mtime_ms,
       size: row.size,
-      projectName: row.project_name
+      projectName: row.project_name,
+      documentKind: normalizeDocumentKind(row.document_kind, row.name)
     }))
   }
 
@@ -636,25 +762,52 @@ export class AppDatabase {
 
   listTrackedFiles(environmentId: string): TrackedFileRecord[] {
     return (this.db
-      .prepare('SELECT id, environment_id, project_id, path, last_opened_at, missing FROM environment_files WHERE environment_id = ? ORDER BY last_opened_at DESC')
-      .all(environmentId) as Array<{ id: string; environment_id: string; project_id: string | null; path: string; last_opened_at: number; missing: number }>).map(
+      .prepare(`SELECT id, environment_id, project_id, path, last_opened_at, missing, document_kind
+        FROM environment_files WHERE environment_id = ? ORDER BY last_opened_at DESC`)
+      .all(environmentId) as Array<{
+        id: string
+        environment_id: string
+        project_id: string | null
+        path: string
+        last_opened_at: number
+        missing: number
+        document_kind: string
+      }>).map(
       (row) => ({
         id: row.id,
         environmentId: row.environment_id,
         projectId: row.project_id ?? undefined,
         path: row.path,
         lastOpenedAt: row.last_opened_at,
-        missing: Boolean(row.missing)
+        missing: Boolean(row.missing),
+        documentKind: normalizeDocumentKind(row.document_kind, row.path)
       })
     )
   }
 
   getTrackedFile(id: string): TrackedFileRecord | null {
     const row = this.db
-      .prepare('SELECT id, environment_id, project_id, path, last_opened_at, missing FROM environment_files WHERE id = ?')
-      .get(id) as { id: string; environment_id: string; project_id: string | null; path: string; last_opened_at: number; missing: number } | undefined
+      .prepare(`SELECT id, environment_id, project_id, path, last_opened_at, missing, document_kind
+        FROM environment_files WHERE id = ?`)
+      .get(id) as {
+        id: string
+        environment_id: string
+        project_id: string | null
+        path: string
+        last_opened_at: number
+        missing: number
+        document_kind: string
+      } | undefined
     return row
-      ? { id: row.id, environmentId: row.environment_id, projectId: row.project_id ?? undefined, path: row.path, lastOpenedAt: row.last_opened_at, missing: Boolean(row.missing) }
+      ? {
+          id: row.id,
+          environmentId: row.environment_id,
+          projectId: row.project_id ?? undefined,
+          path: row.path,
+          lastOpenedAt: row.last_opened_at,
+          missing: Boolean(row.missing),
+          documentKind: normalizeDocumentKind(row.document_kind, row.path)
+        }
       : null
   }
 
@@ -665,38 +818,64 @@ export class AppDatabase {
     return row ? this.getTrackedFile(row.id) : null
   }
 
-  upsertTrackedFile(environmentId: string, path: string, projectId?: string): TrackedFileRecord {
+  upsertTrackedFile(
+    environmentId: string,
+    path: string,
+    projectId?: string,
+    documentKind = documentKindFromName(path) ?? 'markdown'
+  ): TrackedFileRecord {
     const existing = this.findTrackedFile(environmentId, path)
     const now = Date.now()
     if (existing) {
       this.db
-        .prepare('UPDATE environment_files SET project_id = ?, last_opened_at = ?, missing = 0 WHERE id = ?')
-        .run(projectId ?? null, now, existing.id)
-      return { ...existing, projectId, lastOpenedAt: now, missing: false }
+        .prepare(`UPDATE environment_files
+          SET project_id = ?, document_kind = ?, last_opened_at = ?, missing = 0 WHERE id = ?`)
+        .run(projectId ?? null, documentKind, now, existing.id)
+      return { ...existing, projectId, documentKind, lastOpenedAt: now, missing: false }
     }
     const id = randomUUID()
     this.db
-      .prepare('INSERT INTO environment_files (id, environment_id, project_id, path, last_opened_at, missing) VALUES (?, ?, ?, ?, ?, 0)')
-      .run(id, environmentId, projectId ?? null, path, now)
-    return { id, environmentId, projectId, path, lastOpenedAt: now, missing: false }
+      .prepare(`INSERT INTO environment_files
+        (id, environment_id, project_id, path, last_opened_at, missing, document_kind)
+        VALUES (?, ?, ?, ?, ?, 0, ?)`)
+      .run(id, environmentId, projectId ?? null, path, now, documentKind)
+    return { id, environmentId, projectId, path, lastOpenedAt: now, missing: false, documentKind }
   }
 
-  updateTrackedFile(id: string, path: string, projectId?: string): void {
+  updateTrackedFile(
+    id: string,
+    path: string,
+    projectId?: string,
+    documentKind = documentKindFromName(path) ?? 'markdown'
+  ): void {
     const result = this.db
-      .prepare('UPDATE environment_files SET path = ?, project_id = ?, missing = 0, last_opened_at = ? WHERE id = ?')
-      .run(path, projectId ?? null, Date.now(), id)
+      .prepare(`UPDATE environment_files
+        SET path = ?, project_id = ?, document_kind = ?, missing = 0, last_opened_at = ? WHERE id = ?`)
+      .run(path, projectId ?? null, documentKind, Date.now(), id)
     if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'That file is no longer tracked.')
   }
 
-  updateTrackedFiles(changes: Array<{ id: string; path: string; projectId?: string }>): void {
+  updateTrackedFiles(changes: Array<{
+    id: string
+    path: string
+    projectId?: string
+    documentKind?: DocumentKind
+  }>): void {
     this.db.exec('BEGIN')
     try {
       const update = this.db.prepare(
-        'UPDATE environment_files SET path = ?, project_id = ?, missing = 0, last_opened_at = ? WHERE id = ?'
+        `UPDATE environment_files
+          SET path = ?, project_id = ?, document_kind = ?, missing = 0, last_opened_at = ? WHERE id = ?`
       )
       const now = Date.now()
       for (const change of changes) {
-        const result = update.run(change.path, change.projectId ?? null, now, change.id)
+        const result = update.run(
+          change.path,
+          change.projectId ?? null,
+          change.documentKind ?? documentKindFromName(change.path) ?? 'markdown',
+          now,
+          change.id
+        )
         if (result.changes === 0) throw new DesktopError('NOT_FOUND', 'A tracked file no longer exists.')
       }
       this.db.exec('COMMIT')
@@ -773,6 +952,7 @@ interface ProjectRow {
   scope_mode: string
   include_paths: string
   exclude_patterns: string
+  enabled_document_kinds: string
   group_name: string | null
   pinned: number
   archived: number
@@ -796,6 +976,7 @@ function projectFromRow(row: ProjectRow): ProjectRecord {
     scopeMode,
     includePaths: parseStringArray(row.include_paths),
     excludePatterns: parseStringArray(row.exclude_patterns),
+    enabledDocumentKinds: parseDocumentKinds(row.enabled_document_kinds),
     groupName: row.group_name ?? undefined,
     pinned: Boolean(row.pinned),
     archived: Boolean(row.archived),
@@ -805,6 +986,11 @@ function projectFromRow(row: ProjectRow): ProjectRecord {
   }
 }
 
+function parseDocumentKinds(value?: string): DocumentKind[] {
+  const parsed = parseStringArray(value).filter(isDocumentKind)
+  return parsed.length > 0 ? [...new Set(parsed)] : [...ALL_PROJECT_DOCUMENT_KINDS]
+}
+
 function normalizeOptionalText(value?: string): string | null {
   const normalized = value?.trim()
   return normalized ? normalized : null
@@ -812,4 +998,9 @@ function normalizeOptionalText(value?: string): string | null {
 
 function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, '\\$&')
+}
+
+function normalizeDocumentKind(value: string, name: string): DocumentKind {
+  if (value === 'markdown' || value === 'html' || value === 'docx' || value === 'pdf') return value
+  return documentKindFromName(name) ?? 'markdown'
 }

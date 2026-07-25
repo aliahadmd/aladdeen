@@ -17,6 +17,11 @@ describe('application metadata database', () => {
     const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
     created.push(directory)
     const database = new AppDatabase(directory)
+    const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    expect(
+      (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+    ).toBe(6)
+    migrated.close()
 
     expect(database.getSettings()).toEqual({
       theme: 'system',
@@ -27,11 +32,13 @@ describe('application metadata database', () => {
     database.setSettings({ theme: 'dark', accent: 'rose', sidebarWidth: 368, sidebarCollapsed: true })
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
+    expect(project.enabledDocumentKinds).toEqual(['markdown'])
     database.replaceProjectIndex(project.id, [{
       projectId: project.id,
       relativePath: 'hello.md',
       parentPath: '',
       name: 'hello.md',
+      documentKind: 'markdown',
       mtimeMs: 100,
       size: 12
     }, {
@@ -39,6 +46,7 @@ describe('application metadata database', () => {
       relativePath: 'guides/start.md',
       parentPath: 'guides',
       name: 'start.md',
+      documentKind: 'markdown',
       mtimeMs: 101,
       size: 14
     }])
@@ -46,6 +54,7 @@ describe('application metadata database', () => {
       scopeMode: 'selected',
       includePaths: ['hello.md'],
       excludePatterns: ['archive/**'],
+      enabledDocumentKinds: ['markdown', 'html'],
       groupName: 'Writing',
       pinned: true,
       archived: false
@@ -66,6 +75,7 @@ describe('application metadata database', () => {
       path: '/notes',
       scopeMode: 'selected',
       includePaths: ['hello.md'],
+      enabledDocumentKinds: ['markdown', 'html'],
       groupName: 'Writing',
       pinned: true
     })
@@ -122,6 +132,7 @@ describe('application metadata database', () => {
         relativePath: `${folder}/${name}`,
         parentPath: folder,
         name,
+        documentKind: 'markdown',
         mtimeMs: index,
         size: 100
       }
@@ -167,6 +178,7 @@ describe('application metadata database', () => {
     const file = database.listTrackedFiles(environment.id)[0]!
     expect(environment.name).toBe('Personal')
     expect(project.path).toBe('/notes')
+    expect(project.enabledDocumentKinds).toEqual(['markdown', 'html', 'docx', 'pdf'])
     expect(database.getProjectExpandedPaths(project.id)).toEqual(['guides'])
     expect(file.path).toBe('/notes/hello.md')
     expect(database.getEnvironmentState(environment.id).activeFileId).toBe(file.id)

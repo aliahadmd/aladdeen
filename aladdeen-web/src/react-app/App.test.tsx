@@ -20,7 +20,7 @@ describe("Aladdeen landing page", () => {
 
 		expect(
 			screen.getByRole("heading", {
-				name: "All your Markdown, one calm place.",
+				name: "Your research, one calm workspace.",
 			}),
 		).toBeInTheDocument();
 		expect(

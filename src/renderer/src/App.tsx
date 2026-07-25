@@ -3,6 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import type { CloseRequest } from '@shared/contracts'
+import { DOCUMENT_EXTENSION_PATTERN } from '@shared/documents'
 import { AddProjectsDialog } from './components/AddProjectsDialog'
 import { BrandMark } from './components/BrandMark'
 import { CloseRecoveryDialog } from './components/CloseRecoveryDialog'
@@ -34,7 +35,7 @@ export default function App(): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
   const acceptSystemOpenFile = useAppStore((state) => state.acceptSystemOpenFile)
   const handleEnvironmentEvent = useAppStore((state) => state.handleEnvironmentEvent)
-  const openDroppedFile = useAppStore((state) => state.openDroppedFile)
+  const openDroppedFiles = useAppStore((state) => state.openDroppedFiles)
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
@@ -45,10 +46,13 @@ export default function App(): React.JSX.Element {
   const saveDocument = useAppStore((state) => state.saveDocument)
   const addProject = useAppStore((state) => state.addProject)
   const openFile = useAppStore((state) => state.openFile)
+  const createFile = useAppStore((state) => state.createFile)
   const dark = useEffectiveDarkMode()
   const sidebarWidthRef = useRef(settings.sidebarWidth)
   const resizeState = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
+  const dragDepth = useRef(0)
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null)
+  const [dragOpen, setDragOpen] = useState(false)
 
   useEffect(() => {
     void initialize()
@@ -59,6 +63,14 @@ export default function App(): React.JSX.Element {
       offOpenFileRequest()
     }
   }, [acceptSystemOpenFile, handleEnvironmentEvent, initialize])
+
+  useEffect(() => window.aladdeen.document.onOpenDocumentRequest(() => {
+    void openFile()
+  }), [openFile])
+
+  useEffect(() => window.aladdeen.document.onCreateDocumentRequest((kind) => {
+    void createFile(undefined, kind)
+  }), [createFile])
 
   useEffect(() => window.aladdeen.lifecycle.onPrepareClose((request) => {
     void flushDocuments().then(async (saved) => {
@@ -118,8 +130,11 @@ export default function App(): React.JSX.Element {
         event.preventDefault()
         void saveDocument(activeFileId)
       } else if (event.key.toLowerCase() === 'e') {
-        event.preventDefault()
-        setEditing(!editing)
+        const active = useAppStore.getState().documents.find((document) => document.id === activeFileId)
+        if (active?.documentKind === 'markdown') {
+          event.preventDefault()
+          setEditing(!editing)
+        }
       } else if (event.key.toLowerCase() === 'o' && event.shiftKey) {
         event.preventDefault()
         void addProject()
@@ -130,26 +145,60 @@ export default function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [activeFileId, addProject, editing, openFile, saveDocument, setEditing, setSidebarOpen])
+  }, [
+    activeFileId,
+    addProject,
+    createFile,
+    editing,
+    openFile,
+    saveDocument,
+    setEditing,
+    setSidebarOpen
+  ])
 
   useEffect(() => {
     const prevent = (event: DragEvent): void => {
-      if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
+      if (!event.dataTransfer?.types.includes('Files')) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'link'
+      setDragOpen(true)
+    }
+    const enter = (event: DragEvent): void => {
+      if (!event.dataTransfer?.types.includes('Files')) return
+      dragDepth.current += 1
+      prevent(event)
+    }
+    const leave = (event: DragEvent): void => {
+      if (!event.dataTransfer?.types.includes('Files')) return
+      dragDepth.current = Math.max(0, dragDepth.current - 1)
+      if (dragDepth.current === 0) setDragOpen(false)
     }
     const drop = (event: DragEvent): void => {
       if (!event.dataTransfer?.files.length) return
       event.preventDefault()
-      for (const file of Array.from(event.dataTransfer.files)) {
-        if (/\.(md|markdown)$/i.test(file.name)) void openDroppedFile(file)
+      const files = Array.from(event.dataTransfer.files)
+      const documents = files.filter((file) => DOCUMENT_EXTENSION_PATTERN.test(file.name)).slice(0, 20)
+      const unsupported = files.length - documents.length
+      dragDepth.current = 0
+      setDragOpen(false)
+      if (documents.length > 0) void openDroppedFiles(documents)
+      if (unsupported > 0) {
+        toast.warning(`${unsupported} unsupported item${unsupported === 1 ? ' was' : 's were'} skipped.`)
       }
     }
+    window.addEventListener('dragenter', enter)
     window.addEventListener('dragover', prevent)
+    window.addEventListener('dragleave', leave)
     window.addEventListener('drop', drop)
     return () => {
+      window.removeEventListener('dragenter', enter)
       window.removeEventListener('dragover', prevent)
+      window.removeEventListener('dragleave', leave)
       window.removeEventListener('drop', drop)
     }
-  }, [openDroppedFile])
+  }, [
+    openDroppedFiles
+  ])
 
   if (bootStatus !== 'ready') {
     return (
@@ -290,6 +339,26 @@ export default function App(): React.JSX.Element {
         onCancel={() => completeRecovery('cancelled')}
       />
       <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'app-toast' }} />
+      {dragOpen && (
+        <div className="pointer-events-none fixed inset-3 z-[145] grid place-items-center rounded-[17px] border-2 border-dashed border-accent bg-[color-mix(in_oklab,var(--accent-soft)_76%,var(--surface-elevated))] shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--accent)_22%,transparent)] backdrop-blur-[5px]">
+          <div className="rounded-xl border border-border bg-[color-mix(in_oklab,var(--surface-elevated)_94%,transparent)] px-7 py-5 text-center shadow-[0_18px_45px_rgb(0_0_0/.16)]">
+            <FileImportMark />
+            <strong className="mt-2 block text-[15px] text-foreground">Open documents</strong>
+            <span className="mt-1 block text-[11px] text-foreground-soft">
+              Original files stay in place and open in format-specific tabs.
+            </span>
+            <small className="mt-2 block text-[9px] text-foreground-muted">Markdown · DOCX · HTML · PDF</small>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function FileImportMark(): React.JSX.Element {
+  return (
+    <span className="mx-auto grid h-10 w-10 place-items-center rounded-[11px] bg-accent text-accent-contrast shadow-[0_7px_18px_color-mix(in_oklab,var(--accent)_30%,transparent)]">
+      <span className="text-[18px] leading-none">↓</span>
+    </span>
   )
 }

@@ -117,7 +117,7 @@ export function ProjectScopeTree({
         )}
       </div>
       <div className="scope-tree-list">
-        {visibleNodes.length > 0 ? renderNodes(visibleNodes, 0) : <div className={centeredEmptyClasses}>No matching Markdown files</div>}
+        {visibleNodes.length > 0 ? renderNodes(visibleNodes, 0) : <div className={centeredEmptyClasses}>No matching documents</div>}
       </div>
     </div>
   )

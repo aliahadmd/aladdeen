@@ -7,12 +7,29 @@ directories:
 files:
   - out/**
   - package.json
+extraResources:
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
 fileAssociations:
   - ext:
       - md
       - markdown
     name: Markdown Document
     description: Markdown document
+    role: Editor
+  - ext:
+      - html
+      - htm
+    name: HTML Document
+    description: HTML document
+    role: Editor
+  - ext: docx
+    name: Word Document
+    description: Microsoft Word document
+    role: Editor
+  - ext: pdf
+    name: PDF Document
+    description: Portable Document Format
     role: Editor
 mac:
   icon: build/icon.png

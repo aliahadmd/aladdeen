@@ -1,8 +1,168 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
+import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { strFromU8, unzipSync } from 'fflate'
+import sharp from 'sharp'
+
+test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', async () => {
+  test.setTimeout(60_000)
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-workspace-'))
+  const docxPath = join(workspace, 'proposal.docx')
+  const source = new Document({
+    sections: [{
+      children: [
+        new Paragraph({ text: 'Eigenpal integration', heading: HeadingLevel.HEADING_1 }),
+        ...Array.from({ length: 180 }, (_, index) => new Paragraph({
+          text: index === 0
+            ? 'Editable proposal paragraph'
+            : `Proposal detail ${index + 1} keeps the document long enough to test native scrolling.`
+        }))
+      ]
+    }]
+  })
+  await writeFile(docxPath, await Packer.toBuffer(source))
+  const original = await readFile(docxPath)
+  let application = await electron.launch({ args: ['.', docxPath, `--user-data-dir=${userData}`] })
+
+  try {
+    let window = await application.firstWindow()
+    await window.getByRole('button', { name: 'Create environment' }).click()
+    const editor = window.locator('.ep-root.docx-editor')
+    await expect(editor).toBeVisible({ timeout: 15_000 })
+    await expect(editor).toContainText('Eigenpal integration')
+    await expect(editor.getByText('Save As')).toBeVisible()
+
+    const scrollContainer = editor.locator('.docx-editor__scroll-container')
+    await scrollContainer.hover()
+    await window.mouse.wheel(0, 1_100)
+    await expect.poll(() => scrollContainer.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+    await scrollContainer.evaluate((element) => { element.scrollTop = 0 })
+
+    const editableRun = editor.getByText('Editable proposal paragraph', { exact: true })
+    await expect(editableRun).toBeVisible()
+    await editableRun.click()
+    await window.keyboard.press('End')
+    await window.keyboard.insertText(' updated in Aladdeen')
+    await window.keyboard.press('Tab')
+    await expect(editor).toContainText('updated in Aladdeen')
+    await expect(window.getByText('Editing', { exact: true }).first()).toBeVisible()
+    const documentFooter = window.locator('footer').filter({ hasText: 'DOCX' })
+    await expect(documentFooter).toContainText('Saved', { timeout: 15_000 })
+    await expect.poll(async () => {
+      const current = await readFile(docxPath)
+      return current.equals(original)
+    }, { timeout: 15_000 }).toBe(false)
+
+    await application.close()
+    application = await electron.launch({ args: ['.', docxPath, `--user-data-dir=${userData}`] })
+    window = await application.firstWindow()
+    const reopened = window.locator('.ep-root.docx-editor')
+    await expect(reopened).toBeVisible({ timeout: 15_000 })
+    await expect(reopened).toContainText('updated in Aladdeen')
+  } finally {
+    await closeElectron(application)
+    await Promise.all([
+      rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    ])
+  }
+})
+
+async function closeElectron(application: Awaited<ReturnType<typeof electron.launch>>): Promise<void> {
+  const closed = application.close().then(() => true).catch(() => false)
+  if (await Promise.race([
+    closed,
+    new Promise<false>((resolveClose) => setTimeout(() => resolveClose(false), 2_000))
+  ])) return
+  const process = application.process()
+  process.kill('SIGKILL')
+  if (process.exitCode === null) {
+    await new Promise<void>((resolveExit) => {
+      process.once('exit', () => resolveExit())
+    })
+  }
+}
+
+test('opens and edits a dropped HTML document in place with contained local assets', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-html-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-html-workspace-'))
+  const activePath = join(workspace, 'current.md')
+  const htmlPath = join(workspace, 'field-notes.html')
+  const imagePath = join(workspace, 'map.png')
+  const originalHtml = `<!doctype html>
+    <html><head><title>Field notes</title></head><body><main>
+      <h1>Field notes</h1>
+      <p>Opened directly and completely offline.</p>
+      <img src="map.png" alt="Map">
+    </main></body></html>`
+  await writeFile(activePath, '# Current document\n', 'utf8')
+  await writeFile(htmlPath, originalHtml, 'utf8')
+  await sharp({
+    create: {
+      width: 4,
+      height: 4,
+      channels: 4,
+      background: { r: 48, g: 120, b: 214, alpha: 1 }
+    }
+  }).png().toFile(imagePath)
+  const application = await electron.launch({ args: ['.', activePath, `--user-data-dir=${userData}`] })
+
+  try {
+    const window = await application.firstWindow()
+    await window.getByRole('button', { name: 'Create environment' }).click()
+    await expect(window.getByRole('heading', { name: 'Current document' })).toBeVisible()
+    await window.evaluate(() => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.id = 'native-import-drop'
+      input.hidden = true
+      document.body.append(input)
+    })
+    await window.locator('#native-import-drop').setInputFiles(htmlPath)
+    await window.evaluate(() => {
+      const file = (document.querySelector<HTMLInputElement>('#native-import-drop'))?.files?.[0]
+      if (!file) throw new Error('Test drop file was not attached.')
+      const transfer = new DataTransfer()
+      transfer.items.add(file)
+      globalThis.dispatchEvent(new DragEvent('dragenter', { dataTransfer: transfer }))
+    })
+    await expect(window.getByText('Open documents')).toBeVisible()
+    await expect(window.getByText(/Original files stay in place/)).toBeVisible()
+    await window.evaluate(() => {
+      const file = (document.querySelector<HTMLInputElement>('#native-import-drop'))?.files?.[0]
+      if (!file) throw new Error('Test drop file was not attached.')
+      const transfer = new DataTransfer()
+      transfer.items.add(file)
+      globalThis.dispatchEvent(new DragEvent('drop', { dataTransfer: transfer }))
+    })
+    await expect(window.getByRole('tab', { name: /field-notes\.html/i })).toBeVisible()
+    const preview = window.frameLocator('iframe[title="Preview of field-notes.html"]')
+    await expect(preview.getByRole('heading', { name: 'Field notes' })).toBeVisible()
+    await expect.poll(() => preview.locator('img').evaluate(
+      (image: HTMLImageElement) => image.complete && image.naturalWidth > 0
+    )).toBe(true)
+
+    await window.getByRole('button', { name: 'Source' }).click()
+    const editor = window.locator('.html-source-editor .cm-content')
+    await editor.click()
+    await window.keyboard.press('ControlOrMeta+A')
+    await window.keyboard.insertText('<main><h1>Edited field notes</h1><p>Saved as HTML.</p></main>')
+    await expect.poll(async () => readFile(htmlPath, 'utf8')).toContain('Edited field notes')
+    await window.getByRole('button', { name: 'Preview' }).click()
+    await expect(preview.getByRole('heading', { name: 'Edited field notes' })).toBeVisible()
+    await expect(access(join(workspace, 'field-notes.md'))).rejects.toThrow()
+    expect(await readFile(htmlPath, 'utf8')).not.toBe(originalHtml)
+  } finally {
+    await application.close()
+    await Promise.all([
+      rm(userData, { recursive: true, force: true }),
+      rm(workspace, { recursive: true, force: true })
+    ])
+  }
+})
 
 test('onboards into a persistent environment', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-'))
@@ -14,7 +174,7 @@ test('onboards into a persistent environment', async () => {
     await expect(window.getByLabel('Environment name')).toHaveValue('Personal')
     await expect(window).toHaveScreenshot('onboarding.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
     await window.getByRole('button', { name: 'Create environment' }).click()
-    await expect(window.getByRole('heading', { name: 'Your Markdown, one calm place.' })).toBeVisible()
+    await expect(window.getByRole('heading', { name: 'Your research, one calm workspace.' })).toBeVisible()
     await window.getByRole('button', { name: 'Show sidebar' }).click()
     await expect(window.getByRole('button', { name: 'Switch environment' })).toContainText('Personal')
   } finally {
@@ -24,6 +184,7 @@ test('onboards into a persistent environment', async () => {
 })
 
 test('bulk-links a selectively indexed project and quick-opens files without filling recents', async () => {
+  test.setTimeout(60_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
   const projectParent = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-library-'))
   const projectPath = join(projectParent, 'library')
@@ -48,7 +209,9 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
     await window.keyboard.press('ControlOrMeta+Shift+O')
     await expect(window.getByRole('heading', { name: 'Add project folders' })).toBeVisible()
     await window.getByRole('button', { name: /Choose one or more folders/ }).click()
-    await expect(window.getByText('2 Markdown files')).toBeVisible()
+    await expect(window.getByRole('button', {
+      name: new RegExp(`${basename(projectPath)}, 2 selected documents`, 'i')
+    })).toBeVisible()
     const importDialog = window.locator('.project-import-dialog')
     const dialogLayout = await importDialog.evaluate((dialog) => {
       const candidateList = dialog.querySelector('.project-candidate-list')!.getBoundingClientRect()
@@ -78,8 +241,48 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
     await expect(projectRow).toContainText('1')
     await expect(window.locator('.tracked-file-row')).toHaveCount(0)
 
+    await window.getByRole('button', { name: 'Show sidebar' }).click()
+    const visibleProjectRow = window.locator('.project-row:visible').filter({ hasText: basename(projectPath) })
+    await visibleProjectRow.hover()
+    await visibleProjectRow.getByRole('button', { name: `Actions for ${basename(projectPath)}` }).click()
+    await window.getByRole('menuitem', { name: 'Project settings' }).click()
+    await expect(window.getByRole('heading', { name: 'Project settings' })).toBeVisible()
+    await window.locator('[data-sonner-toast]').evaluateAll((toasts) => toasts.forEach((toast) => toast.remove()))
+    for (const size of [
+      { width: 640, height: 480, name: '640' },
+      { width: 900, height: 700, name: '900' },
+      { width: 1440, height: 900, name: '1440' }
+    ]) {
+      await window.setViewportSize(size)
+      await expect(window.locator('.project-dialog-actions')).toBeInViewport()
+      await expect(window).toHaveScreenshot(`project-settings-${size.name}-light.png`, {
+        animations: 'disabled',
+        maxDiffPixelRatio: 0.01
+      })
+    }
+    await window.evaluate(() => {
+      document.documentElement.classList.add('dark')
+      document.documentElement.dataset.theme = 'dark'
+    })
+    for (const size of [
+      { width: 640, height: 480, name: '640' },
+      { width: 900, height: 700, name: '900' },
+      { width: 1440, height: 900, name: '1440' }
+    ]) {
+      await window.setViewportSize(size)
+      await expect(window).toHaveScreenshot(`project-settings-${size.name}-dark.png`, {
+        animations: 'disabled',
+        maxDiffPixelRatio: 0.01
+      })
+    }
+    await window.evaluate(() => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.dataset.theme = 'light'
+    })
+    await window.getByRole('button', { name: 'Close' }).click()
+
     await window.keyboard.press('ControlOrMeta+P')
-    const quickOpen = window.getByPlaceholder('Search indexed Markdown files…')
+    const quickOpen = window.getByPlaceholder('Search indexed documents…')
     await quickOpen.fill('guide')
     const guideResult = window.getByRole('option', { name: /guide\.md/ })
     await expect(guideResult).toContainText(`${basename(projectPath)} › docs/guide.md`)
@@ -88,7 +291,7 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
     await expect(window.locator('.tracked-file-row')).toHaveCount(1)
 
     await window.keyboard.press('ControlOrMeta+Shift+F')
-    const contentSearch = window.getByLabel('Search Markdown source')
+    const contentSearch = window.getByRole('textbox', { name: 'Search document contents' })
     await expect(contentSearch).toBeVisible()
     await contentSearch.fill('Indexed guide')
     const contentMatch = window.getByRole('option', { name: /Indexed guide/ })
@@ -151,7 +354,7 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
     await window.keyboard.press('ControlOrMeta+Shift+F')
     await window.getByRole('button', { name: 'Entire environment' }).click()
     await window.getByRole('button', { name: 'Standalone files' }).click()
-    await window.getByLabel('Search Markdown source').fill('Preview works')
+    await window.getByRole('textbox', { name: 'Search document contents' }).fill('Preview works')
     await expect(window.getByRole('option', { name: /Preview works/ })).toBeVisible()
     await window.keyboard.press('Escape')
 
@@ -406,7 +609,7 @@ test('keeps the environment sidebar usable at compact window sizes', async () =>
       await window.getByRole('button', { name: 'Show sidebar' }).click()
       const sheet = window.getByRole('dialog', { name: 'Environment files' })
       await expect(sheet.locator('.sheet-panel')).toBeVisible()
-      await expect(sheet.getByRole('button', { name: 'New file' })).toBeVisible()
+      await expect(sheet.getByRole('button', { name: 'New document' })).toBeVisible()
       await expect(sheet.getByRole('heading', { name: 'Projects' })).toBeVisible()
       const box = await sheet.locator('.sheet-panel').boundingBox()
       expect(box?.x).toBeGreaterThanOrEqual(0)

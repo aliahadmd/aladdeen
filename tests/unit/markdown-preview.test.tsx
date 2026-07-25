@@ -1,10 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { AladdeenApi, OpenDocument } from '@shared/contracts'
+import type { AladdeenApi, TextOpenDocument } from '@shared/contracts'
+import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 import { MarkdownPreview } from '@renderer/components/MarkdownPreview'
 import { MarkdownImage } from '@renderer/components/MarkdownImage'
 
-const document: OpenDocument = {
+const document: TextOpenDocument = {
   id: '11111111-1111-4111-8111-111111111111',
   environmentId: '22222222-2222-4222-8222-222222222222',
   projectId: '33333333-3333-4333-8333-333333333333',
@@ -12,6 +13,9 @@ const document: OpenDocument = {
   name: 'readme.md',
   location: 'Docs › guides/readme.md',
   fullPath: '/notes/guides/readme.md',
+  documentKind: 'markdown',
+  encoding: 'utf-8',
+  capabilities: DOCUMENT_CAPABILITIES.markdown,
   content: '# Hello\n\n- [x] Offline\n\n| A | B |\n| - | - |\n| 1 | 2 |\n\n![Local](../images/cover.png)\n\n![Remote](https://example.com/a.png)\n\n<script>alert(1)</script>',
   savedContent: '',
   status: 'saved',

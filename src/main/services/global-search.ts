@@ -106,6 +106,7 @@ export class GlobalSearchService {
           path,
           authorityRoot: project.path,
           standalone: false,
+          documentKind: file.documentKind,
           contentOverride: overrideByPath.get(path)
         })
       }
@@ -128,11 +129,12 @@ export class GlobalSearchService {
     return {
       key: `tracked:${file.id}`,
       target: { kind: 'tracked', fileId: file.id },
-      name: file.path.split(/[\\/]/).at(-1) ?? 'Markdown file',
+      name: file.path.split(/[\\/]/).at(-1) ?? 'Document',
       location: abbreviatePath(dirname(file.path)),
       path: file.path,
       authorityRoot: file.path,
       standalone: true,
+      documentKind: file.documentKind,
       contentOverride
     }
   }

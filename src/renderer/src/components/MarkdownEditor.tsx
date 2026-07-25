@@ -11,7 +11,7 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { EditorView, type ViewUpdate } from '@codemirror/view'
-import type { EditorRevealRequest, OpenDocument } from '@shared/contracts'
+import type { EditorRevealRequest, TextOpenDocument } from '@shared/contracts'
 import { useAppStore } from '@renderer/store/app-store'
 
 function flashRevealedLine(
@@ -108,7 +108,7 @@ function installEditorScrolling(
   }
 }
 
-export function MarkdownEditor({ document, dark }: { document: OpenDocument; dark: boolean }): React.JSX.Element {
+export function MarkdownEditor({ document, dark }: { document: TextOpenDocument; dark: boolean }): React.JSX.Element {
   const updateContent = useAppStore((state) => state.updateContent)
   const updateEditorView = useAppStore((state) => state.updateEditorView)
   const getEditorView = useAppStore((state) => state.getEditorView)

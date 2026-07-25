@@ -1,103 +1,83 @@
-import { lazy, Suspense, useDeferredValue } from 'react'
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
+import { Suspense } from 'react'
 import { AlertCircle, CheckCircle2, CloudOff, LoaderCircle, PencilLine } from 'lucide-react'
-import { MarkdownPreview } from './MarkdownPreview'
+import { DocumentAdapterRegistry } from '@renderer/document-adapters/registry'
+import { cn } from '@renderer/lib/cn'
+import { useAppStore } from '@renderer/store/app-store'
+import type { OpenDocument } from '@shared/contracts'
 import { DocumentActions } from './DocumentActions'
 import { Welcome } from './Welcome'
-import { useEffectiveDarkMode } from '@renderer/hooks/use-effective-dark-mode'
-import { useMediaQuery } from '@renderer/hooks/use-media-query'
-import { cn } from '@renderer/lib/cn'
-import { COMPACT_WORKSPACE_QUERY } from '@renderer/lib/breakpoints'
-import { useAppStore } from '@renderer/store/app-store'
-
-const MarkdownEditor = lazy(() => import('./MarkdownEditor').then((module) => ({
-  default: module.MarkdownEditor
-})))
 
 export function DocumentView(): React.JSX.Element {
   const activeFileId = useAppStore((state) => state.activeFileId)
-  const documents = useAppStore((state) => state.documents)
-  const editing = useAppStore((state) => state.editing)
-  const mobilePane = useAppStore((state) => state.mobilePane)
-  const setMobilePane = useAppStore((state) => state.setMobilePane)
-  const dark = useEffectiveDarkMode()
-  const compact = useMediaQuery(COMPACT_WORKSPACE_QUERY)
-  const document = documents.find((candidate) => candidate.id === activeFileId)
-  const deferredContent = useDeferredValue(document?.content ?? '')
+  const document = useAppStore((state) => (
+    state.documents.find((candidate) => candidate.id === activeFileId)
+  ))
 
   if (!document) return <Welcome />
 
-  const previewDocument = deferredContent === document.content
-    ? document
-    : { ...document, content: deferredContent }
-  const words = deferredContent.trim() ? deferredContent.trim().split(/\s+/u).length : 0
-  const editor = (
-    <Suspense fallback={<div className="h-full min-h-0 bg-surface" aria-label="Loading Markdown editor" />}>
-      <MarkdownEditor document={document} dark={dark} />
-    </Suspense>
-  )
-  const preview = (
-    <MarkdownPreview
-      document={previewDocument}
-      sourceNavigationReady={deferredContent === document.content}
-    />
-  )
+  const adapter = DocumentAdapterRegistry[document.documentKind]
+  const Adapter = adapter.component
 
   return (
-    <section className={cn(
-      'document-workspace relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_27px] bg-surface-elevated',
-      editing && 'max-[959px]:grid-rows-[35px_minmax(0,1fr)_27px]'
-    )}>
-      <DocumentActions />
-      {editing && (
-        <div className="compact-pane-switch hidden items-center justify-center gap-0.5 border-b border-border bg-surface max-[959px]:flex" role="tablist" aria-label="Document view">
-          <button className={cn('h-[25px] rounded-md border-0 bg-transparent px-[14px] text-[11px] font-semibold text-foreground-muted', mobilePane === 'editor' && 'bg-surface-elevated text-foreground shadow-[0_1px_4px_rgb(0_0_0/.08)]')} onClick={() => setMobilePane('editor')}>
-            Editor
-          </button>
-          <button className={cn('h-[25px] rounded-md border-0 bg-transparent px-[14px] text-[11px] font-semibold text-foreground-muted', mobilePane === 'preview' && 'bg-surface-elevated text-foreground shadow-[0_1px_4px_rgb(0_0_0/.08)]')} onClick={() => setMobilePane('preview')}>
-            Preview
-          </button>
-        </div>
-      )}
-
-      <div className={cn('document-main h-full min-h-0 min-w-0', editing ? 'is-editing' : 'is-preview-only')}>
-        {editing ? (
-          compact ? (
-            <div className="h-full min-h-0 min-w-0">
-              {mobilePane === 'editor' ? (
-                editor
-              ) : (
-                preview
-              )}
-            </div>
-          ) : (
-            <div className="h-full min-h-0 min-w-0 max-[959px]:hidden">
-              <PanelGroup direction="horizontal" autoSaveId="aladdeen-editor-split">
-                <Panel defaultSize={44} minSize={28} maxSize={70}>
-                  {editor}
-                </Panel>
-                <PanelResizeHandle className="relative w-px bg-border after:absolute after:inset-y-0 after:left-0 after:z-[2] after:w-[7px] after:content-[''] data-[resize-handle-active]:bg-accent" />
-                <Panel defaultSize={56} minSize={30}>
-                  {preview}
-                </Panel>
-              </PanelGroup>
-            </div>
-          )
-        ) : (
-          preview
-        )}
+    <section className="document-workspace relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_27px] bg-surface-elevated">
+      {document.documentKind === 'markdown' && <DocumentActions />}
+      <div className="document-main h-full min-h-0 min-w-0">
+        <Suspense fallback={<AdapterLoading document={document} />}>
+          <Adapter document={document} />
+        </Suspense>
       </div>
 
       <footer className="flex min-w-0 select-none items-center justify-between border-t border-border bg-surface px-[10px] text-[9px] text-foreground-muted">
         <SaveStatus status={document.status} error={document.error} />
-        <div className="flex min-w-0 items-center gap-[13px] whitespace-nowrap max-[700px]:gap-2">
-          <span>{words.toLocaleString()} words</span>
-          <span className="max-[700px]:hidden">{document.content.length.toLocaleString()} characters</span>
-          <span>UTF-8 · {document.revision.lineEnding}</span>
-        </div>
+        <DocumentFacts document={document} />
       </footer>
     </section>
   )
+}
+
+function AdapterLoading({ document }: { document: OpenDocument }): React.JSX.Element {
+  const label = document.documentKind === 'docx'
+    ? 'Word editor'
+    : document.documentKind === 'pdf'
+      ? 'PDF viewer'
+      : document.documentKind === 'html'
+        ? 'HTML editor'
+        : 'Markdown editor'
+  return (
+    <div className="grid h-full min-h-0 place-items-center bg-surface-elevated text-[12px] text-foreground-muted">
+      <span className="flex items-center gap-2">
+        <LoaderCircle className="spinner" size={16} />
+        Loading {label}…
+      </span>
+    </div>
+  )
+}
+
+function DocumentFacts({ document }: { document: OpenDocument }): React.JSX.Element {
+  if ('content' in document) {
+    const words = document.content.trim() ? document.content.trim().split(/\s+/u).length : 0
+    return (
+      <div className="flex min-w-0 items-center gap-[13px] whitespace-nowrap max-[700px]:gap-2">
+        <span>{words.toLocaleString()} words</span>
+        <span className="max-[700px]:hidden">{document.content.length.toLocaleString()} characters</span>
+        <span>UTF-8 · {document.revision.lineEnding ?? 'LF'}</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-[13px] whitespace-nowrap max-[700px]:gap-2">
+      <span>{document.documentKind === 'docx' ? 'Word document' : 'PDF document'}</span>
+      <span className="max-[700px]:hidden">{formatBytes(document.session.byteLength)}</span>
+      <span>{document.documentKind.toUpperCase()}</span>
+    </div>
+  )
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
 function SaveStatus({ status, error }: { status: string; error?: string }): React.JSX.Element {

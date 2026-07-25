@@ -13,6 +13,7 @@ function trackedFile(overrides: Partial<TrackedFileSummary> = {}): TrackedFileSu
     projectId: '04832f7e-e23c-4722-8b4a-945bf8c5a405',
     lastOpenedAt: 1,
     missing: false,
+    documentKind: 'markdown',
     ...overrides
   }
 }

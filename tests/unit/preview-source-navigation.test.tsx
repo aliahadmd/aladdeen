@@ -3,18 +3,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MarkdownContent } from '@renderer/components/MarkdownContent'
 import { MarkdownPreview } from '@renderer/components/MarkdownPreview'
 import { useAppStore } from '@renderer/store/app-store'
-import type { OpenDocument, PreviewSourceTarget } from '@shared/contracts'
+import type { PreviewSourceTarget, TextOpenDocument } from '@shared/contracts'
+import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const fileId = '11111111-1111-4111-8111-111111111111'
 const environmentId = '22222222-2222-4222-8222-222222222222'
 
-function openDocument(content: string): OpenDocument {
+function openDocument(content: string): TextOpenDocument {
   return {
     id: fileId,
     environmentId,
     name: 'navigation.md',
     location: '~/Notes',
     fullPath: '/Users/test/Notes/navigation.md',
+    documentKind: 'markdown',
+    encoding: 'utf-8',
+    capabilities: DOCUMENT_CAPABILITIES.markdown,
     content,
     savedContent: content,
     status: 'saved',

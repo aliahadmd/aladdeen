@@ -26,7 +26,7 @@ export function OnboardingDialog(): React.JSX.Element {
           className="mb-[21px] h-12 w-12 drop-shadow-[0_10px_20px_rgb(0_0_0/.16)]"
           title="Aladdeen"
         />
-        <p className={eyebrowClasses}>WELCOME TO ALADDEEN</p>
+        <p className={eyebrowClasses}>WELCOME TO ALADDEEN RESEARCH</p>
         <h1
           id="onboarding-title"
           className="m-0 text-[25px] leading-[1.12] font-[690] tracking-[-.035em]"
@@ -34,7 +34,7 @@ export function OnboardingDialog(): React.JSX.Element {
           Create your first environment
         </h1>
         <p className="mt-[11px] mb-5 text-[12px] leading-[1.55] text-foreground-soft">
-          Keep project folders and independent Markdown files together without moving anything on disk.
+          Bring project folders and independent research documents together without moving anything on disk.
         </p>
         {pending && (
           <div className="-mt-1 mb-[17px] rounded-[8px] border border-accent-muted bg-accent-soft px-[10px] py-[9px] text-[10px] text-foreground-soft">

@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { FileText, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import {
   documentTabClasses,
   tabBarClasses,
@@ -8,6 +8,7 @@ import {
   tabStateClasses
 } from '@renderer/lib/ui-styles'
 import { isDocumentDirty, useAppStore } from '@renderer/store/app-store'
+import { DocumentKindIcon } from './DocumentKindIcon'
 
 export function TabBar(): React.JSX.Element | null {
   const documents = useAppStore((state) => state.documents)
@@ -66,7 +67,7 @@ export function TabBar(): React.JSX.Element | null {
                 tabs.current.get(target.id)?.focus()
               }}
             >
-              <FileText size={14} />
+              <DocumentKindIcon kind={document.documentKind} />
               <span className={tabNameClasses}>{document.name}</span>
               <span className={tabStateClasses(document.status)} aria-label={document.status}>
                 {isDocumentDirty(document) ? '•' : ''}

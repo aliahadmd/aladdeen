@@ -137,6 +137,16 @@ button {
   color: inherit;
 }
 
+.sidebar-brand-signature {
+  font-family: Baskerville, "Iowan Old Style", "Times New Roman", serif;
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  transform: translateY(1px);
+}
+
 button:focus-visible,
 input:focus-visible,
 a:focus-visible {
@@ -347,7 +357,7 @@ body.is-resizing-sidebar * {
 .scope-mode-grid small {
   margin-top: 3px;
   color: var(--text-muted);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.35;
 }
 
@@ -549,6 +559,315 @@ body.is-resizing-sidebar * {
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+.project-settings-context {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.project-settings-context strong {
+  overflow: hidden;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-settings-context span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-settings-scope {
+  margin-top: 20px;
+}
+
+.project-settings-scope h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.project-settings-scope > p,
+.project-settings-section-description {
+  margin: 4px 0 10px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.project-settings-disclosures {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.project-settings-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.project-settings-section > summary {
+  display: flex;
+  min-height: 52px;
+  cursor: pointer;
+  list-style: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-radius: 7px;
+  padding: 8px 4px;
+  outline: none;
+  color: var(--text);
+}
+
+.project-settings-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.project-settings-section > summary:hover {
+  color: var(--accent);
+}
+
+.project-settings-section > summary:focus-visible {
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.project-settings-section > summary > span,
+.project-settings-section > summary strong,
+.project-settings-section > summary small {
+  display: block;
+  min-width: 0;
+}
+
+.project-settings-section > summary strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.project-settings-section > summary small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-settings-section > summary svg {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.project-settings-section[open] > summary svg {
+  rotate: 180deg;
+}
+
+.project-settings-section-content {
+  padding: 2px 4px 16px;
+}
+
+.project-organization-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.project-organization-fields > label:first-child {
+  display: grid;
+  gap: 6px;
+}
+
+.project-organization-fields > label:first-child > span,
+.project-exclusion-form label > span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.project-organization-fields input[type='text'],
+.project-organization-fields > label:first-child > input,
+.project-exclusion-form input {
+  width: 100%;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--surface);
+  padding: 0 9px;
+  color: var(--text);
+  font-size: 12px;
+  user-select: text;
+}
+
+.project-organization-fields input:focus,
+.project-exclusion-form input:focus {
+  border-color: var(--accent-muted);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.project-settings-toggle,
+.project-management-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.project-settings-toggle input,
+.project-management-row input {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.project-settings-toggle svg,
+.project-management-row > svg {
+  margin-top: 1px;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.project-settings-toggle > span,
+.project-management-row > span {
+  min-width: 0;
+  flex: 1;
+}
+
+.project-settings-toggle strong,
+.project-settings-toggle small,
+.project-management-row strong,
+.project-management-row small {
+  display: block;
+}
+
+.project-settings-toggle strong,
+.project-management-row strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.project-settings-toggle small,
+.project-management-row small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.project-management-list {
+  display: grid;
+  gap: 8px;
+}
+
+.project-management-row.is-warning {
+  border-color: color-mix(in oklab, var(--warning) 42%, var(--border));
+  background: color-mix(in oklab, var(--warning) 7%, var(--surface));
+}
+
+.project-management-row.is-danger {
+  border-color: color-mix(in oklab, var(--danger) 28%, var(--border));
+}
+
+.project-management-row.is-danger > svg,
+.project-management-row.is-danger strong {
+  color: var(--danger);
+}
+
+.project-management-row > button {
+  flex: 0 0 auto;
+}
+
+.project-exclusions ul {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.project-exclusions li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  padding: 7px 9px;
+}
+
+.project-exclusions code {
+  overflow: hidden;
+  flex: 1;
+  color: var(--text-soft);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.project-exclusions li button,
+.project-add-exclusion {
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.project-exclusions li button:hover {
+  color: var(--danger);
+}
+
+.project-exclusions li button:focus-visible,
+.project-add-exclusion:focus-visible {
+  border-radius: 5px;
+  box-shadow: 0 0 0 2px var(--accent-muted);
+}
+
+.project-exclusions-empty {
+  margin: 0 0 9px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.project-add-exclusion {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 3px;
+}
+
+.project-exclusion-form {
+  display: grid;
+  gap: 7px;
+}
+
+.project-exclusion-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.project-exclusion-form > small {
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.project-exclusion-form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
 }
 
 .dialog-actions.project-dialog-actions {
@@ -1219,6 +1538,132 @@ body.is-resizing-sidebar * {
   stroke-width: 1px;
 }
 
+/* Native binary document surfaces. */
+.pdf-viewer-container {
+  position: absolute;
+  inset: 0;
+  scrollbar-gutter: stable;
+}
+
+.pdf-viewer-container .pdfViewer .page {
+  position: relative;
+}
+
+.aladdeen-pdf-annotation {
+  position: absolute;
+  z-index: 8;
+  min-width: 16px;
+  min-height: 16px;
+  transform: translate(-3px, -50%);
+  border-radius: 3px;
+  padding: 2px 4px;
+  color: #183b7a;
+  background: rgb(196 218 255 / 78%);
+  box-shadow: 0 0 0 1px rgb(42 92 180 / 22%);
+  font: 600 10px/1.25 -apple-system, BlinkMacSystemFont, sans-serif;
+  pointer-events: none;
+}
+
+.aladdeen-pdf-annotation.is-highlight {
+  width: 120px;
+  height: 18px;
+  background: rgb(255 218 72 / 38%);
+  box-shadow: none;
+}
+
+.aladdeen-pdf-annotation.is-ink {
+  width: 62px;
+  height: 3px;
+  min-height: 3px;
+  transform: rotate(-10deg);
+  padding: 0;
+  background: #cf3153;
+  box-shadow: none;
+}
+
+.aladdeen-pdf-annotation.is-stamp {
+  color: #9d1733;
+  background: rgb(255 225 230 / 90%);
+  text-transform: uppercase;
+}
+
+.aladdeen-pdf-annotation.is-signature {
+  color: #1f315a;
+  background: transparent;
+  box-shadow: none;
+  font-family: "Snell Roundhand", "Bradley Hand", cursive;
+  font-size: 16px;
+}
+
+.aladdeen-docx-host,
+.aladdeen-docx-plugin-host,
+.aladdeen-docx-plugin-host .plugin-host-editor,
+.aladdeen-docx-plugin-host .docx-editor {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+
+.aladdeen-docx-plugin-host {
+  overflow: hidden !important;
+}
+
+.aladdeen-docx-plugin-host .plugin-host-editor {
+  overflow: hidden !important;
+}
+
+.aladdeen-docx-plugin-host .docx-editor__scroll-container {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.aladdeen-docx-title-action,
+.aladdeen-docx-save-state {
+  display: inline-flex;
+  min-width: 0;
+  height: 28px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.aladdeen-docx-title-action {
+  border: 1px solid var(--border);
+  padding: 0 9px;
+  color: var(--text-muted);
+  background: var(--surface-elevated);
+  cursor: pointer;
+}
+
+.aladdeen-docx-title-action:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.aladdeen-docx-title-action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.aladdeen-docx-save-state {
+  padding: 0 4px;
+}
+
+@media (max-width: 700px) {
+  .aladdeen-docx-save-state span,
+  .aladdeen-docx-title-action span {
+    display: none;
+  }
+
+  .aladdeen-docx-title-action {
+    width: 28px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+
 /* AST-rendered Markdown, GFM, KaTeX, callouts, and Mermaid output. */
 .markdown-body {
   width: min(100% - 72px, 780px);
@@ -1825,6 +2270,19 @@ body.is-resizing-sidebar * {
 
   .scope-patterns {
     grid-column: auto;
+  }
+
+  .project-settings-section > summary {
+    min-height: 50px;
+  }
+
+  .project-management-row.is-danger {
+    flex-wrap: wrap;
+  }
+
+  .project-management-row.is-danger > button {
+    width: 100%;
+    margin-top: 2px;
   }
 
   .dialog-actions.project-dialog-actions {

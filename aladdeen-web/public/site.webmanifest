@@ -1,7 +1,7 @@
 {
-	"name": "Aladdeen",
+	"name": "Aladdeen Research",
 	"short_name": "Aladdeen",
-	"description": "A calm, offline-first Markdown workspace made only for macOS arm64 on M-series Apple silicon.",
+	"description": "A private, offline-first research workspace for Markdown, HTML, Word, and PDF on M-series Apple silicon.",
 	"start_url": "/",
 	"display": "standalone",
 	"background_color": "#ffffff",

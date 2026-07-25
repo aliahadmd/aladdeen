@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { FileText, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import type { IndexedFileSummary } from '@shared/contracts'
 import { cn } from '@renderer/lib/cn'
 import { dialogOverlayClasses } from '@renderer/lib/ui-styles'
 import { useAppStore } from '@renderer/store/app-store'
+import { DocumentKindIcon } from './DocumentKindIcon'
 
 export function QuickOpenDialog(): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
@@ -60,7 +61,7 @@ export function QuickOpenDialog(): React.JSX.Element {
       <Dialog.Portal>
         <Dialog.Overlay className={cn(dialogOverlayClasses, 'quick-open-overlay backdrop-blur-[2px]')} />
         <Dialog.Content className="quick-open-dialog fixed top-[min(18vh,150px)] left-1/2 z-[201] w-[min(calc(100vw-32px),640px)] -translate-x-1/2 overflow-hidden rounded-xl border border-border-strong bg-surface-elevated shadow-[0_28px_80px_rgb(0_0_0/.28)]">
-          <Dialog.Title className="sr-only">Quick open Markdown file</Dialog.Title>
+          <Dialog.Title className="sr-only">Quick open document</Dialog.Title>
           <label className="quick-open-search flex h-[51px] items-center gap-[10px] border-b border-border px-[14px] text-foreground-muted">
             <Search size={17} />
             <input
@@ -74,7 +75,7 @@ export function QuickOpenDialog(): React.JSX.Element {
                 setResultQuery(null)
                 setActiveIndex(0)
               }}
-              placeholder="Search indexed Markdown files…"
+              placeholder="Search indexed documents…"
               onKeyDown={(event) => {
                 if (event.key === 'ArrowDown') {
                   event.preventDefault()
@@ -90,7 +91,7 @@ export function QuickOpenDialog(): React.JSX.Element {
             />
             <kbd className="rounded-[5px] border border-border bg-surface px-[6px] py-[3px] text-[9px] text-foreground-muted">⌘P</kbd>
           </label>
-          <div className="quick-open-results max-h-[min(430px,55vh)] overflow-y-auto p-[6px]" role="listbox" aria-label="Indexed Markdown files">
+          <div className="quick-open-results max-h-[min(430px,55vh)] overflow-y-auto p-[6px]" role="listbox" aria-label="Indexed documents">
             {currentResults.map((file, index) => (
               <button
                 key={`${file.projectId}:${file.relativePath}`}
@@ -104,7 +105,7 @@ export function QuickOpenDialog(): React.JSX.Element {
                 onPointerMove={() => setActiveIndex(index)}
                 onClick={() => choose(file)}
               >
-                <FileText size={15} />
+                <DocumentKindIcon kind={file.documentKind} size={15} />
                 <span className="block min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap"><strong className="block min-w-0 overflow-hidden text-[12px] font-semibold text-ellipsis whitespace-nowrap text-foreground">{file.name}</strong><small className="mt-0.5 block min-w-0 overflow-hidden text-[9px] text-ellipsis whitespace-nowrap text-foreground-muted">{file.location}</small></span>
               </button>
             ))}

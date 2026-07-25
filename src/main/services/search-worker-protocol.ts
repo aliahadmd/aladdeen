@@ -1,4 +1,5 @@
 import type {
+  DocumentKind,
   DocumentTarget,
   GlobalSearchMatch,
   GlobalSearchSummary
@@ -17,6 +18,7 @@ export interface SearchWorkerCandidate {
   path: string
   authorityRoot: string
   standalone: boolean
+  documentKind: DocumentKind
   contentOverride?: string
 }
 

@@ -9,6 +9,7 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
+  FileCode2,
   FilePlus2,
   FileQuestion,
   FileSearch2,
@@ -35,7 +36,14 @@ import {
   X
 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { IndexedFileSummary, ProjectSummary, ProjectTreePage, TrackedFileSummary, WorkspaceTreeNode } from '@shared/contracts'
+import type {
+  DocumentKind,
+  IndexedFileSummary,
+  ProjectSummary,
+  ProjectTreePage,
+  TrackedFileSummary,
+  WorkspaceTreeNode
+} from '@shared/contracts'
 import { cn } from '@renderer/lib/cn'
 import { markdownDisplayName, trackedFileDisplayLocation } from '@renderer/lib/display'
 import {
@@ -67,9 +75,11 @@ import { themeOptions, useAppStore } from '@renderer/store/app-store'
 import { SettingsDialog } from './SettingsDialog'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { BrandMark } from './BrandMark'
+import { DocumentKindIcon } from './DocumentKindIcon'
 
 interface SidebarProps { compact?: boolean }
 type FormKind = 'environment' | 'rename-environment' | 'project' | 'file' | 'folder' | null
+type NewDocumentKind = Exclude<DocumentKind, 'pdf'>
 
 export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
@@ -111,6 +121,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const [loadingTreeKeys, setLoadingTreeKeys] = useState<Set<string>>(new Set())
   const [searchResults, setSearchResults] = useState<IndexedFileSummary[]>([])
   const [formKind, setFormKind] = useState<FormKind>(null)
+  const [newDocumentKind, setNewDocumentKind] = useState<NewDocumentKind>('markdown')
   const [renameNode, setRenameNode] = useState<{ projectId: string; node: WorkspaceTreeNode } | null>(null)
   const [trashNode, setTrashNode] = useState<{ projectId: string; node: WorkspaceTreeNode } | null>(null)
   const [removeProjectTarget, setRemoveProjectTarget] = useState<ProjectSummary | null>(null)
@@ -121,9 +132,18 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   const ThemeIcon = settings.theme === 'dark' ? Moon : settings.theme === 'light' ? Sun : SwatchBook
   const environmentId = environment?.environment.id
   const expansionSignature = environment?.projects
-    .map((project) => `${project.id}:${project.expandedPaths.join(',')}:${project.indexedAt ?? 0}`)
+    .map((project) => [
+      project.id,
+      project.expandedPaths.join(','),
+      project.indexedAt ?? 0,
+      project.scopeMode,
+      project.includePaths.join(','),
+      project.excludePatterns.join(','),
+      project.enabledDocumentKinds.join(',')
+    ].join(':'))
     .join('|') ?? ''
   const environmentRef = useRef(environment)
+  const projectCacheSignaturesRef = useRef<Map<string, string>>(new Map())
   environmentRef.current = environment
 
   useEffect(() => {
@@ -131,12 +151,36 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
     setExpandedFolders({})
     setTreePages({})
     setLoadingTreeKeys(new Set())
+    projectCacheSignaturesRef.current.clear()
   }, [environmentId])
 
   useEffect(() => {
     const currentEnvironment = environmentRef.current
     if (!currentEnvironment) return
     let cancelled = false
+    const nextCacheSignatures = new Map(currentEnvironment.projects.map((project) => [
+      project.id,
+      [
+        project.indexedAt ?? 0,
+        project.scopeMode,
+        project.includePaths.join(','),
+        project.excludePatterns.join(','),
+        project.enabledDocumentKinds.join(',')
+      ].join(':')
+    ]))
+    const staleProjectIds = new Set(currentEnvironment.projects.flatMap((project) =>
+      projectCacheSignaturesRef.current.get(project.id) === nextCacheSignatures.get(project.id)
+        ? []
+        : [project.id]
+    ))
+    projectCacheSignaturesRef.current = nextCacheSignatures
+    if (staleProjectIds.size > 0) {
+      setTreePages((current) => Object.fromEntries(
+        Object.entries(current).filter(([key]) =>
+          ![...staleProjectIds].some((projectId) => key.startsWith(`${projectId}:`))
+        )
+      ))
+    }
     const openProjects = currentEnvironment.projects.filter((project) => project.expandedPaths.includes('') && !project.archived)
     setExpandedProjects(new Set(openProjects.map((project) => project.id)))
     setExpandedFolders(Object.fromEntries(currentEnvironment.projects.map((project) => [project.id, new Set(project.expandedPaths.filter(Boolean))])))
@@ -210,6 +254,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
     )),
     [environment?.files]
   )
+  const selectedProject = environment?.projects.find((project) => project.id === selectedProjectId)
 
   const toggleProject = (projectId: string): void => {
     const opening = !expandedProjects.has(projectId)
@@ -287,12 +332,28 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
     await refreshEnvironment()
   }
 
+  const beginNewDocument = (
+    documentKind: NewDocumentKind,
+    projectId?: string,
+    folderPath = ''
+  ): void => {
+    setNewDocumentKind(documentKind)
+    if (!projectId) {
+      void createFile(undefined, documentKind)
+      return
+    }
+    setSelectedLocation(projectId, folderPath)
+    setFormKind('file')
+  }
+
   const renderProject = (project: ProjectSummary): React.JSX.Element => {
     const projectOpen = !project.archived && !query && expandedProjects.has(project.id)
     const rootPage = treePages[treeKey(project.id, '')]
     return (
       <div className={cn('project-group [&+.project-group]:mt-px', project.archived && 'opacity-70')} key={project.id}>
-        <div className={projectRowClasses(selectedProjectId === project.id && selectedFolderPath === '')}>
+        <div
+          className={projectRowClasses(selectedProjectId === project.id && selectedFolderPath === '')}
+        >
           <button
             className="flex h-[29px] min-w-0 flex-1 items-center gap-[6px] border-0 bg-transparent px-1 text-left text-[12px] text-inherit [&>svg:nth-child(2)]:text-[color-mix(in_oklab,var(--accent)_55%,var(--text-soft))] [&>span]:overflow-hidden [&>span]:text-ellipsis [&>span]:whitespace-nowrap"
             onClick={() => project.archived ? setManageProjectTarget(project) : toggleProject(project.id)}
@@ -309,10 +370,23 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
             <DropdownMenu.Portal>
               <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
                 {!project.archived && <>
-                  <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('file') }}><FilePlus2 size={14} /> New file</DropdownMenu.Item>
+                  <DropdownMenu.Sub>
+                    <DropdownMenu.SubTrigger className={dropdownItemClasses()}>
+                      <FilePlus2 size={14} /> New document <ChevronRight className="ml-auto" size={13} />
+                    </DropdownMenu.SubTrigger>
+                    <DropdownMenu.Portal>
+                      <DropdownMenu.SubContent className={dropdownContentClasses} sideOffset={4}>
+                        <DocumentKindItems
+                          enabledKinds={project.enabledDocumentKinds}
+                          onSelect={(kind) => beginNewDocument(kind, project.id)}
+                          onManage={() => setManageProjectTarget(project)}
+                        />
+                      </DropdownMenu.SubContent>
+                    </DropdownMenu.Portal>
+                  </DropdownMenu.Sub>
                   <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('folder') }}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
                 </>}
-                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setManageProjectTarget(project)}><SlidersHorizontal size={14} /> Manage project</DropdownMenu.Item>
+                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setManageProjectTarget(project)}><SlidersHorizontal size={14} /> Project settings</DropdownMenu.Item>
                 <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.aladdeen.files.revealProjectEntry(project.id, '')}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
                 <DropdownMenu.Separator className={dropdownSeparatorClasses} />
                 <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={() => setRemoveProjectTarget(project)}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
@@ -325,7 +399,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
             {loadingTreeKeys.has(treeKey(project.id, '')) && !rootPage ? (
               <div className="pt-[6px] pr-[10px] pb-2 pl-9 text-[10px] text-foreground-muted"><LoaderCircle className="spinner" size={12} /> Indexing…</div>
             ) : !rootPage || rootPage.entries.length === 0 ? (
-              <div className="pt-[6px] pr-[10px] pb-2 pl-9 text-[10px] text-foreground-muted">{project.indexStatus === 'indexing' ? 'Indexing Markdown files…' : 'No Markdown files in this scope'}</div>
+              <div className="pt-[6px] pr-[10px] pb-2 pl-9 text-[10px] text-foreground-muted">{project.indexStatus === 'indexing' ? 'Indexing documents…' : 'No supported documents in this scope'}</div>
             ) : rootPage.entries.map((node) => (
               <ProjectTreeItem
                 key={node.path}
@@ -337,13 +411,21 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
                 expanded={expandedFolders[project.id] ?? new Set()}
                 pages={treePages}
                 loadingKeys={loadingTreeKeys}
+                enabledDocumentKinds={project.enabledDocumentKinds}
                 onToggle={toggleFolder}
                 onOpen={(path) => void openDocument({ kind: 'project', projectId: project.id, relativePath: path })}
                 onSelectFolder={(path) => setSelectedLocation(project.id, path)}
                 onRename={(item) => setRenameNode({ projectId: project.id, node: item })}
                 onTrash={(item) => setTrashNode({ projectId: project.id, node: item })}
-                onCreate={(path, kind) => { setSelectedLocation(project.id, path); setFormKind(kind) }}
+                onCreate={(path, kind, documentKind) => {
+                  if (kind === 'file') beginNewDocument(documentKind ?? 'markdown', project.id, path)
+                  else {
+                    setSelectedLocation(project.id, path)
+                    setFormKind('folder')
+                  }
+                }}
                 onLoadMore={(path, cursor) => void loadChildren(project.id, path, cursor)}
+                onManageDocumentKinds={() => setManageProjectTarget(project)}
               />
             ))}
             {rootPage?.nextCursor !== undefined && (
@@ -360,9 +442,12 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   return (
     <aside className={cn(sidebarClasses, compact && 'is-compact w-full shadow-[12px_0_38px_rgb(0_0_0/.18)]')} aria-label="Environment files">
       <div className="flex min-h-11 shrink-0 items-center justify-between pt-2 pr-[9px] pb-1 pl-[11px]">
-        <div className="flex min-w-0 items-center gap-2" aria-label="Aladdeen">
+        <div className="flex min-w-0 items-center gap-2" aria-label="Aladdeen Research">
           <BrandMark className="block h-[25px] w-[25px] shrink-0 drop-shadow-[0_3px_7px_rgb(0_0_0/.16)]" />
-          <strong className="overflow-hidden text-[13px] font-[720] tracking-[-.015em] text-ellipsis whitespace-nowrap text-foreground">Aladdeen</strong>
+          <span className="flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
+            <strong className="shrink-0 text-[13px] font-[720] tracking-[-.015em] text-foreground">Aladdeen</strong>
+            <span className="sidebar-brand-signature truncate text-foreground-soft" aria-hidden="true">Research</span>
+          </span>
         </div>
         <div className="flex items-center gap-0.5">
           <button
@@ -371,8 +456,8 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
               if (compact) setSidebarOpen(false)
               setGlobalSearchOpen(true)
             }}
-            aria-label="Search Markdown contents"
-            title="Search Markdown contents (⌘/Ctrl Shift F)"
+            aria-label="Search document contents"
+            title="Search document contents (⌘ Shift F)"
           >
             <FileSearch2 size={15} />
           </button>
@@ -397,7 +482,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
 
       <div className="mx-[10px] mt-0.5 mb-[5px] grid min-w-0 shrink-0 gap-0.5 rounded-lg border border-border bg-[color-mix(in_oklab,var(--surface-elevated)_72%,transparent)] px-[9px] py-2" title={activeDocument?.fullPath}>
         <strong className={cn('overflow-hidden text-[12px] font-[630] leading-4 text-ellipsis whitespace-nowrap text-foreground', !activeDocument && 'text-foreground-soft')}>{activeDocument?.name ?? 'No file selected'}</strong>
-        <span className="active-document-location overflow-hidden text-[9px] leading-[13px] text-ellipsis whitespace-nowrap text-foreground-muted">{activeDocument?.location ?? 'Open or create a Markdown file'}</span>
+        <span className="active-document-location overflow-hidden text-[9px] leading-[13px] text-ellipsis whitespace-nowrap text-foreground-muted">{activeDocument?.location ?? 'Open or create a document'}</span>
       </div>
 
       <div className="flex min-h-[35px] shrink-0 items-center justify-between pt-0 pr-[9px] pb-0.5 pl-[11px]">
@@ -434,7 +519,26 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
       )}
 
       <div className="flex shrink-0 flex-col items-stretch gap-px px-[9px] pt-[3px] pb-[10px]">
-        <button className={sidebarQuickActionClasses} onClick={() => selectedProjectId ? setFormKind('file') : void createFile()}><FilePlus2 size={15} /> New file</button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button className={sidebarQuickActionClasses}>
+              <FilePlus2 size={15} /> New document <ChevronDown className="ml-auto" size={13} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
+              <DocumentKindItems
+                enabledKinds={selectedProject?.enabledDocumentKinds}
+                onSelect={(kind) => beginNewDocument(
+                  kind,
+                  selectedProjectId ?? undefined,
+                  selectedFolderPath
+                )}
+                onManage={selectedProject ? () => setManageProjectTarget(selectedProject) : undefined}
+              />
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
         <button className={sidebarQuickActionClasses} onClick={() => setFormKind('project')}><FolderPlus size={15} /> New folder</button>
       </div>
 
@@ -544,6 +648,9 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
 
       <SidebarForm
         kind={formKind}
+        title={formKind === 'file'
+          ? `New ${newDocumentKind === 'markdown' ? 'Markdown' : newDocumentKind === 'html' ? 'HTML' : 'Word'} document`
+          : undefined}
         initialValue={formKind === 'rename-environment' ? environment.environment.name : ''}
         locationLabel={selectedProjectId ? environment.projects.find((project) => project.id === selectedProjectId)?.name : undefined}
         onClose={() => setFormKind(null)}
@@ -551,7 +658,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
           if (formKind === 'environment') return createEnvironment(value)
           if (formKind === 'rename-environment') return renameEnvironment(value)
           if (formKind === 'project') { await createProject(value); return true }
-          if (formKind === 'file') { await createFile(value); return true }
+          if (formKind === 'file') { await createFile(value, newDocumentKind); return true }
           if (formKind === 'folder') { await createFolder(value); return true }
           return false
         }}
@@ -569,7 +676,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
       <ConfirmDialog
         open={Boolean(trashNode)}
         title={`Move “${trashNode?.node.name ?? ''}” to Trash?`}
-        description={trashNode?.node.kind === 'directory' ? 'The folder and everything inside it will be moved to your system Trash.' : 'You can recover this Markdown file later from your system Trash.'}
+        description={trashNode?.node.kind === 'directory' ? 'The folder and everything inside it will be moved to your system Trash.' : 'You can recover this document later from your system Trash.'}
         confirmLabel="Move to Trash"
         destructive
         onCancel={() => setTrashNode(null)}
@@ -595,7 +702,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
       <ConfirmDialog
         open={deleteEnvironmentOpen}
         title={`Delete “${environment.environment.name}”?`}
-        description="Only Aladdeen’s saved environment metadata is removed. No folders or Markdown files will be deleted."
+        description="Only Aladdeen’s saved environment metadata is removed. No folders or documents will be deleted."
         confirmLabel="Delete environment"
         destructive
         onCancel={() => setDeleteEnvironmentOpen(false)}
@@ -607,9 +714,49 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
   )
 }
 
+function DocumentKindItems({
+  enabledKinds,
+  onSelect,
+  onManage
+}: {
+  enabledKinds?: readonly DocumentKind[]
+  onSelect(documentKind: NewDocumentKind): void
+  onManage?(): void
+}): React.JSX.Element {
+  const enabled = new Set<DocumentKind>(enabledKinds ?? ['markdown', 'html', 'docx'])
+  const hasCreatableDocument = enabled.has('markdown') || enabled.has('html') || enabled.has('docx')
+  return (
+    <>
+      {enabled.has('markdown') && (
+        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('markdown')}>
+          <FileText size={14} /> Markdown
+        </DropdownMenu.Item>
+      )}
+      {enabled.has('html') && (
+        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('html')}>
+          <FileCode2 size={14} /> HTML
+        </DropdownMenu.Item>
+      )}
+      {enabled.has('docx') && (
+        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('docx')}>
+          <FileText size={14} /> Word document
+        </DropdownMenu.Item>
+      )}
+      {onManage && (
+        <>
+          {hasCreatableDocument && <DropdownMenu.Separator className={dropdownSeparatorClasses} />}
+          <DropdownMenu.Item className={dropdownItemClasses()} onSelect={onManage}>
+            <SlidersHorizontal size={14} /> Manage file types…
+          </DropdownMenu.Item>
+        </>
+      )}
+    </>
+  )
+}
+
 function ProjectTreeItem({
-  projectId, node, depth, activeFileId, trackedFilesByProjectPath, expanded, pages, loadingKeys, onToggle, onOpen, onSelectFolder,
-  onRename, onTrash, onCreate, onLoadMore
+  projectId, node, depth, activeFileId, trackedFilesByProjectPath, expanded, pages, loadingKeys, enabledDocumentKinds,
+  onToggle, onOpen, onSelectFolder, onRename, onTrash, onCreate, onLoadMore, onManageDocumentKinds
 }: {
   projectId: string
   node: WorkspaceTreeNode
@@ -619,13 +766,15 @@ function ProjectTreeItem({
   expanded: Set<string>
   pages: Record<string, ProjectTreePage>
   loadingKeys: Set<string>
+  enabledDocumentKinds: readonly DocumentKind[]
   onToggle(projectId: string, path: string): void
   onOpen(path: string): void
   onSelectFolder(path: string): void
   onRename(node: WorkspaceTreeNode): void
   onTrash(node: WorkspaceTreeNode): void
-  onCreate(path: string, kind: 'file' | 'folder'): void
+  onCreate(path: string, kind: 'file' | 'folder', documentKind?: NewDocumentKind): void
   onLoadMore(path: string, cursor: number): void
+  onManageDocumentKinds(): void
 }): React.JSX.Element {
   const isExpanded = expanded.has(node.path)
   const page = pages[treeKey(projectId, node.path)]
@@ -633,13 +782,18 @@ function ProjectTreeItem({
   const tracked = node.kind === 'file' ? trackedFilesByProjectPath.get(`${projectId}\0${node.path}`) : undefined
   return (
     <div role="treeitem" aria-expanded={node.kind === 'directory' ? isExpanded : undefined}>
-      <div className={environmentTreeRowClasses(tracked?.id === activeFileId)} style={{ '--tree-depth': depth } as React.CSSProperties}>
+      <div
+        className={environmentTreeRowClasses(tracked?.id === activeFileId)}
+        style={{ '--tree-depth': depth } as React.CSSProperties}
+      >
         <button className="flex h-7 min-w-0 flex-1 items-center gap-[6px] border-0 bg-transparent px-[3px] text-left text-inherit [&>svg]:shrink-0 [&>svg]:text-foreground-muted [&>span:last-child]:overflow-hidden [&>span:last-child]:text-ellipsis [&>span:last-child]:whitespace-nowrap" onClick={() => {
           if (node.kind === 'directory') { onSelectFolder(node.path); onToggle(projectId, node.path) }
           else onOpen(node.path)
         }}>
           <span className="grid w-3 shrink-0 basis-3 place-items-center text-foreground-muted">{node.kind === 'directory' && (isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />)}</span>
-          {node.kind === 'directory' ? (isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />) : <FileText size={14} />}
+          {node.kind === 'directory'
+            ? (isExpanded ? <FolderOpen size={14} /> : <Folder size={14} />)
+            : <DocumentKindIcon kind={node.documentKind} size={14} />}
           <span>{node.name}</span>
         </button>
         <DropdownMenu.Root>
@@ -647,7 +801,20 @@ function ProjectTreeItem({
           <DropdownMenu.Portal>
             <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
               {node.kind === 'directory' && <>
-                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onCreate(node.path, 'file')}><FilePlus2 size={14} /> New file</DropdownMenu.Item>
+                <DropdownMenu.Sub>
+                  <DropdownMenu.SubTrigger className={dropdownItemClasses()}>
+                    <FilePlus2 size={14} /> New document <ChevronRight className="ml-auto" size={13} />
+                  </DropdownMenu.SubTrigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.SubContent className={dropdownContentClasses} sideOffset={4}>
+                      <DocumentKindItems
+                        enabledKinds={enabledDocumentKinds}
+                        onSelect={(kind) => onCreate(node.path, 'file', kind)}
+                        onManage={onManageDocumentKinds}
+                      />
+                    </DropdownMenu.SubContent>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Sub>
                 <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onCreate(node.path, 'folder')}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
               </>}
               <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onRename(node)}><Pencil size={14} /> Rename</DropdownMenu.Item>
@@ -672,6 +839,7 @@ function ProjectTreeItem({
               expanded={expanded}
               pages={pages}
               loadingKeys={loadingKeys}
+              enabledDocumentKinds={enabledDocumentKinds}
               onToggle={onToggle}
               onOpen={onOpen}
               onSelectFolder={onSelectFolder}
@@ -679,10 +847,11 @@ function ProjectTreeItem({
               onTrash={onTrash}
               onCreate={onCreate}
               onLoadMore={onLoadMore}
+              onManageDocumentKinds={onManageDocumentKinds}
             />
           ))}
           {page?.nextCursor !== undefined && <button className={treeLoadMoreClasses(true)} onClick={() => onLoadMore(node.path, page.nextCursor!)}>Show more</button>}
-          {page && page.entries.length === 0 && <div className="flex min-h-[25px] items-center gap-[5px] pl-[calc(35px+var(--tree-depth,0)*14px)] text-[9px] text-foreground-muted" style={{ '--tree-depth': depth + 1 } as React.CSSProperties}>No Markdown files</div>}
+          {page && page.entries.length === 0 && <div className="flex min-h-[25px] items-center gap-[5px] pl-[calc(35px+var(--tree-depth,0)*14px)] text-[9px] text-foreground-muted" style={{ '--tree-depth': depth + 1 } as React.CSSProperties}>No supported documents</div>}
         </>
       )}
     </div>
@@ -695,7 +864,9 @@ function TrackedFileRow({ file, active, onOpen, onLocate, onRemove, onTrash }: {
   return (
     <div className={trackedFileRowClasses(active, file.missing)} title={file.fullPath}>
       <button className="flex min-w-0 flex-1 items-center gap-2 border-0 bg-transparent py-[6px] pr-[7px] pl-2 text-left text-inherit" onClick={onOpen} aria-label={`Open ${file.name}`}>
-        {file.missing ? <FileQuestion className="shrink-0 text-foreground-muted" size={15} /> : <FileText className="shrink-0 text-foreground-muted" size={15} />}
+        {file.missing
+          ? <FileQuestion className="shrink-0 text-foreground-muted" size={15} />
+          : <DocumentKindIcon className="shrink-0 text-foreground-muted" kind={file.documentKind} size={15} />}
         <span className="tracked-file-copy block min-w-0 flex-1"><strong className="block overflow-hidden text-[12px] font-[580] leading-[17px] text-ellipsis whitespace-nowrap text-inherit">{displayName}</strong><small className="block overflow-hidden text-[10px] leading-[15px] text-ellipsis whitespace-nowrap text-foreground-muted">{displayLocation}</small></span>
         {file.missing && <span className="shrink-0 rounded-[5px] bg-danger-soft px-[5px] py-0.5 text-[8px] font-bold text-danger">Missing</span>}
       </button>
@@ -731,7 +902,7 @@ function SidebarForm({ kind, title, initialValue = '', locationLabel, submitLabe
     environment: 'New environment',
     'rename-environment': 'Rename environment',
     project: 'New folder project',
-    file: 'New Markdown file',
+    file: 'New document',
     folder: 'New subfolder'
   }
   const submit = async (): Promise<void> => {
@@ -750,7 +921,7 @@ function SidebarForm({ kind, title, initialValue = '', locationLabel, submitLabe
           <Dialog.Description className={dialogDescriptionClasses}>
             {kind === 'project' ? 'You’ll choose where to create it next.' : locationLabel && (kind === 'file' || kind === 'folder') ? `Create inside ${locationLabel}` : kind?.includes('environment') ? 'Environment names are unique in Aladdeen.' : 'Choose a clear, portable name.'}
           </Dialog.Description>
-          <input className={dialogInputClasses} value={value} autoFocus onFocus={(event) => kind?.includes('rename') && event.currentTarget.select()} placeholder={kind === 'file' ? 'Untitled.md' : kind === 'project' || kind === 'folder' ? 'Folder name' : 'Environment name'} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void submit()} />
+          <input className={dialogInputClasses} value={value} autoFocus onFocus={(event) => kind?.includes('rename') && event.currentTarget.select()} placeholder={kind === 'file' ? 'Document name' : kind === 'project' || kind === 'folder' ? 'Folder name' : 'Environment name'} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void submit()} />
           <div className={dialogActionsClasses}><Dialog.Close className={buttonClasses({ variant: 'secondary' })}>Cancel</Dialog.Close><button className={buttonClasses()} disabled={!value.trim() || busy} onClick={() => void submit()}>{busy ? 'Working…' : submitLabel ?? (kind?.includes('rename') ? 'Rename' : 'Create')}</button></div>
         </Dialog.Content>
       </Dialog.Portal>

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TabBar } from '@renderer/components/TabBar'
 import { useAppStore } from '@renderer/store/app-store'
 import type { AladdeenApi, OpenDocument } from '@shared/contracts'
+import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const environmentId = '22222222-2222-4222-8222-222222222222'
 
@@ -13,6 +14,9 @@ function document(id: string, name: string): OpenDocument {
     name,
     location: '~/Notes',
     fullPath: `/Users/test/Notes/${name}`,
+    documentKind: 'markdown',
+    encoding: 'utf-8',
+    capabilities: DOCUMENT_CAPABILITIES.markdown,
     content: '# Test',
     savedContent: '# Test',
     status: 'saved',

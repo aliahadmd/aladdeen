@@ -1,6 +1,11 @@
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Accent = 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose'
 export type SaveStatus = 'editing' | 'saving' | 'saved' | 'conflict' | 'error'
+export type DocumentKind = 'markdown' | 'html' | 'docx' | 'pdf'
+export type TextDocumentKind = Extract<DocumentKind, 'markdown' | 'html'>
+export type BinaryDocumentKind = Extract<DocumentKind, 'docx' | 'pdf'>
+export type DocumentActor = 'user' | 'agent' | 'system'
+export type DocumentKindCounts = Record<DocumentKind, number>
 
 export type ErrorCode =
   | 'CANCELLED'
@@ -29,6 +34,7 @@ export interface WorkspaceTreeNode {
   kind: 'file' | 'directory'
   children?: WorkspaceTreeNode[]
   descendantCount?: number
+  documentKind?: DocumentKind
 }
 
 export interface EnvironmentSummary {
@@ -47,6 +53,7 @@ export interface ProjectSummary {
   scopeMode: ProjectScopeMode
   includePaths: string[]
   excludePatterns: string[]
+  enabledDocumentKinds: DocumentKind[]
   groupName?: string
   pinned: boolean
   archived: boolean
@@ -68,6 +75,7 @@ export interface ProjectImportPreview {
   name: string
   displayPath: string
   fileCount: number
+  kindCounts: DocumentKindCounts
   tree: ProjectScopeNode[]
   truncated: boolean
 }
@@ -77,6 +85,7 @@ export interface ProjectImportSelection {
   scopeMode: ProjectScopeMode
   includePaths: string[]
   excludePatterns: string[]
+  enabledDocumentKinds: DocumentKind[]
   groupName?: string
   pinned: boolean
 }
@@ -84,7 +93,8 @@ export interface ProjectImportSelection {
 export interface ProjectScopePreview {
   project: ProjectSummary
   tree: ProjectScopeNode[]
-  totalMarkdownFiles: number
+  totalDocuments: number
+  kindCounts: DocumentKindCounts
   truncated: boolean
 }
 
@@ -93,6 +103,7 @@ export interface UpdateProjectRequest {
   scopeMode: ProjectScopeMode
   includePaths: string[]
   excludePatterns: string[]
+  enabledDocumentKinds: DocumentKind[]
   groupName?: string
   pinned: boolean
   archived: boolean
@@ -112,6 +123,7 @@ export interface IndexedFileSummary {
   name: string
   relativePath: string
   location: string
+  documentKind: DocumentKind
 }
 
 export interface TrackedFileSummary {
@@ -124,6 +136,7 @@ export interface TrackedFileSummary {
   relativePath?: string
   lastOpenedAt: number
   missing: boolean
+  documentKind: DocumentKind
 }
 
 export interface EnvironmentSnapshot {
@@ -171,6 +184,17 @@ export interface GlobalSearchMatch {
   snippetMatchStart: number
   snippetMatchEnd: number
   fileTruncated: boolean
+  documentKind?: DocumentKind
+  pageIndex?: number
+  pageX?: number
+  pageY?: number
+  documentPosition?: number
+}
+
+export interface BinarySearchRevealContext {
+  query: string
+  matchCase: boolean
+  wholeWord: boolean
 }
 
 export interface GlobalSearchSummary {
@@ -199,11 +223,29 @@ export interface FileRevision {
   mtimeMs: number
   size: number
   sha256: string
-  lineEnding: 'LF' | 'CRLF'
-  hasBom: boolean
+  lineEnding?: 'LF' | 'CRLF'
+  hasBom?: boolean
 }
 
-export interface DocumentSnapshot {
+export interface DocumentCapabilities {
+  edit: boolean
+  preview: boolean
+  split: boolean
+  outline: boolean
+  search: boolean
+  undoRedo: boolean
+  save: boolean
+  saveAs: boolean
+  exportPdf: boolean
+  exportDocx: boolean
+  comments: boolean
+  trackedChanges: boolean
+  annotations: boolean
+  forms: boolean
+  pageTools: boolean
+}
+
+export interface BaseDocumentSnapshot {
   id: string
   environmentId: string
   projectId?: string
@@ -211,9 +253,31 @@ export interface DocumentSnapshot {
   name: string
   location: string
   fullPath: string
-  content: string
   revision: FileRevision
+  capabilities: DocumentCapabilities
 }
+
+export interface TextDocumentSnapshot extends BaseDocumentSnapshot {
+  documentKind: TextDocumentKind
+  content: string
+  encoding: 'utf-8'
+}
+
+export interface BinaryDocumentSession {
+  id: string
+  url: string
+  byteLength: number
+  encrypted?: boolean
+  signed?: boolean
+  restricted?: boolean
+}
+
+export interface BinaryDocumentSnapshot extends BaseDocumentSnapshot {
+  documentKind: BinaryDocumentKind
+  session: BinaryDocumentSession
+}
+
+export type DocumentSnapshot = TextDocumentSnapshot | BinaryDocumentSnapshot
 
 export interface PreviewSourceTarget {
   from: number
@@ -229,14 +293,41 @@ export interface EditorRevealRequest {
   origin: 'preview' | 'search'
 }
 
-export interface OpenDocument extends DocumentSnapshot {
-  savedContent: string
+export interface OpenDocumentState {
   status: SaveStatus
   error?: string
   deleted?: boolean
   editorScrollTop: number
   editorSelection: number
   editorReveal?: EditorRevealRequest
+}
+
+export interface TextOpenDocument extends TextDocumentSnapshot, OpenDocumentState {
+  savedContent: string
+}
+
+export interface BinaryOpenDocument extends BinaryDocumentSnapshot, OpenDocumentState {
+  binaryDirty: boolean
+  adapterRevision: number
+}
+
+export type OpenDocument = TextOpenDocument | BinaryOpenDocument
+
+export interface DocumentTransaction {
+  id: string
+  fileId: string
+  documentKind: DocumentKind
+  actor: DocumentActor
+  baseRevision: string
+  undoGroup?: string
+  createdAt: number
+}
+
+export interface DocumentCapabilitiesByKind {
+  markdown: DocumentCapabilities
+  html: DocumentCapabilities
+  docx: DocumentCapabilities
+  pdf: DocumentCapabilities
 }
 
 export interface AppSettings {
@@ -284,10 +375,24 @@ export interface SaveDocumentRequest {
   force?: boolean
 }
 
+export interface SaveBinaryDocumentRequest {
+  requestId: string
+  fileId: string
+  expectedRevision: FileRevision
+  byteLength: number
+  force?: boolean
+  saveAs?: boolean
+}
+
 export interface CreateEntryRequest {
   projectId: string
   parentPath: string
   name: string
+  documentKind?: Exclude<DocumentKind, 'pdf'>
+}
+
+export interface CreateStandaloneDocumentRequest {
+  documentKind: Exclude<DocumentKind, 'pdf'>
 }
 
 export interface RenameEntryRequest {
@@ -355,17 +460,25 @@ export interface AladdeenApi {
   document: {
     open(target: DocumentTarget): Promise<Result<DocumentSnapshot>>
     openFile(): Promise<Result<DocumentSnapshot>>
-    openDropped(file: File): Promise<Result<DocumentSnapshot>>
+    openDropped(files: File[]): Promise<Result<DocumentSnapshot[]>>
     openRelative(fileId: string, target: string): Promise<Result<DocumentSnapshot>>
     acceptOpenFile(token: string): Promise<Result<DocumentSnapshot>>
     read(fileId: string): Promise<Result<DocumentSnapshot>>
     save(request: SaveDocumentRequest): Promise<Result<FileRevision>>
+    saveAs(request: SaveDocumentRequest): Promise<Result<FileRevision>>
+    saveBinary(
+      request: Omit<SaveBinaryDocumentRequest, 'requestId' | 'byteLength'>,
+      data: ArrayBuffer
+    ): Promise<Result<FileRevision>>
+    releaseSession(sessionId: string): Promise<Result<void>>
     saveCopy(fileId: string, content: string): Promise<Result<SaveCopyResult>>
     onEvent(callback: (event: EnvironmentEvent) => void): () => void
     onOpenFileRequest(callback: (request: OpenFileRequest) => void): () => void
+    onOpenDocumentRequest(callback: () => void): () => void
+    onCreateDocumentRequest(callback: (kind: Exclude<DocumentKind, 'pdf'>) => void): () => void
   }
   files: {
-    create(request?: CreateEntryRequest): Promise<Result<DocumentSnapshot>>
+    create(request: CreateEntryRequest | CreateStandaloneDocumentRequest): Promise<Result<DocumentSnapshot>>
     createFolder(request: CreateEntryRequest): Promise<Result<EnvironmentSnapshot>>
     rename(request: RenameEntryRequest): Promise<Result<RenameEntryResult>>
     trash(projectId: string, path: string): Promise<Result<void>>
@@ -412,6 +525,8 @@ export const IPC = {
   globalSearchOpenRequest: 'search:open-request',
   environmentEvent: 'environment:event',
   systemOpenFileRequest: 'system:open-file-request',
+  openDocumentRequest: 'document:open-request',
+  createDocumentRequest: 'document:create-request',
   acceptSystemOpenFile: 'system:accept-open-file',
   openDocument: 'document:open',
   openFile: 'document:open-file',
@@ -419,6 +534,10 @@ export const IPC = {
   openRelativeDocument: 'document:open-relative',
   readDocument: 'document:read',
   saveDocument: 'document:save',
+  saveDocumentAs: 'document:save-as',
+  saveBinaryDocument: 'document:save-binary',
+  binarySaveResult: 'document:save-binary-result',
+  releaseDocumentSession: 'document:release-session',
   saveCopy: 'document:save-copy',
   createEntry: 'files:create',
   createFolder: 'files:create-folder',

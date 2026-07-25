@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { extname, join } from 'node:path'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { access } from 'node:fs/promises'
 import {
   app,
   BrowserWindow,
   dialog,
   Menu,
+  net,
   nativeTheme,
   protocol,
   session,
@@ -17,13 +19,16 @@ import { GlobalSearchService } from '@main/services/global-search'
 import { WorkspaceService } from '@main/services/workspace'
 import { registerIpc } from '@main/ipc'
 import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
+import { documentKindFromName, isSupportedDocumentName } from '@shared/documents'
 
 const mainBundleDirectory = import.meta.dirname
-const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown'])
-
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'aladdeen-asset',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
+  },
+  {
+    scheme: 'aladdeen-document',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
   }
 ])
@@ -47,16 +52,16 @@ let pendingClose: {
 } | null = null
 const systemOpenTokens = new Map<string, { path: string; expiresAt: number }>()
 
-function extractMarkdownPath(argv: string[]): string | null {
-  return argv.find((argument) => MARKDOWN_EXTENSIONS.has(extname(argument).toLowerCase())) ?? null
+function extractDocumentPath(argv: string[]): string | null {
+  return argv.find((argument) => isSupportedDocumentName(argument)) ?? null
 }
 
-const initialSystemPath = extractMarkdownPath(process.argv.slice(1))
+const initialSystemPath = extractDocumentPath(process.argv.slice(1))
 const hasLock = app.requestSingleInstanceLock()
 if (!hasLock) app.quit()
 
 app.on('second-instance', (_event, argv) => {
-  const filePath = extractMarkdownPath(argv)
+  const filePath = extractDocumentPath(argv)
   if (filePath) void openSystemFile(filePath)
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore()
@@ -87,7 +92,6 @@ app.whenReady().then(async () => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.environmentEvent, environmentEvent)
   })
   globalSearch = new GlobalSearchService(database, workspace, () => mainWindow)
-
   const exportService = new ExportService(workspace, () => mainWindow)
   registerIpc({
     database,
@@ -100,6 +104,7 @@ app.whenReady().then(async () => {
     completeClose
   })
   registerAssetProtocol(workspace)
+  registerDocumentProtocol(workspace)
   configureSessionSecurity()
   const fileToOpen = pendingSystemFile ?? initialSystemPath
   pendingSystemFile = null
@@ -172,6 +177,19 @@ function createWindow(): void {
 function configureSessionSecurity(): void {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
   session.defaultSession.setPermissionCheckHandler(() => false)
+  const developmentOrigin = !app.isPackaged && process.env.ELECTRON_RENDERER_URL
+    ? new URL(process.env.ELECTRON_RENDERER_URL).origin
+    : null
+  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    if (!/^https?:/i.test(details.url)) {
+      callback({})
+      return
+    }
+    const allowedDevelopmentRequest = developmentOrigin
+      ? new URL(details.url).origin === developmentOrigin
+      : false
+    callback({ cancel: !allowedDevelopmentRequest })
+  })
 }
 
 function registerAssetProtocol(service: WorkspaceService): void {
@@ -193,15 +211,41 @@ function registerAssetProtocol(service: WorkspaceService): void {
   })
 }
 
+function registerDocumentProtocol(service: WorkspaceService): void {
+  protocol.handle('aladdeen-document', async (request) => {
+    try {
+      const url = new URL(request.url)
+      if (url.hostname !== 'session') return new Response('Not found', { status: 404 })
+      const sessionId = decodeURIComponent(url.pathname.replace(/^\//, ''))
+      if (!sessionId) return new Response('Not found', { status: 404 })
+      const document = await service.resolveBinarySession(sessionId)
+      const response = await net.fetch(pathToFileURL(document.path).toString(), {
+        headers: request.headers
+      })
+      const headers = new Headers(response.headers)
+      headers.set('Content-Type', document.mimeType)
+      headers.set('Cache-Control', 'no-store')
+      headers.set('Content-Disposition', 'inline')
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers
+      })
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
+}
+
 async function openSystemFile(filePath: string): Promise<void> {
-  if (!workspace || !database || !MARKDOWN_EXTENSIONS.has(extname(filePath).toLowerCase())) return
+  if (!workspace || !database || !documentKindFromName(filePath)) return
   try {
     await access(filePath)
     const token = randomUUID()
     const now = Date.now()
     for (const [candidate, request] of systemOpenTokens) if (request.expiresAt < now) systemOpenTokens.delete(candidate)
     systemOpenTokens.set(token, { path: filePath, expiresAt: now + 3_600_000 })
-    pendingOpenRequest = { token, name: filePath.split(/[\\/]/).pop() ?? 'Markdown file' }
+    pendingOpenRequest = { token, name: filePath.split(/[\\/]/).pop() ?? 'Document' }
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
       mainWindow.webContents.send(IPC.systemOpenFileRequest, pendingOpenRequest)
     }
@@ -231,6 +275,36 @@ function installMenu(): void {
         { role: 'unhide' },
         { type: 'separator' },
         { role: 'quit' }
+      ]
+    },
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'New Document',
+          submenu: [
+            {
+              label: 'Markdown',
+              accelerator: 'Command+N',
+              click: () => mainWindow?.webContents.send(IPC.createDocumentRequest, 'markdown')
+            },
+            {
+              label: 'HTML',
+              click: () => mainWindow?.webContents.send(IPC.createDocumentRequest, 'html')
+            },
+            {
+              label: 'Word Document',
+              click: () => mainWindow?.webContents.send(IPC.createDocumentRequest, 'docx')
+            }
+          ]
+        },
+        {
+          label: 'Open Document…',
+          accelerator: 'Command+O',
+          click: () => mainWindow?.webContents.send(IPC.openDocumentRequest)
+        },
+        { type: 'separator' },
+        { role: 'close' }
       ]
     },
     {
