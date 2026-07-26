@@ -96,7 +96,7 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'About' }))
     expect(screen.getByRole('heading', { name: 'About' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Aladdeen Research' })).toBeVisible()
-    expect(screen.getByText('Version 0.4.0')).toBeVisible()
+    expect(screen.getByText('Version 0.5.0')).toBeVisible()
     expect(screen.getByText(/original disk locations/i)).toBeVisible()
     expect(screen.queryByText('Quick open')).not.toBeInTheDocument()
 

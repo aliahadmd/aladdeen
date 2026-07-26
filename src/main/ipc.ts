@@ -16,7 +16,7 @@ import type { ExportService } from '@main/services/export'
 import type { GlobalSearchService } from '@main/services/global-search'
 import type { WorkspaceService } from '@main/services/workspace'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
-import { defaultNameForKind, DOCUMENT_EXTENSIONS } from '@shared/documents'
+import { defaultNameForKind, DOCUMENT_EXTENSIONS, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import {
   createEntrySchema,
   createStandaloneDocumentSchema,
@@ -202,7 +202,7 @@ export function registerIpc({
     return workspace.openAbsoluteDocument(result.filePaths[0])
   })
   handle(IPC.openDroppedFile, async (_event, input) => {
-    const paths = parse(z.array(z.string().min(1).max(16_384)).min(1).max(20), input)
+    const paths = parse(z.array(z.string().min(1).max(16_384)).min(1).max(MAX_DROPPED_DOCUMENTS), input)
     const documents: DocumentSnapshot[] = []
     for (const path of paths) documents.push(await workspace.openAbsoluteDocument(path))
     return documents

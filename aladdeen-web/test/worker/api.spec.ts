@@ -5,6 +5,7 @@ import {
 	CURRENT_RELEASE,
 	RELEASE_ARTIFACTS,
 } from "../../src/shared/releases";
+import { releaseObjectMatchesManifest } from "../../src/worker/index";
 
 const testBody = "aladdeen-installer";
 const arm64Url = `http://example.com${RELEASE_ARTIFACTS.arm64.downloadPath}`;
@@ -36,6 +37,17 @@ describe("Worker API", () => {
 		});
 	});
 
+	it("rejects release objects whose byte size differs from the manifest", () => {
+		expect(releaseObjectMatchesManifest(
+			{ size: RELEASE_ARTIFACTS.arm64.byteSize },
+			RELEASE_ARTIFACTS.arm64,
+		)).toBe(true);
+		expect(releaseObjectMatchesManifest(
+			{ size: RELEASE_ARTIFACTS.arm64.byteSize - 1 },
+			RELEASE_ARTIFACTS.arm64,
+		)).toBe(false);
+	});
+
 	it("streams an allow-listed installer with download metadata", async () => {
 		const response = await exports.default.fetch(arm64Url);
 
@@ -55,6 +67,8 @@ describe("Worker API", () => {
 		);
 		expect(response.headers.get("cache-control")).toContain("immutable");
 		expect(response.headers.get("etag")).toBeTruthy();
+		expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
+		expect(response.headers.get("strict-transport-security")).toContain("max-age=63072000");
 	});
 
 	it("supports HEAD without returning a body", async () => {
@@ -103,7 +117,9 @@ describe("Worker API", () => {
 
 	it("returns 404 when an allow-listed object is missing", async () => {
 		await env.DOWNLOADS.delete(RELEASE_ARTIFACTS.arm64.r2Key);
-		const response = await exports.default.fetch(arm64Url);
+		const response = await exports.default.fetch(new Request(arm64Url, {
+			headers: { Range: "bytes=0-1" },
+		}));
 
 		expect(response.status).toBe(404);
 		expect(await response.json()).toEqual({

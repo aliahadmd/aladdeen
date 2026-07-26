@@ -515,6 +515,7 @@ export class WorkspaceService {
     const project = this.findContainingProject(targetPath)
     this.database.updateTrackedFile(tracked.id, targetPath, project?.id, tracked.documentKind)
     await this.restartStandaloneWatcher()
+    await this.refreshProjectIndexes([tracked.projectId, project?.id])
     return this.createRevision(savedStats.mtimeMs, nextBuffer, lineEnding, hasBom)
   }
 
@@ -563,19 +564,24 @@ export class WorkspaceService {
 
     this.suppressInternalWrite(targetPath)
     try {
-      await writeFileAtomic(targetPath, Buffer.from(data), { fsync: true })
+      const dataView = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+      await writeFileAtomic(targetPath, dataView, { fsync: true })
     } catch (error) {
       this.suppressedWrites.delete(targetPath)
       throw error
     }
 
     const savedStats = await stat(targetPath)
-    const savedBuffer = Buffer.from(data)
-    const revision = this.createRevision(savedStats.mtimeMs, savedBuffer)
+    const revision: FileRevision = {
+      mtimeMs: savedStats.mtimeMs,
+      size: savedStats.size,
+      sha256: await sha256File(targetPath)
+    }
     if (destinationPath) {
       const project = this.findContainingProject(targetPath)
       this.database.updateTrackedFile(tracked.id, targetPath, project?.id, tracked.documentKind)
       await this.restartStandaloneWatcher()
+      await this.refreshProjectIndexes([tracked.projectId, project?.id])
     } else {
       this.database.setTrackedFileMissing(tracked.id, false)
     }
@@ -684,6 +690,7 @@ export class WorkspaceService {
       return updated ? [updated] : []
     })
     await this.restartStandaloneWatcher()
+    await this.refreshProjectIndexes([project.id])
     const projects = this.database.listProjects(this.requireEnvironment())
     return {
       projectId: project.id,
@@ -1108,13 +1115,24 @@ export class WorkspaceService {
     rootPath: string,
     enabledDocumentKinds: readonly DocumentKind[] = ALL_PROJECT_DOCUMENT_KINDS
   ): Promise<{ files: ProjectIndexFileRecord[]; truncated: boolean }> {
-    const files: ProjectIndexFileRecord[] = []
+    const candidates: Array<{
+      fullPath: string
+      relativePath: string
+      name: string
+      documentKind: DocumentKind
+    }> = []
     const directories: Array<{ fullPath: string; relativePath: string }> = [{ fullPath: rootPath, relativePath: '' }]
     const enabledKinds = new Set(enabledDocumentKinds)
 
     while (directories.length > 0) {
       const directory = directories.pop()!
-      const entries = await readdir(directory.fullPath, { withFileTypes: true })
+      let entries
+      try {
+        entries = await readdir(directory.fullPath, { withFileTypes: true })
+      } catch (error) {
+        if (directory.relativePath === '') throw error
+        continue
+      }
       for (const entry of entries) {
         if (entry.isSymbolicLink()) continue
         const childRelative = directory.relativePath
@@ -1128,19 +1146,25 @@ export class WorkspaceService {
         }
         const documentKind = documentKindFromName(entry.name)
         if (!entry.isFile() || !documentKind || !enabledKinds.has(documentKind)) continue
-        const fileStats = await stat(fullPath)
-        if (!fileStats.isFile()) continue
-        files.push({
-          projectId: '',
-          relativePath: childRelative,
-          parentPath: toPosixPath(dirname(childRelative)) === '.' ? '' : toPosixPath(dirname(childRelative)),
-          name: entry.name,
-          mtimeMs: fileStats.mtimeMs,
-          size: fileStats.size,
-          documentKind
-        })
+        candidates.push({ fullPath, relativePath: childRelative, name: entry.name, documentKind })
       }
     }
+    const inspected = await mapWithConcurrency(candidates, 32, async (candidate) => {
+      const fileStats = await stat(candidate.fullPath).catch(() => null)
+      if (!fileStats?.isFile()) return null
+      return {
+        projectId: '',
+        relativePath: candidate.relativePath,
+        parentPath: toPosixPath(dirname(candidate.relativePath)) === '.'
+          ? ''
+          : toPosixPath(dirname(candidate.relativePath)),
+        name: candidate.name,
+        mtimeMs: fileStats.mtimeMs,
+        size: fileStats.size,
+        documentKind: candidate.documentKind
+      } satisfies ProjectIndexFileRecord
+    })
+    const files = inspected.filter((file): file is ProjectIndexFileRecord => file !== null)
     return { files, truncated: files.length > MAX_SCOPE_PREVIEW_FILES }
   }
 
@@ -1160,13 +1184,28 @@ export class WorkspaceService {
     }
   }
 
+  private async refreshProjectIndexes(projectIds: Array<string | undefined>): Promise<void> {
+    for (const projectId of new Set(projectIds.filter((value): value is string => Boolean(value)))) {
+      const project = this.database.getProject(projectId)
+      if (!project || project.environmentId !== this.environmentId) continue
+      try {
+        await this.reindexProject(project)
+      } catch {
+        // The disk operation already succeeded. Preserve the last valid index
+        // and retry instead of reporting the save/rename itself as failed.
+        this.scheduleProjectReindex(project, 1_000)
+      }
+      this.onEvent({ type: 'tree-changed', projectId, isDirectory: true })
+    }
+  }
+
   private async refreshMissingFiles(): Promise<void> {
     if (!this.environmentId) return
-    await Promise.all(this.database.listTrackedFiles(this.environmentId).map(async (file) => {
+    await mapWithConcurrency(this.database.listTrackedFiles(this.environmentId), 16, async (file) => {
       let missing = false
       try { await access(file.path) } catch { missing = true }
       this.database.setTrackedFileMissing(file.id, missing)
-    }))
+    })
   }
 
   private async reassociateTrackedFiles(): Promise<void> {
@@ -1190,6 +1229,7 @@ export class WorkspaceService {
       ? [project.path]
       : normalizeScopePaths(project.includePaths).map((path) => resolveSyntacticPath(project.path, path))
     if (watchTargets.length === 0) return
+    const policy = compileProjectPolicy(project)
     const watcher = chokidar.watch(watchTargets, {
       ignoreInitial: true,
       followSymlinks: false,
@@ -1199,9 +1239,9 @@ export class WorkspaceService {
         if (relation && relation.split(sep).some((part) => IGNORED_DIRECTORY_NAMES.has(part))) return true
         if (!relation || !pathStats) return false
         const normalized = toPosixPath(relation)
-        if (pathStats.isDirectory()) return normalizePatterns(project.excludePatterns).some((pattern) => matchesGlob(`${normalized}/`, pattern))
+        if (pathStats.isDirectory()) return policy.isExcluded(`${normalized}/`)
         const documentKind = documentKindFromName(normalized)
-        return !documentKind || !isIncludedByProjectPolicy(normalized, documentKind, project)
+        return !documentKind || !policy.includes(normalized, documentKind)
       }
     })
     watcher.on('all', (eventName, fullPath) => this.handleProjectEvent(project, eventName, fullPath))
@@ -1212,17 +1252,19 @@ export class WorkspaceService {
     await this.standaloneWatcher?.close()
     this.standaloneWatcher = null
     if (!this.environmentId) return
+    const projects = new Map(this.database.listProjects(this.environmentId).map((project) => [project.id, project]))
+    const policies = new Map([...projects].map(([projectId, project]) => [projectId, compileProjectPolicy(project)]))
     const exactFiles = this.database.listTrackedFiles(this.environmentId).filter((file) => {
       if (!file.projectId) return true
-      const project = this.database.getProject(file.projectId)
+      const project = projects.get(file.projectId)
       if (!project || project.archived || !isPathInside(project.path, file.path)) return true
-      return !isIncludedByProjectPolicy(
+      return !policies.get(project.id)!.includes(
         toPosixPath(relative(project.path, file.path)),
-        file.documentKind,
-        project
+        file.documentKind
       )
     })
     if (exactFiles.length === 0) return
+    const exactFilesByPath = new Map(exactFiles.map((file) => [file.path, file]))
     const watchedEnvironmentId = this.environmentId
     const watcher = chokidar.watch(exactFiles.map((file) => file.path), {
       ignoreInitial: true,
@@ -1231,7 +1273,7 @@ export class WorkspaceService {
     })
     watcher.on('all', (eventName, fullPath) => {
       if (!watchedEnvironmentId || this.environmentId !== watchedEnvironmentId) return
-      const file = this.database.listTrackedFiles(watchedEnvironmentId).find((candidate) => candidate.path === fullPath)
+      const file = exactFilesByPath.get(fullPath)
       if (!file) return
       if (this.consumeSuppressed(fullPath)) return
       const type: EnvironmentEvent['type'] =
@@ -1248,8 +1290,8 @@ export class WorkspaceService {
     const isDirectory = eventName === 'addDir' || eventName === 'unlinkDir'
     const relativePath = toPosixPath(relative(project.path, fullPath))
     const documentKind = documentKindFromName(fullPath)
-    if (!isDirectory && (!documentKind || !isIncludedByProjectPolicy(relativePath, documentKind, project))) return
-    const file = this.database.listTrackedFiles(project.environmentId).find((candidate) => candidate.path === fullPath)
+    if (!isDirectory && (!documentKind || !compileProjectPolicy(project).includes(relativePath, documentKind))) return
+    const file = this.database.findTrackedFile(project.environmentId, fullPath)
     const type: EnvironmentEvent['type'] = eventName === 'change' ? 'changed' : eventName.startsWith('unlink') ? 'removed' : 'added'
     if (file && type === 'removed') this.database.setTrackedFileMissing(file.id, true)
     if (file && type === 'added') this.database.setTrackedFileMissing(file.id, false)
@@ -1313,24 +1355,7 @@ function normalizeDocumentKinds(kinds: readonly DocumentKind[]): DocumentKind[] 
   return normalized
 }
 
-function isIncludedByScope(relativePath: string, project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns'>): boolean {
-  const normalized = toPosixPath(relativePath)
-  const included = project.scopeMode === 'all' || normalizeScopePaths(project.includePaths).some(
-    (path) => normalized === path || normalized.startsWith(`${path}/`)
-  )
-  if (!included) return false
-  return !normalizePatterns(project.excludePatterns).some((pattern) => matchesGlob(normalized, pattern))
-}
-
-function isIncludedByProjectPolicy(
-  relativePath: string,
-  documentKind: DocumentKind,
-  project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'enabledDocumentKinds'>
-): boolean {
-  return project.enabledDocumentKinds.includes(documentKind) && isIncludedByScope(relativePath, project)
-}
-
-function matchesGlob(path: string, pattern: string): boolean {
+function globMatcher(pattern: string): RegExp {
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
   const source = escaped
     .replaceAll('**/', '\u0000')
@@ -1340,14 +1365,42 @@ function matchesGlob(path: string, pattern: string): boolean {
     .replaceAll('\u0000', '(?:.*/)?')
     .replaceAll('\u0001', '.*')
   const prefix = pattern.endsWith('/') ? source : `${source}(?:/.*)?`
-  return new RegExp(`^${prefix}$`, 'i').test(path)
+  return new RegExp(`^${prefix}$`, 'i')
+}
+
+function compileProjectPolicy(
+  project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'enabledDocumentKinds'>
+): {
+    includes(relativePath: string, documentKind: DocumentKind): boolean
+    isExcluded(relativePath: string): boolean
+  } {
+  const includePaths = project.scopeMode === 'all' ? [] : normalizeScopePaths(project.includePaths)
+  const excludeMatchers = normalizePatterns(project.excludePatterns).map(globMatcher)
+  const enabledKinds = new Set(project.enabledDocumentKinds)
+  const isExcluded = (relativePath: string): boolean => {
+    const normalized = toPosixPath(relativePath)
+    return excludeMatchers.some((matcher) => matcher.test(normalized))
+  }
+  return {
+    includes(relativePath, documentKind) {
+      if (!enabledKinds.has(documentKind)) return false
+      const normalized = toPosixPath(relativePath)
+      if (
+        project.scopeMode !== 'all' &&
+        !includePaths.some((path) => normalized === path || normalized.startsWith(`${path}/`))
+      ) return false
+      return !isExcluded(normalized)
+    },
+    isExcluded
+  }
 }
 
 function filterIndexedFiles(
   files: ProjectIndexFileRecord[],
   project: Pick<ProjectRecord, 'scopeMode' | 'includePaths' | 'excludePatterns' | 'enabledDocumentKinds'>
 ): ProjectIndexFileRecord[] {
-  return files.filter((file) => isIncludedByProjectPolicy(file.relativePath, file.documentKind, project))
+  const policy = compileProjectPolicy(project)
+  return files.filter((file) => policy.includes(file.relativePath, file.documentKind))
 }
 
 function countDocumentKinds(files: readonly ProjectIndexFileRecord[]): Record<DocumentKind, number> {

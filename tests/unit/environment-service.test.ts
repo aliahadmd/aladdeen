@@ -13,6 +13,44 @@ afterEach(async () => {
 })
 
 describe('environment service', () => {
+  it('updates the project index immediately after rename and Save As', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-index-consistency-'))
+    created.push(profile, projectPath)
+    await writeFile(join(projectPath, 'draft.md'), '# Draft\n', 'utf8')
+
+    const database = new AppDatabase(profile)
+    const environment = database.createEnvironment('Personal')
+    const service = new WorkspaceService(database, vi.fn())
+    await service.activateEnvironment(environment.id)
+    const project = (await service.addProjectPath(projectPath)).projects[0]!
+    const opened = await service.openDocument({
+      kind: 'project',
+      projectId: project.id,
+      relativePath: 'draft.md'
+    })
+
+    await service.renameEntry({ projectId: project.id, path: 'draft.md', newName: 'renamed.md' })
+    expect(database.listProjectIndex(project.id).map((file) => file.relativePath)).toEqual(['renamed.md'])
+
+    if (opened.documentKind !== 'markdown') throw new Error('Expected a Markdown snapshot.')
+    const tracked = database.getTrackedFile(opened.id)!
+    const renamed = await service.readDocument(tracked.id)
+    if (renamed.documentKind !== 'markdown') throw new Error('Expected a Markdown snapshot.')
+    await service.saveTextDocumentAs({
+      fileId: renamed.id,
+      content: '# Saved copy\n',
+      expectedRevision: renamed.revision
+    }, join(projectPath, 'saved-copy.md'))
+    expect(database.listProjectIndex(project.id).map((file) => file.relativePath)).toEqual([
+      'renamed.md',
+      'saved-copy.md'
+    ])
+
+    await service.close()
+    database.close()
+  })
+
   it('opens HTML, DOCX, and PDF in place with format-specific sessions', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
     const documentsPath = await mkdtemp(join(tmpdir(), 'aladdeen-formats-'))

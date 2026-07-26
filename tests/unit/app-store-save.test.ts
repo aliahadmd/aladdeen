@@ -79,7 +79,7 @@ describe('document save serialization', () => {
     useAppStore.setState({
       documents: [document('first edit', 'original')],
       activeFileId: fileId,
-      conflictFileId: null
+      conflictFileIds: []
     })
   })
 
@@ -135,7 +135,7 @@ describe('document save serialization', () => {
     useAppStore.setState({
       documents: [binaryDocument()],
       activeFileId: fileId,
-      conflictFileId: null
+      conflictFileIds: []
     })
     registerDocumentRuntime(fileId, {
       serialize: () => serialization.promise,
@@ -158,5 +158,87 @@ describe('document save serialization', () => {
       revision: revision(2)
     })
     useAppStore.getState().markBinaryDirty(fileId, false)
+  })
+
+  it('commits adapter-owned edits only after a successful binary write', async () => {
+    const completeSave = vi.fn()
+    const saveBinary = vi.fn()
+      .mockResolvedValueOnce({ ok: true, value: revision(2) } satisfies Result<FileRevision>)
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { code: 'PERMISSION_DENIED', message: 'Read only' }
+      } satisfies Result<FileRevision>)
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+    })
+    useAppStore.setState({ documents: [binaryDocument()], activeFileId: fileId })
+    registerDocumentRuntime(fileId, {
+      serialize: async () => new ArrayBuffer(128),
+      completeSave,
+      cleanup: () => undefined
+    })
+
+    await expect(useAppStore.getState().saveDocument(fileId)).resolves.toBe(true)
+    expect(completeSave).toHaveBeenLastCalledWith(true, 1)
+
+    useAppStore.getState().markBinaryDirty(fileId)
+    await expect(useAppStore.getState().saveDocument(fileId)).resolves.toBe(false)
+    expect(completeSave).toHaveBeenLastCalledWith(false, 2)
+  })
+
+  it('does not replace a local edit made while an external reload is in flight', async () => {
+    const diskRead = deferred<Result<ReturnType<typeof document>>>()
+    const read = vi.fn().mockReturnValue(diskRead.promise)
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { document: { save, read } } as unknown as AladdeenApi
+    })
+    useAppStore.setState({
+      documents: [document('on disk', 'on disk')],
+      conflictFileIds: []
+    })
+
+    const handling = useAppStore.getState().handleEnvironmentEvent({
+      type: 'changed',
+      fileId,
+      isDirectory: false
+    })
+    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce())
+    useAppStore.setState((state) => ({
+      documents: state.documents.map((item) => item.id === fileId && 'content' in item
+        ? { ...item, content: 'typed while reading', status: 'editing' }
+        : item)
+    }))
+    diskRead.resolve({
+      ok: true,
+      value: {
+        ...document('external version', 'external version'),
+        revision: revision(2)
+      }
+    })
+    await handling
+
+    expect(useAppStore.getState().documents[0]).toMatchObject({
+      content: 'typed while reading',
+      status: 'conflict'
+    })
+    expect(useAppStore.getState().conflictFileIds).toEqual([fileId])
+  })
+
+  it('queues simultaneous conflicts without replacing the first document', async () => {
+    const secondFileId = '44444444-4444-4444-8444-444444444444'
+    useAppStore.setState({
+      documents: [
+        document('first local edit', 'original'),
+        { ...document('second local edit', 'original'), id: secondFileId, name: 'second.md' }
+      ],
+      conflictFileIds: []
+    })
+
+    await useAppStore.getState().handleEnvironmentEvent({ type: 'changed', fileId, isDirectory: false })
+    await useAppStore.getState().handleEnvironmentEvent({ type: 'changed', fileId: secondFileId, isDirectory: false })
+
+    expect(useAppStore.getState().conflictFileIds).toEqual([fileId, secondFileId])
   })
 })

@@ -55,6 +55,13 @@ interface PdfEditSnapshot {
   pageChanges: Record<number, PageChange>
 }
 
+interface PendingAnnotation {
+  pageIndex: number
+  xRatio: number
+  yRatio: number
+  tool: 'freeText' | 'stamp' | 'signature'
+}
+
 interface PdfOutlineItem {
   title: string
   depth: number
@@ -97,6 +104,8 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
   pageChangesRef.current = pageChanges
   const undoHistory = useRef<PdfEditSnapshot[]>([])
   const redoHistory = useRef<PdfEditSnapshot[]>([])
+  const savePendingRef = useRef(false)
+  const stagedAdapterRevisionRef = useRef<number | null>(null)
   const historyRuntime = useRef({ undo: (): void => undefined, redo: (): void => undefined })
   const [page, setPage] = useState(1)
   const [pages, setPages] = useState(0)
@@ -112,6 +121,7 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
     update(password: string): void
     reason: number
   } | null>(null)
+  const [pendingAnnotation, setPendingAnnotation] = useState<PendingAnnotation | null>(null)
   const sessionUrl = document.documentKind === 'pdf' ? document.session.url : ''
   const snapshotEdits = (): PdfEditSnapshot => ({
     annotations: [...annotationsRef.current],
@@ -128,12 +138,14 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
     redoHistory.current = []
   }
   historyRuntime.current.undo = () => {
+    if (savePendingRef.current) return
     const previous = undoHistory.current.pop()
     if (!previous) return
     redoHistory.current.push(snapshotEdits())
     restoreEditSnapshot(previous)
   }
   historyRuntime.current.redo = () => {
+    if (savePendingRef.current) return
     const next = redoHistory.current.pop()
     if (!next) return
     undoHistory.current.push(snapshotEdits())
@@ -195,7 +207,7 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
         loadingTask = pdfjs.getDocument({
           url: sessionUrl,
-          enableXfa: true
+          enableXfa: false
         })
         loadingTask.onPassword = (updatePassword: (password: string) => void, reason: number) => {
           setPasswordPrompt({ update: updatePassword, reason })
@@ -250,9 +262,31 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
         container.current.addEventListener('change', handleFormChange)
 
         unregister = registerDocumentRuntime(document.id, {
-          serialize: async () => {
-            const saved = await loaded.saveDocument()
-            return applyPdfChanges(saved, annotationsRef.current, pageChangesRef.current)
+          serialize: async (adapterRevision) => {
+            const pendingAnnotations = [...annotationsRef.current]
+            const pendingPageChanges = structuredClone(pageChangesRef.current)
+            savePendingRef.current = true
+            stagedAdapterRevisionRef.current = adapterRevision ?? null
+            try {
+              const saved = await loaded.saveDocument()
+              return await applyPdfChanges(saved, pendingAnnotations, pendingPageChanges)
+            } catch (caught) {
+              savePendingRef.current = false
+              stagedAdapterRevisionRef.current = null
+              throw caught
+            }
+          },
+          completeSave: (committed, adapterRevision) => {
+            if (stagedAdapterRevisionRef.current !== adapterRevision) return
+            savePendingRef.current = false
+            stagedAdapterRevisionRef.current = null
+            if (!committed) return
+            annotationsRef.current = []
+            pageChangesRef.current = {}
+            setAnnotations([])
+            setPageChanges({})
+            undoHistory.current = []
+            redoHistory.current = []
           },
           extractText: async () => {
             const output: string[] = []
@@ -314,6 +348,7 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
     viewer.currentScale = Math.min(4, Math.max(0.35, viewer.currentScale + delta))
   }
   const markPageChange = (change: PageChange): void => {
+    if (savePendingRef.current) return
     rememberEdit()
     setPageChanges((current) => ({
       ...current,
@@ -322,22 +357,33 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
     markChanged(document.id, 'user', markBinaryDirty, document.revision.sha256)
   }
   const addAnnotation = (event: React.MouseEvent<HTMLDivElement>): void => {
-    if (mode !== 'annotate') return
+    if (mode !== 'annotate' || savePendingRef.current) return
     const target = event.target instanceof Element ? event.target.closest<HTMLElement>('.page') : null
     if (!target) return
     const rect = target.getBoundingClientRect()
     const pageIndex = Math.max(0, Number(target.dataset.pageNumber ?? page) - 1)
-    const text = tool === 'freeText' || tool === 'stamp' || tool === 'signature'
-      ? window.prompt(tool === 'signature' ? 'Signature text' : tool === 'stamp' ? 'Stamp label' : 'Annotation text')?.trim()
-      : undefined
-    if ((tool === 'freeText' || tool === 'stamp' || tool === 'signature') && !text) return
+    const xRatio = (event.clientX - rect.left) / rect.width
+    const yRatio = (event.clientY - rect.top) / rect.height
+    if (tool === 'freeText' || tool === 'stamp' || tool === 'signature') {
+      setPendingAnnotation({ pageIndex, xRatio, yRatio, tool })
+      return
+    }
+    commitAnnotation(pageIndex, xRatio, yRatio, tool)
+  }
+  const commitAnnotation = (
+    pageIndex: number,
+    xRatio: number,
+    yRatio: number,
+    annotationTool: AnnotationTool,
+    text?: string
+  ): void => {
     rememberEdit()
     setAnnotations((current) => [...current, {
       id: crypto.randomUUID(),
       pageIndex,
-      xRatio: (event.clientX - rect.left) / rect.width,
-      yRatio: (event.clientY - rect.top) / rect.height,
-      tool,
+      xRatio,
+      yRatio,
+      tool: annotationTool,
       text
     }])
     markChanged(document.id, 'user', markBinaryDirty, document.revision.sha256)
@@ -499,6 +545,56 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
             </form>
           </div>
         )}
+        {pendingAnnotation && (
+          <div className="absolute inset-0 z-30 grid place-items-center bg-[rgb(10_10_15/.42)] p-6 backdrop-blur-[2px]">
+            <form
+              className="grid w-full max-w-sm gap-3 rounded-xl border border-border bg-surface p-5 shadow-xl"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const data = new FormData(event.currentTarget)
+                const text = String(data.get('annotation') ?? '').trim()
+                if (!text) return
+                commitAnnotation(
+                  pendingAnnotation.pageIndex,
+                  pendingAnnotation.xRatio,
+                  pendingAnnotation.yRatio,
+                  pendingAnnotation.tool,
+                  text
+                )
+                setPendingAnnotation(null)
+              }}
+            >
+              <strong className="text-[14px] text-foreground">
+                {pendingAnnotation.tool === 'signature'
+                  ? 'Add signature text'
+                  : pendingAnnotation.tool === 'stamp'
+                    ? 'Add stamp label'
+                    : 'Add annotation text'}
+              </strong>
+              <span className="text-[11px] text-foreground-muted">
+                This text is embedded into the PDF when the document is saved.
+              </span>
+              <input
+                name="annotation"
+                autoFocus
+                maxLength={500}
+                className="h-9 rounded-md border border-border bg-surface-elevated px-3 text-[12px] outline-none focus:border-accent"
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="h-9 rounded-md border border-border bg-surface-elevated px-3 text-[11px] font-semibold text-foreground hover:bg-surface-hover"
+                  onClick={() => setPendingAnnotation(null)}
+                >
+                  Cancel
+                </button>
+                <button className="h-9 rounded-md border-0 bg-accent px-3 text-[11px] font-semibold text-accent-contrast">
+                  Add annotation
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
         {error && (
           <div className="absolute inset-0 grid place-items-center bg-surface-elevated p-8 text-center">
             <div><strong className="block text-[14px] text-danger">Could not open this PDF</strong><span className="mt-2 block max-w-md text-[11px] text-foreground-muted">{error}</span></div>
@@ -547,13 +643,19 @@ async function applyPdfChanges(
   const font = await document.embedFont(StandardFonts.Helvetica)
   for (const [rawIndex, change] of Object.entries(changes)) {
     const index = Number(rawIndex)
+    if (!Number.isInteger(index) || index < 0 || index >= document.getPageCount()) continue
     const page = document.getPage(index)
-    if (!page || change.deleted) continue
+    if (change.deleted) continue
     if (change.rotation !== undefined) page.setRotation(degrees(change.rotation))
   }
   for (const annotation of annotations) {
+    if (
+      !Number.isInteger(annotation.pageIndex) ||
+      annotation.pageIndex < 0 ||
+      annotation.pageIndex >= document.getPageCount()
+    ) continue
     const page = document.getPage(annotation.pageIndex)
-    if (!page || changes[annotation.pageIndex]?.deleted) continue
+    if (changes[annotation.pageIndex]?.deleted) continue
     const x = annotation.xRatio * page.getWidth()
     const y = (1 - annotation.yRatio) * page.getHeight()
     if (annotation.tool === 'highlight') {

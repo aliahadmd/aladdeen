@@ -10,8 +10,41 @@ import {
 import { isDocumentDirty, useAppStore } from '@renderer/store/app-store'
 import { DocumentKindIcon } from './DocumentKindIcon'
 
+interface TabSummary {
+  id: string
+  name: string
+  fullPath: string
+  documentKind: Parameters<typeof DocumentKindIcon>[0]['kind']
+  status: string
+  dirty: boolean
+}
+
+let priorTabs: TabSummary[] = []
+
+function selectTabs(state: ReturnType<typeof useAppStore.getState>): TabSummary[] {
+  const next = state.documents.map((document) => ({
+    id: document.id,
+    name: document.name,
+    fullPath: document.fullPath,
+    documentKind: document.documentKind,
+    status: document.status,
+    dirty: isDocumentDirty(document)
+  }))
+  if (
+    next.length === priorTabs.length &&
+    next.every((tab, index) => {
+      const prior = priorTabs[index]
+      return prior && Object.keys(tab).every((key) => (
+        tab[key as keyof TabSummary] === prior[key as keyof TabSummary]
+      ))
+    })
+  ) return priorTabs
+  priorTabs = next
+  return next
+}
+
 export function TabBar(): React.JSX.Element | null {
-  const documents = useAppStore((state) => state.documents)
+  const documents = useAppStore(selectTabs)
   const activeFileId = useAppStore((state) => state.activeFileId)
   const setActiveFileId = useAppStore((state) => state.setActiveFileId)
   const closeDocument = useAppStore((state) => state.closeDocument)
@@ -70,7 +103,7 @@ export function TabBar(): React.JSX.Element | null {
               <DocumentKindIcon kind={document.documentKind} />
               <span className={tabNameClasses}>{document.name}</span>
               <span className={tabStateClasses(document.status)} aria-label={document.status}>
-                {isDocumentDirty(document) ? '•' : ''}
+                {document.dirty ? '•' : ''}
               </span>
             </button>
             <button

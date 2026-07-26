@@ -73,7 +73,7 @@ export function DocxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       // Eigenpal calls onSave while resolving save(). That callback is useful
       // for its toolbar and Cmd+S, but this serialization already owns the
       // returned buffer and must not enqueue a duplicate disk write.
-      if (stagedSaveBufferRef.current === saved) stagedSaveBufferRef.current = null
+      stagedSaveBufferRef.current = null
     }
     if (!saved) throw new Error('The Word editor did not produce a document to save.')
     const transferable = saved.slice(0)

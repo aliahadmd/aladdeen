@@ -10,6 +10,7 @@ import {
 } from 'electron'
 import {
   BorderStyle,
+  AlignmentType,
   Document,
   ExternalHyperlink,
   FileChild,
@@ -39,6 +40,9 @@ import type { WorkspaceService } from './workspace'
 import { MAX_DOCUMENT_BYTES } from '@shared/limits'
 
 const mainBundleDirectory = import.meta.dirname
+const EXPORT_LOAD_TIMEOUT_MS = 15_000
+const EXPORT_RENDER_TIMEOUT_MS = 45_000
+const EXPORT_PRINT_TIMEOUT_MS = 30_000
 
 interface InlineStyle {
   bold?: boolean
@@ -112,23 +116,36 @@ export class ExportService {
         const rendererUrl = process.env.ELECTRON_RENDERER_URL.endsWith('/')
           ? process.env.ELECTRON_RENDERER_URL
           : `${process.env.ELECTRON_RENDERER_URL}/`
-        await printWindow.loadURL(new URL('export.html', rendererUrl).toString())
+        await withTimeout(
+          printWindow.loadURL(new URL('export.html', rendererUrl).toString()),
+          EXPORT_LOAD_TIMEOUT_MS,
+          'The PDF export renderer did not load.'
+        )
       } else {
-        await printWindow.loadFile(join(mainBundleDirectory, '../renderer/export.html'))
+        await withTimeout(
+          printWindow.loadFile(join(mainBundleDirectory, '../renderer/export.html')),
+          EXPORT_LOAD_TIMEOUT_MS,
+          'The PDF export renderer did not load.'
+        )
       }
+      await waitForExportRenderer(printWindow)
       const payload = JSON.stringify({
         fileId: request.fileId,
         title: request.title,
         content: request.content
       })
-      await printWindow.webContents.executeJavaScript(`window.renderAladdeenExport(${payload})`, true)
-      const buffer = await printWindow.webContents.printToPDF({
+      await withTimeout(
+        printWindow.webContents.executeJavaScript(`window.renderAladdeenExport(${payload})`, true),
+        EXPORT_RENDER_TIMEOUT_MS,
+        'The PDF export content did not finish rendering.'
+      )
+      const buffer = await withTimeout(printWindow.webContents.printToPDF({
         pageSize: 'A4',
         landscape: false,
         printBackground: true,
         displayHeaderFooter: false,
         preferCSSPageSize: true
-      })
+      }), EXPORT_PRINT_TIMEOUT_MS, 'Electron did not finish printing the PDF.')
       await writeFile(destination.filePath, buffer)
       return { path: destination.filePath }
     } catch (error) {
@@ -299,11 +316,19 @@ export class ExportService {
         }
         case 'code':
           {
-            const label = node.lang?.toLowerCase() === 'mermaid' ? 'Mermaid diagram\n' : ''
+            const isMermaid = node.lang?.toLowerCase() === 'mermaid'
           children.push(
             new Paragraph({
               style: 'AladdeenCode',
-              children: [new TextRun({ text: `${label}${node.value}`, font: 'Courier New' })],
+              children: [
+                ...(isMermaid
+                  ? [
+                      new TextRun({ text: 'Mermaid diagram', bold: true, font: 'Courier New' }),
+                      new TextRun({ break: 1, text: '', font: 'Courier New' })
+                    ]
+                  : []),
+                ...codeTextRuns(node.value)
+              ],
               shading: { type: ShadingType.CLEAR, fill: 'F1F1F6', color: 'auto' }
             })
           )
@@ -312,22 +337,35 @@ export class ExportService {
         case 'list': {
           let index = node.start ?? 1
           for (const item of node.children) {
-            const first = item.children[0]
             const marker = item.checked === true ? '☑ ' : item.checked === false ? '☐ ' : node.ordered ? `${index}. ` : ''
-            if (first?.type === 'paragraph') {
-              children.push(
-                new Paragraph({
-                  children: [
-                    new TextRun({ text: marker }),
-                    ...(await this.inlineToDocx(first.children, fileId, {}, footnoteIds))
-                  ],
-                  bullet: node.ordered ? undefined : { level: Math.min(listLevel, 8) },
-                  indent: node.ordered ? { left: 360 + listLevel * 240, hanging: 240 } : undefined
-                })
-              )
+            let paragraphIndex = 0
+            for (const itemChild of item.children) {
+              if (itemChild.type === 'paragraph') {
+                const firstParagraph = paragraphIndex === 0
+                children.push(
+                  new Paragraph({
+                    children: [
+                      ...(firstParagraph && marker ? [new TextRun({ text: marker })] : []),
+                      ...(await this.inlineToDocx(itemChild.children, fileId, {}, footnoteIds))
+                    ],
+                    bullet: firstParagraph && !node.ordered ? { level: Math.min(listLevel, 8) } : undefined,
+                    indent: node.ordered && firstParagraph
+                      ? { left: 360 + listLevel * 240, hanging: 240 }
+                      : !firstParagraph
+                        ? { left: 600 + listLevel * 240 }
+                        : undefined
+                  })
+                )
+                paragraphIndex += 1
+              } else {
+                children.push(...(await this.blocksToDocx(
+                  [itemChild as RootContent],
+                  fileId,
+                  listLevel + 1,
+                  footnoteIds
+                )))
+              }
             }
-            const nested = item.children.filter((child) => child.type !== 'paragraph') as RootContent[]
-            children.push(...(await this.blocksToDocx(nested, fileId, listLevel + 1, footnoteIds)))
             index += 1
           }
           break
@@ -368,11 +406,16 @@ export class ExportService {
       node.children.map(async (row, rowIndex) =>
         new TableRow({
           children: await Promise.all(
-            row.children.map(async (cell) =>
+            row.children.map(async (cell, cellIndex) =>
               new TableCell({
                 children: [
                   new Paragraph({
-                    children: await this.inlineToDocx(cell.children, fileId, {}, footnoteIds)
+                    children: await this.inlineToDocx(cell.children, fileId, {}, footnoteIds),
+                    alignment: node.align?.[cellIndex] === 'center'
+                      ? AlignmentType.CENTER
+                      : node.align?.[cellIndex] === 'right'
+                        ? AlignmentType.RIGHT
+                        : AlignmentType.LEFT
                   })
                 ],
                 shading: rowIndex === 0 ? { type: ShadingType.CLEAR, fill: 'F0F0F5', color: 'auto' } : undefined,
@@ -565,5 +608,41 @@ export class ExportService {
   private showSaveDialog(options: SaveDialogOptions): Promise<SaveDialogReturnValue> {
     const parent = this.getParentWindow()
     return parent ? dialog.showSaveDialog(parent, options) : dialog.showSaveDialog(options)
+  }
+}
+
+function codeTextRuns(value: string): TextRun[] {
+  return value.split('\n').map((line, index) => new TextRun({
+    text: line,
+    break: index === 0 ? undefined : 1,
+    font: 'Courier New'
+  }))
+}
+
+async function waitForExportRenderer(window: BrowserWindowType): Promise<void> {
+  const deadline = Date.now() + EXPORT_LOAD_TIMEOUT_MS
+  while (!window.isDestroyed()) {
+    const ready = await window.webContents.executeJavaScript(
+      'typeof window.renderAladdeenExport === "function"',
+      true
+    ) as boolean
+    if (ready) return
+    if (Date.now() >= deadline) break
+    await new Promise((resolve) => setTimeout(resolve, 25))
+  }
+  throw new Error('The PDF export renderer did not become ready.')
+}
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }

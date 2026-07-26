@@ -16,6 +16,7 @@ interface MermaidResult {
 const diagramCache = new Map<string, MermaidResult>()
 let renderSequence = 0
 let renderQueue = Promise.resolve()
+const MERMAID_RENDER_TIMEOUT_MS = 10_000
 
 function hasUnsafeCssReference(value: string): boolean {
   if (/@import|expression\s*\(/i.test(value)) return true
@@ -53,6 +54,9 @@ async function renderMermaid(source: string, theme: 'light' | 'dark'): Promise<M
   if (new TextEncoder().encode(source).byteLength > 100_000) {
     return { error: 'Diagram source exceeds the 100 KB safety limit.' }
   }
+  if (/%%\s*\{[\s\S]*?themeCSS/i.test(source)) {
+    return { error: 'Custom Mermaid CSS is not supported.' }
+  }
   const cacheKey = `${theme}\0${source}`
   const cached = diagramCache.get(cacheKey)
   if (cached) return cached
@@ -66,10 +70,16 @@ async function renderMermaid(source: string, theme: 'light' | 'dark'): Promise<M
         theme: theme === 'dark' ? 'dark' : 'neutral',
         htmlLabels: false,
         flowchart: { htmlLabels: false },
+        maxTextSize: 100_000,
+        secure: ['securityLevel', 'startOnLoad', 'maxTextSize', 'themeCSS'],
         suppressErrorRendering: true
       })
       const id = `aladdeen-mermaid-${renderSequence++}`
-      const rendered = await mermaid.render(id, source)
+      const rendered = await withDeadline(
+        mermaid.render(id, source),
+        MERMAID_RENDER_TIMEOUT_MS,
+        'The diagram took too long to render.'
+      )
       const result = { svg: sanitizeMermaidSvg(rendered.svg) }
       diagramCache.set(cacheKey, result)
       if (diagramCache.size > 80) diagramCache.delete(diagramCache.keys().next().value as string)
@@ -89,6 +99,22 @@ async function renderMermaid(source: string, theme: 'light' | 'dark'): Promise<M
     () => undefined
   )
   return pending
+}
+
+function withDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        window.clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
 }
 
 export function MermaidDiagram({

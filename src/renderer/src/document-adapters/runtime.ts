@@ -5,7 +5,8 @@ import type {
 } from '@shared/contracts'
 
 export interface BinaryDocumentRuntime {
-  serialize(): Promise<ArrayBuffer>
+  serialize(adapterRevision?: number): Promise<ArrayBuffer>
+  completeSave?(committed: boolean, adapterRevision: number): void
   extractText?(): string | Promise<string>
   reveal?(match: GlobalSearchMatch, context: BinarySearchRevealContext): boolean | void
   undo?(): void

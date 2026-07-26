@@ -37,7 +37,7 @@ mac:
   # Keep the bundle internally consistent without requiring a paid Apple
   # Developer certificate. Gatekeeper will still require explicit user approval.
   identity: "-"
-  hardenedRuntime: false
+  hardenedRuntime: true
   notarize: false
   artifactName: ${productName}-${version}-${arch}-mac.${ext}
   target:

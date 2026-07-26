@@ -3,7 +3,7 @@ import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerE
 import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import type { CloseRequest } from '@shared/contracts'
-import { DOCUMENT_EXTENSION_PATTERN } from '@shared/documents'
+import { DOCUMENT_EXTENSION_PATTERN, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import { AddProjectsDialog } from './components/AddProjectsDialog'
 import { BrandMark } from './components/BrandMark'
 import { CloseRecoveryDialog } from './components/CloseRecoveryDialog'
@@ -47,6 +47,8 @@ export default function App(): React.JSX.Element {
   const addProject = useAppStore((state) => state.addProject)
   const openFile = useAppStore((state) => state.openFile)
   const createFile = useAppStore((state) => state.createFile)
+  const documentTransitioning = useAppStore((state) => state.documentTransitioning)
+  const setDocumentTransitioning = useAppStore((state) => state.setDocumentTransitioning)
   const dark = useEffectiveDarkMode()
   const sidebarWidthRef = useRef(settings.sidebarWidth)
   const resizeState = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
@@ -73,30 +75,46 @@ export default function App(): React.JSX.Element {
   }), [createFile])
 
   useEffect(() => window.aladdeen.lifecycle.onPrepareClose((request) => {
-    void flushDocuments().then(async (saved) => {
+    setDocumentTransitioning(true)
+    void (async () => {
+      let saved = false
+      try {
+        saved = await flushDocuments()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Aladdeen could not finish saving the open documents.')
+      }
       if (!saved) {
+        setDocumentTransitioning(false)
         toast.error('Aladdeen kept the window open because one or more documents could not be saved.')
         setCloseRequest(request)
       } else {
         setCloseRequest(null)
       }
-      await window.aladdeen.lifecycle.completeClose({
-        requestId: request.id,
-        outcome: saved ? 'ready' : 'blocked'
-      })
-    })
-  }), [flushDocuments])
+      try {
+        await window.aladdeen.lifecycle.completeClose({
+          requestId: request.id,
+          outcome: saved ? 'ready' : 'blocked'
+        })
+      } catch (error) {
+        setDocumentTransitioning(false)
+        toast.error(error instanceof Error ? error.message : 'Aladdeen could not complete the close request.')
+      }
+    })()
+  }), [flushDocuments, setDocumentTransitioning])
 
   const completeRecovery = async (outcome: 'ready' | 'blocked' | 'cancelled'): Promise<void> => {
     if (!closeRequest) return
     const requestId = closeRequest.id
     if (outcome !== 'blocked') setCloseRequest(null)
+    if (outcome !== 'ready') setDocumentTransitioning(false)
     await window.aladdeen.lifecycle.completeClose({ requestId, outcome })
   }
 
   const retryClose = async (): Promise<void> => {
+    setDocumentTransitioning(true)
     const saved = await flushDocuments()
     if (!saved) {
+      setDocumentTransitioning(false)
       toast.error('The documents still could not be saved. Your edits remain open.')
       await completeRecovery('blocked')
       return
@@ -105,7 +123,9 @@ export default function App(): React.JSX.Element {
   }
 
   const saveCopiesAndClose = async (): Promise<void> => {
+    setDocumentTransitioning(true)
     if (await saveDirtyCopies()) await completeRecovery('ready')
+    else setDocumentTransitioning(false)
   }
 
   useEffect(() => {
@@ -177,7 +197,9 @@ export default function App(): React.JSX.Element {
       if (!event.dataTransfer?.files.length) return
       event.preventDefault()
       const files = Array.from(event.dataTransfer.files)
-      const documents = files.filter((file) => DOCUMENT_EXTENSION_PATTERN.test(file.name)).slice(0, 20)
+      const documents = files
+        .filter((file) => DOCUMENT_EXTENSION_PATTERN.test(file.name))
+        .slice(0, MAX_DROPPED_DOCUMENTS)
       const unsupported = files.length - documents.length
       dragDepth.current = 0
       setDragOpen(false)
@@ -280,10 +302,14 @@ export default function App(): React.JSX.Element {
 
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)] bg-background">
-      <div className={cn(
-        'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
-        settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]'
-      )}>
+      <div
+        inert={documentTransitioning}
+        aria-busy={documentTransitioning}
+        className={cn(
+          'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
+          settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]'
+        )}
+      >
         <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><Sidebar /></div>
         <div
           className={cn(

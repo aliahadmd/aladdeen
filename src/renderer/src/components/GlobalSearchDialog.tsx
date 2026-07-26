@@ -42,7 +42,6 @@ interface ResultGroup {
 
 export function GlobalSearchDialog(): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
-  const documents = useAppStore((state) => state.documents)
   const open = useAppStore((state) => state.globalSearchOpen)
   const setOpen = useAppStore((state) => state.setGlobalSearchOpen)
   const openSearchMatch = useAppStore((state) => state.openSearchMatch)
@@ -153,7 +152,8 @@ export function GlobalSearchDialog(): React.JSX.Element {
     activeSearchKey.current = searchKey
     completedSearchKey.current = null
 
-    const bufferOverrides = (await Promise.all(documents.map(async (document) => {
+    const openDocuments = useAppStore.getState().documents
+    const bufferOverrides = (await Promise.all(openDocuments.map(async (document) => {
       if (document.deleted) return null
       if ('content' in document) {
         return document.content !== document.savedContent
@@ -185,7 +185,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
       return
     }
     activeSession.current = result.value.sessionId
-  }, [documents, environment, matchCase, query, scope, wholeWord])
+  }, [environment, matchCase, query, scope, wholeWord])
 
   useEffect(() => {
     if (!open) return

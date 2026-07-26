@@ -22,6 +22,20 @@ import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } fr
 import { documentKindFromName, isSupportedDocumentName } from '@shared/documents'
 
 const mainBundleDirectory = import.meta.dirname
+const productionRendererCsp = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: aladdeen-asset:",
+  "font-src 'self' data: blob: aladdeen-asset:",
+  "connect-src 'self' aladdeen-document: aladdeen-asset:",
+  "worker-src 'self' blob:",
+  "frame-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'"
+].join('; ')
 protocol.registerSchemesAsPrivileged([
   {
     scheme: 'aladdeen-asset',
@@ -76,7 +90,7 @@ app.on('open-file', (event, filePath) => {
   else pendingSystemFile = filePath
 })
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   const previousApplicationDirectory = ['Fl', 'uid', 'MD'].join('')
   const previousUserDataPath = app.commandLine.hasSwitch('user-data-dir')
     ? undefined
@@ -112,6 +126,14 @@ app.whenReady().then(async () => {
 
   createWindow()
   installMenu()
+}).catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : 'An unexpected startup error occurred.'
+  console.error('Aladdeen failed to start:', error)
+  dialog.showErrorBox(
+    'Aladdeen could not start',
+    `${message}\n\nYour documents were not changed. Restart Aladdeen after resolving the error.`
+  )
+  app.exit(1)
 })
 
 function createWindow(): void {
@@ -181,7 +203,7 @@ function configureSessionSecurity(): void {
     ? new URL(process.env.ELECTRON_RENDERER_URL).origin
     : null
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    if (!/^https?:/i.test(details.url)) {
+    if (!/^(?:https?|wss?):/i.test(details.url)) {
       callback({})
       return
     }
@@ -190,6 +212,20 @@ function configureSessionSecurity(): void {
       : false
     callback({ cancel: !allowedDevelopmentRequest })
   })
+  if (app.isPackaged) {
+    session.defaultSession.webRequest.onHeadersReceived({ urls: ['file://*'] }, (details, callback) => {
+      if (!details.url.endsWith('/index.html')) {
+        callback({})
+        return
+      }
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [productionRendererCsp]
+        }
+      })
+    })
+  }
 }
 
 function registerAssetProtocol(service: WorkspaceService): void {

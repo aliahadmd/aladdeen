@@ -25,6 +25,10 @@ const DEFAULT_SETTINGS: AppSettings = {
 
 const DATABASE_FILENAME = 'aladdeen.sqlite'
 const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
+// Version 7 was briefly used by the removed Research Notes feature. Keep that
+// migration number reserved and migrate its metadata away instead of treating a
+// user's existing profile as a database from an unknown future release.
+const CURRENT_DATABASE_VERSION = 8
 
 function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
   if (existsSync(destination)) return
@@ -35,6 +39,9 @@ function restorePreviousDatabase(destination: string, userDataPath: string, prev
   for (const candidate of candidates) {
     if (!candidate || candidate === destination || !existsSync(candidate)) continue
     copyFileSync(candidate, destination)
+    for (const suffix of ['-wal', '-shm']) {
+      if (existsSync(`${candidate}${suffix}`)) copyFileSync(`${candidate}${suffix}`, `${destination}${suffix}`)
+    }
     return
   }
 }
@@ -103,8 +110,24 @@ export class AppDatabase {
     mkdirSync(dirname(databasePath), { recursive: true })
     restorePreviousDatabase(databasePath, userDataPath, previousUserDataPath)
     this.db = new DatabaseSync(databasePath)
-    this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;')
-    this.migrate()
+    try {
+      this.assertSupportedVersion()
+      this.db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 3000;')
+      this.migrate()
+    } catch (error) {
+      this.db.close()
+      throw error
+    }
+  }
+
+  private assertSupportedVersion(): void {
+    const row = this.db.prepare('PRAGMA user_version').get() as { user_version: number }
+    if (row.user_version > CURRENT_DATABASE_VERSION) {
+      throw new DesktopError(
+        'INVALID_FILE',
+        `This Aladdeen database was created by a newer application version (schema ${row.user_version}).`
+      )
+    }
   }
 
   private migrate(): void {
@@ -175,11 +198,19 @@ export class AppDatabase {
           expanded_paths TEXT NOT NULL DEFAULT '[]',
           updated_at INTEGER NOT NULL
         ) STRICT;
-        PRAGMA user_version = 2;
-        COMMIT;
       `)
-      this.importLegacyWorkspaceHistory()
-      this.db.exec('DROP TABLE IF EXISTS workspace_state; DROP TABLE IF EXISTS recent_workspaces;')
+      try {
+        this.importLegacyWorkspaceHistory()
+        this.db.exec(`
+          DROP TABLE IF EXISTS workspace_state;
+          DROP TABLE IF EXISTS recent_workspaces;
+          PRAGMA user_version = 2;
+          COMMIT;
+        `)
+      } catch (error) {
+        this.db.exec('ROLLBACK;')
+        throw error
+      }
     }
 
     if (row.user_version < 3) {
@@ -288,6 +319,37 @@ export class AppDatabase {
         COMMIT;
       `)
     }
+
+    if (row.user_version < 8) {
+      this.db.exec(`
+        BEGIN;
+        DROP TABLE IF EXISTS research_note_links;
+        DROP TABLE IF EXISTS research_notes;
+        DROP TABLE IF EXISTS environment_note_locations;
+        PRAGMA user_version = 8;
+        COMMIT;
+      `)
+    }
+
+    this.repairLegacyWorkspaceHistory()
+  }
+
+  private repairLegacyWorkspaceHistory(): void {
+    if (!this.tableExists('recent_workspaces') || !this.tableExists('workspace_state')) return
+    this.db.exec('BEGIN')
+    try {
+      this.importLegacyWorkspaceHistory()
+      this.db.exec('DROP TABLE IF EXISTS workspace_state; DROP TABLE IF EXISTS recent_workspaces; COMMIT;')
+    } catch (error) {
+      this.db.exec('ROLLBACK;')
+      throw error
+    }
+  }
+
+  private tableExists(name: string): boolean {
+    return Boolean(this.db.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
+    ).get(name))
   }
 
   private listProjectsForDirectoryBackfill(): Array<{ id: string }> {
@@ -324,16 +386,14 @@ export class AppDatabase {
 
     const environmentId = randomUUID()
     const now = Date.now()
-    this.db.exec('BEGIN')
-    try {
-      this.db.prepare('INSERT INTO environments (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(
+    this.db.prepare('INSERT INTO environments (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(
         environmentId,
         'Personal',
         now,
         now
-      )
-      let selectedFileId: string | undefined
-      for (const workspace of workspaces) {
+    )
+    let selectedFileId: string | undefined
+    for (const workspace of workspaces) {
         const projectId = randomUUID()
         this.db
           .prepare('INSERT INTO environment_projects (id, environment_id, path, name, last_opened_at) VALUES (?, ?, ?, ?, ?)')
@@ -351,16 +411,11 @@ export class AppDatabase {
             .run(fileId, environmentId, projectId, join(workspace.path, state.selected_file), workspace.last_opened_at)
           selectedFileId ??= fileId
         }
-      }
-      this.db
-        .prepare('INSERT INTO environment_state (environment_id, open_file_ids, active_file_id, updated_at) VALUES (?, ?, ?, ?)')
-        .run(environmentId, JSON.stringify(selectedFileId ? [selectedFileId] : []), selectedFileId ?? null, now)
-      this.setSetting('active_environment_id', environmentId)
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
     }
+    this.db
+      .prepare('INSERT INTO environment_state (environment_id, open_file_ids, active_file_id, updated_at) VALUES (?, ?, ?, ?)')
+      .run(environmentId, JSON.stringify(selectedFileId ? [selectedFileId] : []), selectedFileId ?? null, now)
+    this.setSetting('active_environment_id', environmentId)
   }
 
   getSettings(): AppSettings {

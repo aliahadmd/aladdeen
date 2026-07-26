@@ -1,6 +1,9 @@
 import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
-import { inspectDocxBuffer } from '../../src/main/services/zip-guard'
+import {
+  inspectDocxBuffer,
+  requireZipEntryWithinBudget
+} from '../../src/main/services/zip-guard'
 
 function createPackage(extraEntries: Record<string, Uint8Array> = {}): Uint8Array {
   return zipSync({
@@ -18,6 +21,18 @@ describe('DOCX package guard', () => {
     )
   })
 
+  it('enforces a strict extraction budget before inflating a requested part', () => {
+    const entries = inspectDocxBuffer(createPackage())
+    expect(requireZipEntryWithinBudget(entries, 'word/document.xml', {
+      maxUncompressedBytes: 1_024,
+      maxCompressionRatio: 200
+    }).name).toBe('word/document.xml')
+    expect(() => requireZipEntryWithinBudget(entries, 'word/document.xml', {
+      maxUncompressedBytes: 1,
+      maxCompressionRatio: 200
+    })).toThrow(/permitted size/i)
+  })
+
   it('rejects path traversal before an edited package reaches disk', () => {
     expect(() => inspectDocxBuffer(createPackage({
       '../outside.xml': strToU8('<unsafe />')
@@ -28,5 +43,13 @@ describe('DOCX package guard', () => {
     expect(() => inspectDocxBuffer(zipSync({
       'notes.txt': strToU8('not a document')
     }))).toThrow('not a valid DOCX')
+  })
+
+  it('rejects trailing data that makes the ZIP end record ambiguous', () => {
+    const source = createPackage()
+    const appended = new Uint8Array(source.byteLength + 1)
+    appended.set(source)
+    appended[source.byteLength] = 1
+    expect(() => inspectDocxBuffer(appended)).toThrow(/comment length/i)
   })
 })

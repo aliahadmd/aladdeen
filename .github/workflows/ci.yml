@@ -87,6 +87,15 @@ jobs:
       - run: pnpm dist:mac
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Record built artifact checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          dmg="release/${version}/Aladdeen-${version}-arm64.dmg"
+          test -f "$dmg"
+          shasum -a 256 "$dmg" > "release/${version}/SHA256SUMS"
+          stat -f '%z' "$dmg" > "release/${version}/Aladdeen-${version}-arm64.dmg.size"
       - name: Verify ad-hoc signatures
         shell: bash
         run: |

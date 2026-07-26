@@ -14,6 +14,26 @@ export interface ZipEntrySummary {
   uncompressedSize: number
 }
 
+export function requireZipEntryWithinBudget(
+  entries: readonly ZipEntrySummary[],
+  requestedName: string,
+  options: { maxUncompressedBytes: number; maxCompressionRatio: number }
+): ZipEntrySummary {
+  const normalizedName = requestedName.replaceAll('\\', '/')
+  const entry = entries.find((candidate) => candidate.name.replaceAll('\\', '/') === normalizedName)
+  if (!entry) throw new Error(`The ZIP package is missing ${normalizedName}.`)
+  if (entry.uncompressedSize > options.maxUncompressedBytes) {
+    throw new Error(`${normalizedName} expands beyond the permitted size.`)
+  }
+  if (
+    entry.uncompressedSize > 0 &&
+    (entry.compressedSize === 0 || entry.uncompressedSize / entry.compressedSize > options.maxCompressionRatio)
+  ) {
+    throw new Error(`${normalizedName} has an unsafe compression ratio.`)
+  }
+  return entry
+}
+
 export async function inspectZipArchive(path: string): Promise<ZipEntrySummary[]> {
   const handle = await open(path, 'r')
   try {
@@ -81,6 +101,8 @@ function readDirectoryDescriptor(
   const entryCount = tail.readUInt16LE(eocd + 10)
   const directorySize = tail.readUInt32LE(eocd + 12)
   const directoryOffset = tail.readUInt32LE(eocd + 16)
+  const commentLength = tail.readUInt16LE(eocd + 20)
+  const eocdOffset = archiveSize - tail.length + eocd
   if (
     disk !== 0 ||
     directoryDisk !== 0 ||
@@ -94,7 +116,10 @@ function readDirectoryDescriptor(
   if (entryCount > MAX_ZIP_ENTRIES || directorySize > MAX_CENTRAL_DIRECTORY_BYTES) {
     throw new Error('The ZIP package contains too many entries.')
   }
-  if (directoryOffset + directorySize > archiveSize) {
+  if (eocdOffset + 22 + commentLength !== archiveSize) {
+    throw new Error('The ZIP end record is inconsistent with its comment length.')
+  }
+  if (directoryOffset + directorySize > eocdOffset) {
     throw new Error('The ZIP directory points outside the source file.')
   }
   return { entryCount, directorySize, directoryOffset }

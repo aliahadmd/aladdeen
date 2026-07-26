@@ -1,9 +1,9 @@
-import { Suspense } from 'react'
+import { Component, Suspense, useDeferredValue, useMemo, type ErrorInfo, type ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, CloudOff, LoaderCircle, PencilLine } from 'lucide-react'
 import { DocumentAdapterRegistry } from '@renderer/document-adapters/registry'
 import { cn } from '@renderer/lib/cn'
 import { useAppStore } from '@renderer/store/app-store'
-import type { OpenDocument } from '@shared/contracts'
+import type { OpenDocument, TextOpenDocument } from '@shared/contracts'
 import { DocumentActions } from './DocumentActions'
 import { Welcome } from './Welcome'
 
@@ -22,9 +22,11 @@ export function DocumentView(): React.JSX.Element {
     <section className="document-workspace relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_27px] bg-surface-elevated">
       {document.documentKind === 'markdown' && <DocumentActions />}
       <div className="document-main h-full min-h-0 min-w-0">
-        <Suspense fallback={<AdapterLoading document={document} />}>
-          <Adapter document={document} />
-        </Suspense>
+        <DocumentAdapterBoundary key={document.id} document={document}>
+          <Suspense fallback={<AdapterLoading document={document} />}>
+            <Adapter document={document} />
+          </Suspense>
+        </DocumentAdapterBoundary>
       </div>
 
       <footer className="flex min-w-0 select-none items-center justify-between border-t border-border bg-surface px-[10px] text-[9px] text-foreground-muted">
@@ -33,6 +35,45 @@ export function DocumentView(): React.JSX.Element {
       </footer>
     </section>
   )
+}
+
+class DocumentAdapterBoundary extends Component<{
+  document: OpenDocument
+  children: ReactNode
+}, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error): { error: Error } {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo): void {
+    console.error('Document adapter failed', error, info.componentStack)
+  }
+
+  render(): ReactNode {
+    if (!this.state.error) return this.props.children
+    return (
+      <div className="grid h-full min-h-0 place-items-center bg-surface-elevated p-8 text-center">
+        <div className="max-w-md">
+          <AlertCircle className="mx-auto text-danger" size={24} />
+          <strong className="mt-3 block text-[14px] text-foreground">
+            Could not display {this.props.document.name}
+          </strong>
+          <span className="mt-1.5 block text-[11px] leading-relaxed text-foreground-muted">
+            {this.state.error.message || 'The document editor stopped unexpectedly.'}
+          </span>
+          <button
+            type="button"
+            className="mt-4 h-8 rounded-md border border-border bg-surface px-3 text-[11px] font-semibold text-foreground hover:bg-surface-hover"
+            onClick={() => this.setState({ error: null })}
+          >
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
 }
 
 function AdapterLoading({ document }: { document: OpenDocument }): React.JSX.Element {
@@ -55,14 +96,7 @@ function AdapterLoading({ document }: { document: OpenDocument }): React.JSX.Ele
 
 function DocumentFacts({ document }: { document: OpenDocument }): React.JSX.Element {
   if ('content' in document) {
-    const words = document.content.trim() ? document.content.trim().split(/\s+/u).length : 0
-    return (
-      <div className="flex min-w-0 items-center gap-[13px] whitespace-nowrap max-[700px]:gap-2">
-        <span>{words.toLocaleString()} words</span>
-        <span className="max-[700px]:hidden">{document.content.length.toLocaleString()} characters</span>
-        <span>UTF-8 · {document.revision.lineEnding ?? 'LF'}</span>
-      </div>
-    )
+    return <TextDocumentFacts document={document} />
   }
 
   return (
@@ -70,6 +104,21 @@ function DocumentFacts({ document }: { document: OpenDocument }): React.JSX.Elem
       <span>{document.documentKind === 'docx' ? 'Word document' : 'PDF document'}</span>
       <span className="max-[700px]:hidden">{formatBytes(document.session.byteLength)}</span>
       <span>{document.documentKind.toUpperCase()}</span>
+    </div>
+  )
+}
+
+function TextDocumentFacts({ document }: { document: TextOpenDocument }): React.JSX.Element {
+  const content = useDeferredValue(document.content)
+  const words = useMemo(() => {
+    const trimmed = content.trim()
+    return trimmed ? trimmed.split(/\s+/u).length : 0
+  }, [content])
+  return (
+    <div className="flex min-w-0 items-center gap-[13px] whitespace-nowrap max-[700px]:gap-2">
+      <span>{words.toLocaleString()} words</span>
+      <span className="max-[700px]:hidden">{content.length.toLocaleString()} characters</span>
+      <span>UTF-8 · {document.revision.lineEnding ?? 'LF'}</span>
     </div>
   )
 }

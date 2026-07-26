@@ -68,6 +68,13 @@ describe('Mermaid diagrams', () => {
     expect(screen.getByText('not a diagram')).toBeInTheDocument()
   })
 
+  it('rejects document-provided theme CSS before Mermaid sees it', async () => {
+    diagram(`%%{init: { "themeCSS": "body { display: none }" }}%%\nflowchart LR\nA --> B`)
+
+    await waitFor(() => expect(screen.getByText(/Custom Mermaid CSS is not supported/)).toBeInTheDocument())
+    expect(mermaidMocks.render).not.toHaveBeenCalled()
+  })
+
   it('uses cached output immediately when a diagram remounts', async () => {
     mermaidMocks.render.mockResolvedValue({ svg: '<svg><text>Cached diagram</text></svg>' })
     const source = 'flowchart LR\nCachedA --> CachedB'

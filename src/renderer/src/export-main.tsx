@@ -33,7 +33,7 @@ async function waitForDiagrams(): Promise<void> {
 }
 
 async function waitForImages(): Promise<void> {
-  await Promise.all(
+  await withTimeout(Promise.all(
     Array.from(document.images).map(
       (image) =>
         image.complete ||
@@ -42,7 +42,7 @@ async function waitForImages(): Promise<void> {
           image.addEventListener('error', () => resolve(), { once: true })
         })
     )
-  )
+  ).then(() => undefined), 15_000, 'Timed out while loading local images.')
 }
 
 window.renderAladdeenExport = async ({ fileId, title, content }) => {
@@ -57,8 +57,22 @@ window.renderAladdeenExport = async ({ fileId, title, content }) => {
   )
   await nextFrame()
   await waitForDiagrams()
-  await document.fonts.ready
+  await withTimeout(document.fonts.ready, 15_000, 'Timed out while loading export fonts.')
   await waitForImages()
   await nextFrame()
   document.title = document.querySelector<HTMLElement>('.markdown-body')?.dataset.documentTitle || title
+}
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timer: number | undefined
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_resolve, reject) => {
+        timer = window.setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timer !== undefined) window.clearTimeout(timer)
+  }
 }

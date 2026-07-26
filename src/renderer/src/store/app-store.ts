@@ -20,7 +20,7 @@ import type {
   TrackedFileSummary,
   UpdateProjectRequest
 } from '@shared/contracts'
-import { isTextDocumentKind } from '@shared/documents'
+import { isTextDocumentKind, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import { findNearestLiteralMatch, matchesLiteral } from '@shared/search'
 import {
   cleanupDocumentRuntime,
@@ -45,10 +45,11 @@ interface AppState {
   editing: boolean
   mobilePane: MobilePane
   sidebarOpen: boolean
-  conflictFileId: string | null
+  conflictFileIds: string[]
   pendingOpenRequest?: OpenFileRequest
   projectImportOpen: boolean
   globalSearchOpen: boolean
+  documentTransitioning: boolean
   selectedProjectId: string | null
   selectedFolderPath: string
   initialize(): Promise<void>
@@ -105,16 +106,24 @@ interface AppState {
   setSidebarOpen(value: boolean): void
   setProjectImportOpen(value: boolean): void
   setGlobalSearchOpen(value: boolean): void
+  setDocumentTransitioning(value: boolean): void
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
+const autosaveStartedAt = new Map<string, number>()
 const saveOperations = new Map<string, Promise<boolean>>()
 const editorViewports = new Map<string, EditorViewport>()
 const previewScrollPositions = new Map<string, number>()
+const externalReadRequests = new Map<string, number>()
 let editorRevealId = 0
 let initializePromise: Promise<void> | null = null
 let environmentRequestId = 0
 let settingsRequestId = 0
+let documentMutationVersion = 0
+const TEXT_AUTOSAVE_DELAY_MS = 500
+const TEXT_AUTOSAVE_MAX_WAIT_MS = 5_000
+const BINARY_AUTOSAVE_DELAY_MS = 1_500
+const BINARY_AUTOSAVE_MAX_WAIT_MS = 10_000
 let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settings.update>>> = Promise.resolve({
   ok: true,
   value: {
@@ -127,6 +136,29 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
 
 function withoutCancelled(error: { code: string; message: string }): void {
   if (error.code !== 'CANCELLED') toast.error(error.message)
+}
+
+function enqueueConflict(fileIds: string[], fileId: string): string[] {
+  return fileIds.includes(fileId) ? fileIds : [...fileIds, fileId]
+}
+
+function removeConflict(fileIds: string[], fileId: string): string[] {
+  return fileIds.filter((candidate) => candidate !== fileId)
+}
+
+function scheduleAutosave(
+  fileId: string,
+  delayMs: number,
+  maxWaitMs: number,
+  getState: () => AppState
+): void {
+  const startedAt = autosaveStartedAt.get(fileId) ?? Date.now()
+  autosaveStartedAt.set(fileId, startedAt)
+  const remaining = Math.max(0, maxWaitMs - (Date.now() - startedAt))
+  saveTimers.set(fileId, setTimeout(
+    () => void getState().saveDocument(fileId),
+    Math.min(delayMs, remaining)
+  ))
 }
 
 function openDocumentFromSnapshot(snapshot: DocumentSnapshot): OpenDocument {
@@ -167,10 +199,31 @@ export const useAppStore = create<AppState>((set, get) => {
   }
 
   const flushDocuments = async (): Promise<boolean> => {
-    for (const document of [...get().documents]) {
-      if (isDocumentDirty(document) && !(await get().saveDocument(document.id))) return false
+    // A document may transact while an earlier write is in flight. Drain both
+    // dirty state and queued writes until they remain stable for one event-loop
+    // turn; otherwise a close or environment switch can miss the newest edit.
+    for (let pass = 0; pass < 12; pass += 1) {
+      const dirtyIds = get().documents.filter(isDocumentDirty).map((document) => document.id)
+      try {
+        const results = await Promise.all(dirtyIds.map((fileId) => get().saveDocument(fileId)))
+        if (results.some((saved) => !saved)) return false
+        const pending = [...saveOperations.values()]
+        if (pending.length > 0 && (await Promise.all(pending)).some((saved) => !saved)) return false
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'One or more documents could not be saved.')
+        return false
+      }
+
+      const stableVersion = documentMutationVersion
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      if (
+        stableVersion === documentMutationVersion &&
+        saveOperations.size === 0 &&
+        !get().documents.some(isDocumentDirty)
+      ) return true
     }
-    return true
+    toast.error('Edits continued while Aladdeen was preparing the documents. Try again.')
+    return false
   }
 
   const saveDocumentNow = async (
@@ -181,6 +234,7 @@ export const useAppStore = create<AppState>((set, get) => {
     const timer = saveTimers.get(fileId)
     if (timer) clearTimeout(timer)
     saveTimers.delete(fileId)
+    autosaveStartedAt.delete(fileId)
     const document = get().documents.find((candidate) => candidate.id === fileId)
     if (!document || (!isDocumentDirty(document) && !force && !saveAs)) return true
     if (document.deleted && !force) {
@@ -203,8 +257,9 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       let data: ArrayBuffer
       try {
-        data = await runtime.serialize()
+        data = await runtime.serialize(serializedAdapterRevision)
       } catch (error) {
+        runtime.completeSave?.(false, serializedAdapterRevision)
         const message = error instanceof Error ? error.message : 'The document could not be serialized.'
         set((state) => ({
           documents: state.documents.map((item) => item.id === fileId
@@ -214,18 +269,33 @@ export const useAppStore = create<AppState>((set, get) => {
         toast.error(message)
         return false
       }
-      const result = await window.aladdeen.document.saveBinary({
-        fileId,
-        expectedRevision: document.revision,
-        force,
-        saveAs: saveAs || (document.documentKind === 'pdf' && Boolean(
-          document.session.signed || document.session.restricted
-        ))
-      }, data)
+      const binarySaveAs = saveAs || (document.documentKind === 'pdf' && Boolean(
+        document.session.signed || document.session.restricted
+      ))
+      let result
+      try {
+        result = await window.aladdeen.document.saveBinary({
+          fileId,
+          expectedRevision: document.revision,
+          force,
+          saveAs: binarySaveAs
+        }, data)
+      } catch (error) {
+        runtime.completeSave?.(false, serializedAdapterRevision)
+        const message = error instanceof Error ? error.message : 'The document could not be saved.'
+        set((state) => ({
+          documents: state.documents.map((item) => item.id === fileId
+            ? { ...item, status: 'error', error: message }
+            : item)
+        }))
+        toast.error(message)
+        return false
+      }
       if (!result.ok) {
+        runtime.completeSave?.(false, serializedAdapterRevision)
         if (result.error.code === 'CONFLICT') {
           set((state) => ({
-            conflictFileId: fileId,
+            conflictFileIds: enqueueConflict(state.conflictFileIds, fileId),
             documents: state.documents.map((item) => item.id === fileId
               ? { ...item, status: 'conflict', error: result.error.message }
               : item)
@@ -240,8 +310,13 @@ export const useAppStore = create<AppState>((set, get) => {
         }
         return false
       }
+      runtime.completeSave?.(true, serializedAdapterRevision)
       set((state) => ({
-        documents: state.documents.map((item) => item.id === fileId && !isTextOpenDocument(item)
+        documents: state.documents.map((item) => (
+          item.id === fileId &&
+          !isTextOpenDocument(item) &&
+          item.revision.sha256 === document.revision.sha256
+        )
           ? (() => {
               const hasNewerEdits = item.adapterRevision !== serializedAdapterRevision
               return {
@@ -258,9 +333,9 @@ export const useAppStore = create<AppState>((set, get) => {
       }))
       const latest = get().documents.find((candidate) => candidate.id === fileId)
       if (latest && !isTextOpenDocument(latest) && latest.binaryDirty) {
-        saveTimers.set(fileId, setTimeout(() => void get().saveDocument(fileId), 1_500))
+        scheduleAutosave(fileId, BINARY_AUTOSAVE_DELAY_MS, BINARY_AUTOSAVE_MAX_WAIT_MS, get)
       }
-      await get().refreshEnvironment()
+      if (binarySaveAs) await get().refreshEnvironment()
       return true
     }
 
@@ -271,13 +346,25 @@ export const useAppStore = create<AppState>((set, get) => {
       expectedRevision: document.revision,
       force
     }
-    const result = saveAs
-      ? await window.aladdeen.document.saveAs(request)
-      : await window.aladdeen.document.save(request)
+    let result
+    try {
+      result = saveAs
+        ? await window.aladdeen.document.saveAs(request)
+        : await window.aladdeen.document.save(request)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The document could not be saved.'
+      set((state) => ({
+        documents: state.documents.map((item) => item.id === fileId
+          ? { ...item, status: 'error', error: message }
+          : item)
+      }))
+      toast.error(message)
+      return false
+    }
     if (!result.ok) {
       if (result.error.code === 'CONFLICT') {
         set((state) => ({
-          conflictFileId: fileId,
+          conflictFileIds: enqueueConflict(state.conflictFileIds, fileId),
           documents: state.documents.map((item) => item.id === fileId ? { ...item, status: 'conflict', error: result.error.message } : item)
         }))
       } else {
@@ -287,19 +374,26 @@ export const useAppStore = create<AppState>((set, get) => {
       return false
     }
     const latest = get().documents.find((candidate) => candidate.id === fileId)
+    const sameDocumentRevision = latest && latest.revision.sha256 === document.revision.sha256
     const hasNewerEdits = latest && isTextOpenDocument(latest)
       ? latest.content !== snapshotContent
       : false
-    set((state) => ({ documents: state.documents.map((item) => item.id === fileId ? {
-      ...item,
-      revision: result.value,
-      savedContent: snapshotContent,
-      status: hasNewerEdits ? 'editing' : 'saved',
-      error: undefined,
-      deleted: false
-    } : item) }))
+    if (sameDocumentRevision) {
+      set((state) => ({ documents: state.documents.map((item) => (
+        item.id === fileId &&
+        isTextOpenDocument(item) &&
+        item.revision.sha256 === document.revision.sha256
+      ) ? {
+          ...item,
+          revision: result.value,
+          savedContent: snapshotContent,
+          status: hasNewerEdits ? 'editing' : 'saved',
+          error: undefined,
+          deleted: false
+        } : item) }))
+    }
     if (hasNewerEdits) {
-      saveTimers.set(fileId, setTimeout(() => void get().saveDocument(fileId), 500))
+      scheduleAutosave(fileId, TEXT_AUTOSAVE_DELAY_MS, TEXT_AUTOSAVE_MAX_WAIT_MS, get)
     }
     if (saveAs) await get().refreshEnvironment()
     return true
@@ -340,32 +434,38 @@ export const useAppStore = create<AppState>((set, get) => {
     editing: false,
     mobilePane: 'preview',
     sidebarOpen: false,
-    conflictFileId: null,
+    conflictFileIds: [],
     projectImportOpen: false,
     globalSearchOpen: false,
+    documentTransitioning: false,
     selectedProjectId: null,
     selectedFolderPath: '',
 
     async initialize() {
       if (initializePromise) return initializePromise
       initializePromise = (async () => {
-        set({ bootStatus: 'booting' })
-        const result = await window.aladdeen.app.bootstrap()
-        if (!result.ok) {
-          toast.error(result.error.message)
+        try {
+          set({ bootStatus: 'booting' })
+          const result = await window.aladdeen.app.bootstrap()
+          if (!result.ok) {
+            toast.error(result.error.message)
+            set({ bootStatus: 'error' })
+            return
+          }
+          set({
+            settings: result.value.settings,
+            persistedSettings: result.value.settings,
+            pendingOpenRequest: result.value.pendingOpenRequest
+          })
+          if (result.value.environment) await get().loadEnvironment(result.value.environment)
+          if (result.value.environment && result.value.pendingOpenRequest) {
+            await get().acceptSystemOpenFile(result.value.pendingOpenRequest)
+          }
+          set({ bootStatus: 'ready' })
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Aladdeen could not finish starting.')
           set({ bootStatus: 'error' })
-          return
         }
-        set({
-          settings: result.value.settings,
-          persistedSettings: result.value.settings,
-          pendingOpenRequest: result.value.pendingOpenRequest
-        })
-        if (result.value.environment) await get().loadEnvironment(result.value.environment)
-        if (result.value.environment && result.value.pendingOpenRequest) {
-          await get().acceptSystemOpenFile(result.value.pendingOpenRequest)
-        }
-        set({ bootStatus: 'ready' })
       })().finally(() => {
         initializePromise = null
       })
@@ -385,7 +485,7 @@ export const useAppStore = create<AppState>((set, get) => {
             withoutCancelled(result.error)
             return false
           }
-        } else if (!(await get().saveDocument(document.id))) {
+        } else if (!(await get().saveDocumentAs(document.id))) {
           return false
         }
       }
@@ -396,19 +496,24 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async createEnvironment(name) {
-      if (get().environment) {
-        if (!(await flushDocuments())) return false
-        await persistOpenState()
+      set({ documentTransitioning: true })
+      try {
+        if (get().environment) {
+          if (!(await flushDocuments())) return false
+          await persistOpenState()
+        }
+        const result = await window.aladdeen.environments.create(name)
+        if (!result.ok) {
+          withoutCancelled(result.error)
+          return false
+        }
+        await get().loadEnvironment(result.value)
+        const pending = get().pendingOpenRequest
+        if (pending) await get().acceptSystemOpenFile(pending)
+        return true
+      } finally {
+        set({ documentTransitioning: false })
       }
-      const result = await window.aladdeen.environments.create(name)
-      if (!result.ok) {
-        withoutCancelled(result.error)
-        return false
-      }
-      await get().loadEnvironment(result.value)
-      const pending = get().pendingOpenRequest
-      if (pending) await get().acceptSystemOpenFile(pending)
-      return true
     },
 
     async renameEnvironment(name) {
@@ -425,38 +530,50 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async removeEnvironment() {
       const environmentId = get().environment?.environment.id
-      if (!environmentId || !(await flushDocuments())) return false
-      await persistOpenState()
-      const result = await window.aladdeen.environments.remove(environmentId)
-      if (!result.ok) {
-        withoutCancelled(result.error)
-        return false
+      if (!environmentId) return false
+      set({ documentTransitioning: true })
+      try {
+        if (!(await flushDocuments())) return false
+        await persistOpenState()
+        const result = await window.aladdeen.environments.remove(environmentId)
+        if (!result.ok) {
+          withoutCancelled(result.error)
+          return false
+        }
+        if (result.value) await get().loadEnvironment(result.value)
+        else {
+          saveTimers.forEach((timer) => clearTimeout(timer))
+          saveTimers.clear()
+          autosaveStartedAt.clear()
+          set({
+            environment: null,
+            documents: [],
+            activeFileId: null,
+            globalSearchOpen: false,
+            selectedProjectId: null,
+            selectedFolderPath: ''
+          })
+        }
+        return true
+      } finally {
+        set({ documentTransitioning: false })
       }
-      if (result.value) await get().loadEnvironment(result.value)
-      else {
-        saveTimers.forEach((timer) => clearTimeout(timer))
-        saveTimers.clear()
-        set({
-          environment: null,
-          documents: [],
-          activeFileId: null,
-          globalSearchOpen: false,
-          selectedProjectId: null,
-          selectedFolderPath: ''
-        })
-      }
-      return true
     },
 
     async switchEnvironment(environmentId) {
       if (environmentId === get().environment?.environment.id) return
-      if (!(await flushDocuments())) return
-      await persistOpenState()
-      const requestId = ++environmentRequestId
-      const result = await window.aladdeen.environments.switch(environmentId)
-      if (!result.ok) return withoutCancelled(result.error)
-      if (requestId !== environmentRequestId) return
-      await get().loadEnvironment(result.value)
+      set({ documentTransitioning: true })
+      try {
+        if (!(await flushDocuments())) return
+        await persistOpenState()
+        const requestId = ++environmentRequestId
+        const result = await window.aladdeen.environments.switch(environmentId)
+        if (!result.ok) return withoutCancelled(result.error)
+        if (requestId !== environmentRequestId) return
+        await get().loadEnvironment(result.value)
+      } finally {
+        set({ documentTransitioning: false })
+      }
     },
 
     async loadEnvironment(snapshot) {
@@ -469,6 +586,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       saveTimers.forEach((timer) => clearTimeout(timer))
       saveTimers.clear()
+      autosaveStartedAt.clear()
       saveOperations.clear()
       editorViewports.clear()
       previewScrollPositions.clear()
@@ -486,7 +604,7 @@ export const useAppStore = create<AppState>((set, get) => {
         activeFileId: preferred,
         sidebarOpen: false,
         globalSearchOpen: false,
-        conflictFileId: null,
+        conflictFileIds: [],
         selectedProjectId: null,
         selectedFolderPath: ''
       })
@@ -704,7 +822,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async openDroppedFiles(files) {
       if (!get().environment || files.length === 0) return
-      const result = await window.aladdeen.document.openDropped(files.slice(0, 20))
+      const result = await window.aladdeen.document.openDropped(files.slice(0, MAX_DROPPED_DOCUMENTS))
       if (!result.ok) return withoutCancelled(result.error)
       for (const snapshot of result.value) await ingestDocument(snapshot)
     },
@@ -715,6 +833,10 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     updateContent(fileId, content) {
+      const previous = get().documents.find((document) => document.id === fileId)
+      if (previous && isTextOpenDocument(previous) && previous.content !== content) {
+        documentMutationVersion += 1
+      }
       set((state) => ({
         documents: state.documents.map((document) =>
           document.id === fileId && isTextOpenDocument(document)
@@ -723,10 +845,11 @@ export const useAppStore = create<AppState>((set, get) => {
       }))
       const current = saveTimers.get(fileId)
       if (current) clearTimeout(current)
-      saveTimers.set(fileId, setTimeout(() => void get().saveDocument(fileId), 500))
+      scheduleAutosave(fileId, TEXT_AUTOSAVE_DELAY_MS, TEXT_AUTOSAVE_MAX_WAIT_MS, get)
     },
 
     markBinaryDirty(fileId, dirty = true) {
+      if (dirty) documentMutationVersion += 1
       set((state) => ({
         documents: state.documents.map((document) =>
           document.id === fileId && !isTextOpenDocument(document)
@@ -742,6 +865,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }))
       const current = saveTimers.get(fileId)
       if (current) clearTimeout(current)
+      if (!dirty) autosaveStartedAt.delete(fileId)
       const document = get().documents.find((candidate) => candidate.id === fileId)
       if (
         dirty &&
@@ -749,7 +873,7 @@ export const useAppStore = create<AppState>((set, get) => {
         !isTextOpenDocument(document) &&
         !(document.documentKind === 'pdf' && (document.session.signed || document.session.restricted))
       ) {
-        saveTimers.set(fileId, setTimeout(() => void get().saveDocument(fileId), 1_500))
+        scheduleAutosave(fileId, BINARY_AUTOSAVE_DELAY_MS, BINARY_AUTOSAVE_MAX_WAIT_MS, get)
       }
     },
 
@@ -815,6 +939,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const timer = saveTimers.get(fileId)
       if (timer) clearTimeout(timer)
       saveTimers.delete(fileId)
+      autosaveStartedAt.delete(fileId)
       cleanupDocumentRuntime(fileId)
       if (!isTextOpenDocument(document)) {
         await window.aladdeen.document.releaseSession(document.session.id)
@@ -823,7 +948,11 @@ export const useAppStore = create<AppState>((set, get) => {
         const index = state.documents.findIndex((item) => item.id === fileId)
         const documents = state.documents.filter((item) => item.id !== fileId)
         const activeFileId = state.activeFileId === fileId ? documents[Math.min(index, documents.length - 1)]?.id ?? null : state.activeFileId
-        return { documents, activeFileId }
+        return {
+          documents,
+          activeFileId,
+          conflictFileIds: removeConflict(state.conflictFileIds, fileId)
+        }
       })
       await persistOpenState()
     },
@@ -904,14 +1033,32 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!document || (event.type !== 'changed' && event.type !== 'added')) return
       if (isDocumentDirty(document) || document.status === 'saving') {
         set((state) => ({
-          conflictFileId: event.fileId ?? null,
+          conflictFileIds: enqueueConflict(state.conflictFileIds, event.fileId as string),
           documents: state.documents.map((item) => item.id === event.fileId ? { ...item, status: 'conflict', error: 'This file changed outside Aladdeen.' } : item)
         }))
         return
       }
+      const requestId = (externalReadRequests.get(event.fileId) ?? 0) + 1
+      externalReadRequests.set(event.fileId, requestId)
       const result = await window.aladdeen.document.read(event.fileId)
-      if (!result.ok) return
-      if (!isTextOpenDocument(document)) cleanupDocumentRuntime(document.id)
+      if (externalReadRequests.get(event.fileId) !== requestId) return
+      if (!result.ok) {
+        withoutCancelled(result.error)
+        return
+      }
+      const latest = get().documents.find((candidate) => candidate.id === event.fileId)
+      if (!latest) return
+      if (isDocumentDirty(latest) || latest.status === 'saving') {
+        set((state) => ({
+          conflictFileIds: enqueueConflict(state.conflictFileIds, event.fileId as string),
+          documents: state.documents.map((item) => item.id === event.fileId
+            ? { ...item, status: 'conflict', error: 'This file changed outside Aladdeen.' }
+            : item)
+        }))
+        return
+      }
+      if (latest.revision.sha256 !== document.revision.sha256) return
+      if (!isTextOpenDocument(latest)) cleanupDocumentRuntime(latest.id)
       set((state) => ({
         documents: state.documents.map((item) => item.id === event.fileId
           ? openDocumentFromSnapshot(result.value)
@@ -925,22 +1072,29 @@ export const useAppStore = create<AppState>((set, get) => {
         set({ pendingOpenRequest: request })
         return
       }
-      if (!(await flushDocuments())) {
-        toast.error('Resolve the current save issue before opening another file.')
-        return
+      set({ documentTransitioning: true })
+      try {
+        if (!(await flushDocuments())) {
+          toast.error('Resolve the current save issue before opening another file.')
+          return
+        }
+        const result = await window.aladdeen.document.acceptOpenFile(request.token)
+        if (!result.ok) return withoutCancelled(result.error)
+        set({ pendingOpenRequest: undefined })
+        await ingestDocument(result.value)
+      } finally {
+        set({ documentTransitioning: false })
       }
-      const result = await window.aladdeen.document.acceptOpenFile(request.token)
-      if (!result.ok) return withoutCancelled(result.error)
-      set({ pendingOpenRequest: undefined })
-      await ingestDocument(result.value)
     },
 
     async resolveConflict(action) {
-      const fileId = get().conflictFileId
+      const fileId = get().conflictFileIds[0]
       const document = get().documents.find((candidate) => candidate.id === fileId)
       if (!fileId || !document) return
       if (action === 'keep') {
-        if (await get().saveDocument(fileId, true)) set({ conflictFileId: null })
+        if (await get().saveDocument(fileId, true)) {
+          set((state) => ({ conflictFileIds: removeConflict(state.conflictFileIds, fileId) }))
+        }
         return
       }
       if (action === 'copy') {
@@ -950,14 +1104,25 @@ export const useAppStore = create<AppState>((set, get) => {
           toast.success('A copy of your changes was saved.')
         } else {
           const runtime = getDocumentRuntime(fileId)
-          if (!runtime) return
-          const data = await runtime.serialize()
+          if (!runtime) {
+            toast.error('The document editor is not ready to save a copy.')
+            return
+          }
+          let data: ArrayBuffer
+          try {
+            data = await runtime.serialize(document.adapterRevision)
+          } catch (error) {
+            runtime.completeSave?.(false, document.adapterRevision)
+            toast.error(error instanceof Error ? error.message : 'The document could not be serialized.')
+            return
+          }
           const copy = await window.aladdeen.document.saveBinary({
-            fileId,
-            expectedRevision: document.revision,
-            force: true,
-            saveAs: true
-          }, data)
+              fileId,
+              expectedRevision: document.revision,
+              force: true,
+              saveAs: true
+            }, data)
+          runtime.completeSave?.(copy.ok, document.adapterRevision)
           if (!copy.ok) return withoutCancelled(copy.error)
           toast.success('A copy of your document was saved.')
         }
@@ -966,7 +1131,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!external.ok) return withoutCancelled(external.error)
       cleanupDocumentRuntime(fileId)
       set((state) => ({
-        conflictFileId: null,
+        conflictFileIds: removeConflict(state.conflictFileIds, fileId),
         documents: state.documents.map((item) => item.id === fileId
           ? openDocumentFromSnapshot(external.value)
           : item)
@@ -976,11 +1141,16 @@ export const useAppStore = create<AppState>((set, get) => {
     async exportActive(format) {
       const document = get().documents.find((candidate) => candidate.id === get().activeFileId)
       if (!document || document.documentKind !== 'markdown') return
-      await get().saveDocument(document.id)
+      if (!(await get().saveDocument(document.id))) {
+        toast.error('Resolve the save issue before exporting this document.')
+        return
+      }
+      const latest = get().documents.find((candidate) => candidate.id === document.id)
+      if (!latest || !isTextOpenDocument(latest) || latest.documentKind !== 'markdown') return
       const result = await window.aladdeen.export.document({
-        fileId: document.id,
-        title: document.name.replace(/\.(md|markdown)$/i, ''),
-        content: document.content,
+        fileId: latest.id,
+        title: latest.name.replace(/\.(md|markdown)$/i, ''),
+        content: latest.content,
         format
       })
       if (!result.ok) return withoutCancelled(result.error)
@@ -1025,6 +1195,10 @@ export const useAppStore = create<AppState>((set, get) => {
 
     setGlobalSearchOpen(value) {
       set({ globalSearchOpen: value })
+    },
+
+    setDocumentTransitioning(value) {
+      set({ documentTransitioning: value })
     }
   }
 })

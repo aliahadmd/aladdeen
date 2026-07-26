@@ -5,6 +5,7 @@ export default defineConfig({
 	plugins: [
 		cloudflareTest(() => ({
 			wrangler: { configPath: "./wrangler.json" },
+			miniflare: { bindings: { RELEASE_SIZE_CHECK: "disabled" } },
 		})),
 	],
 	test: {

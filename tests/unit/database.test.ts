@@ -20,7 +20,7 @@ describe('application metadata database', () => {
     const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(6)
+    ).toBe(8)
     migrated.close()
 
     expect(database.getSettings()).toEqual({
@@ -183,5 +183,117 @@ describe('application metadata database', () => {
     expect(file.path).toBe('/notes/hello.md')
     expect(database.getEnvironmentState(environment.id).activeFileId).toBe(file.id)
     database.close()
+  })
+
+  it('repairs legacy history left behind by an interrupted version-two migration', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-repair-'))
+    created.push(directory)
+    const initial = new AppDatabase(directory)
+    initial.close()
+
+    const raw = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    raw.exec(`
+      DELETE FROM environments;
+      CREATE TABLE recent_workspaces (path TEXT PRIMARY KEY, last_opened_at INTEGER NOT NULL) STRICT;
+      CREATE TABLE workspace_state (
+        workspace_path TEXT PRIMARY KEY,
+        selected_file TEXT,
+        expanded_paths TEXT NOT NULL DEFAULT '[]',
+        updated_at INTEGER NOT NULL
+      ) STRICT;
+      INSERT INTO recent_workspaces VALUES ('/recovered-notes', 200);
+      INSERT INTO workspace_state VALUES ('/recovered-notes', 'evidence.md', '[]', 200);
+    `)
+    raw.close()
+
+    const repaired = new AppDatabase(directory)
+    expect(repaired.listEnvironments()[0]?.name).toBe('Personal')
+    expect(repaired.listTrackedFiles(repaired.listEnvironments()[0]!.id)[0]?.path).toBe(
+      '/recovered-notes/evidence.md'
+    )
+    repaired.close()
+
+    const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    expect(verified.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_workspaces'"
+    ).get()).toBeUndefined()
+    verified.close()
+  })
+
+  it('migrates removed Research Notes metadata without losing application data', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-research-notes-'))
+    created.push(directory)
+    const initial = new AppDatabase(directory)
+    const environment = initial.createEnvironment('Research')
+    const project = initial.addProject(environment.id, '/research', 'research')
+    const file = initial.upsertTrackedFile(environment.id, '/research/evidence.md', project.id)
+    initial.close()
+
+    const legacy = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    legacy.exec(`
+      CREATE TABLE environment_note_locations (
+        environment_id TEXT PRIMARY KEY REFERENCES environments(id) ON DELETE CASCADE,
+        project_id TEXT NOT NULL REFERENCES environment_projects(id) ON DELETE CASCADE,
+        relative_path TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      ) STRICT;
+      CREATE TABLE research_notes (
+        note_file_id TEXT PRIMARY KEY REFERENCES environment_files(id) ON DELETE CASCADE,
+        environment_id TEXT NOT NULL REFERENCES environments(id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      ) STRICT;
+      CREATE TABLE research_note_links (
+        note_file_id TEXT NOT NULL REFERENCES research_notes(note_file_id) ON DELETE CASCADE,
+        block_id TEXT NOT NULL,
+        source_file_id TEXT REFERENCES environment_files(id) ON DELETE SET NULL,
+        source_kind TEXT NOT NULL,
+        source_revision_hash TEXT NOT NULL,
+        display_label TEXT NOT NULL,
+        marker_offset INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'exact',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY(note_file_id, block_id)
+      ) STRICT;
+      INSERT INTO environment_note_locations
+        VALUES ('${environment.id}', '${project.id}', '', 1, 1);
+      INSERT INTO research_notes VALUES ('${file.id}', '${environment.id}', 1, 1);
+      INSERT INTO research_note_links
+        VALUES ('${file.id}', 'block-1', '${file.id}', 'markdown', 'revision', 'Evidence', 0, 'exact', 1, 1);
+      PRAGMA user_version = 7;
+    `)
+    legacy.close()
+
+    const migrated = new AppDatabase(directory)
+    expect(migrated.listEnvironments()).toEqual([expect.objectContaining({ id: environment.id })])
+    expect(migrated.listProjects(environment.id)).toEqual([expect.objectContaining({ id: project.id })])
+    expect(migrated.listTrackedFiles(environment.id)).toEqual([expect.objectContaining({ id: file.id })])
+    migrated.close()
+
+    const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    expect(
+      (verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
+    ).toBe(8)
+    for (const table of ['environment_note_locations', 'research_notes', 'research_note_links']) {
+      expect(verified.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
+      ).get(table)).toBeUndefined()
+    }
+    verified.close()
+  })
+
+  it('refuses a database created by a newer schema without downgrading it', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-future-'))
+    created.push(directory)
+    const raw = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    raw.exec('PRAGMA user_version = 99;')
+    raw.close()
+
+    expect(() => new AppDatabase(directory)).toThrow(/newer application version/i)
+    const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    expect((verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(99)
+    verified.close()
   })
 })

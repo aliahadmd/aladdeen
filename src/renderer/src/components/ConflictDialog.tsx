@@ -14,9 +14,10 @@ const conflictOptionClasses =
   'grid grid-cols-[22px_minmax(0,1fr)] items-start gap-[9px] rounded-[9px] border border-border bg-surface p-[10px] text-left text-foreground-soft hover:border-accent-muted hover:bg-accent-soft'
 
 export function ConflictDialog(): React.JSX.Element {
-  const conflictPath = useAppStore((state) => state.conflictFileId)
+  const conflictFileIds = useAppStore((state) => state.conflictFileIds)
   const documents = useAppStore((state) => state.documents)
   const resolveConflict = useAppStore((state) => state.resolveConflict)
+  const conflictPath = conflictFileIds[0]
   const document = documents.find((candidate) => candidate.id === conflictPath)
 
   return (
@@ -30,6 +31,7 @@ export function ConflictDialog(): React.JSX.Element {
           <AlertDialog.Title className={dialogTitleClasses}>{document?.name ?? 'This file'} changed on disk</AlertDialog.Title>
           <AlertDialog.Description className={dialogDescriptionClasses}>
             Aladdeen paused autosave so neither version is lost. Choose which copy should become the active document.
+            {conflictFileIds.length > 1 && ` ${conflictFileIds.length - 1} more conflicted ${conflictFileIds.length === 2 ? 'document is' : 'documents are'} waiting.`}
           </AlertDialog.Description>
           <div className="mt-[18px] grid gap-[7px]">
             <button className={conflictOptionClasses} onClick={() => void resolveConflict('reload')}>
