@@ -9,8 +9,6 @@ import {
 type Theme = "light" | "dark" | "system";
 
 const themeOrder: Theme[] = ["light", "dark", "system"];
-const usePolicy =
-	"Aladdeen must not be used in ways that harm people, society, or the environment. Individuals may use it without prior permission. Organizations must obtain permission before use: ali@aliahad.com.";
 
 const featureGroups = [
 	{
@@ -207,21 +205,6 @@ function MenuIcon({ open }: { open: boolean }): ReactNode {
 	);
 }
 
-function AnnouncementControlIcon({ paused }: { paused: boolean }): ReactNode {
-	return (
-		<svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5">
-			{paused ? (
-				<path d="m5 3 7 5-7 5Z" fill="currentColor" />
-			) : (
-				<>
-					<rect x="4" y="3" width="2.5" height="10" rx="0.75" fill="currentColor" />
-					<rect x="9.5" y="3" width="2.5" height="10" rx="0.75" fill="currentColor" />
-				</>
-			)}
-		</svg>
-	);
-}
-
 function DownloadLink({
 	artifact,
 	primary = false,
@@ -250,7 +233,6 @@ function formatSize(byteSize: number): string {
 function App() {
 	const [theme, setTheme] = useState<Theme>(readTheme);
 	const [menuOpen, setMenuOpen] = useState(false);
-	const [policyPaused, setPolicyPaused] = useState(false);
 
 	useEffect(() => {
 		window.localStorage.setItem("theme", theme);
@@ -328,42 +310,6 @@ function App() {
 			</a>
 
 			<div className="sticky top-0 z-50">
-				<aside
-					className="announcement-bar flex h-8 items-stretch overflow-hidden border-b border-neutral-800 bg-neutral-950 text-neutral-100"
-					aria-labelledby="use-policy"
-				>
-					<p id="use-policy" className="sr-only">{usePolicy}</p>
-					<div className="announcement-viewport min-w-0 flex-1 overflow-hidden">
-						<div
-							className="announcement-track flex h-full w-max items-center"
-							data-paused={policyPaused}
-							aria-hidden="true"
-						>
-							{[0, 1].map((copy) => (
-								<span
-									key={copy}
-									className="announcement-segment flex shrink-0 items-center gap-3 px-6 text-[11px] font-medium tracking-[0.01em]"
-								>
-									<span className="rounded-sm bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-neutral-300">
-										Use policy
-									</span>
-									<span className="whitespace-nowrap text-neutral-200">{usePolicy}</span>
-								</span>
-							))}
-						</div>
-					</div>
-					<button
-						type="button"
-						className="announcement-toggle flex w-9 shrink-0 items-center justify-center border-l border-white/10 text-neutral-400 transition-colors hover:bg-white/10 hover:text-white active:bg-white/15"
-						onClick={() => setPolicyPaused((paused) => !paused)}
-						aria-label={policyPaused ? "Resume use policy announcement" : "Pause use policy announcement"}
-						aria-pressed={policyPaused}
-						title={policyPaused ? "Resume announcement" : "Pause announcement"}
-					>
-						<AnnouncementControlIcon paused={policyPaused} />
-					</button>
-				</aside>
-
 				<header className="border-b border-neutral-100 bg-white/85 backdrop-blur-sm dark:border-neutral-900 dark:bg-neutral-950/85">
 					<div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-6">
 						<a href="#" className="flex items-center gap-2.5" aria-label="Aladdeen Research home">

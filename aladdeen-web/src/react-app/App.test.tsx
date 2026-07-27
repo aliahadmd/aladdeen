@@ -47,27 +47,9 @@ describe("Aladdeen landing page", () => {
 			}),
 		).toBeInTheDocument();
 		expect(document.querySelectorAll("#features img")).toHaveLength(0);
-	});
-
-	it("shows the use policy and lets visitors pause its motion", () => {
-		render(<App />);
-
 		expect(
-			screen.getAllByText(
-				/Aladdeen must not be used in ways that harm people, society, or the environment/,
-			).length,
-		).toBeGreaterThan(0);
-
-		const pauseButton = screen.getByRole("button", {
-			name: "Pause use policy announcement",
-		});
-		fireEvent.click(pauseButton);
-
-		expect(
-			screen.getByRole("button", {
-				name: "Resume use policy announcement",
-			}),
-		).toHaveAttribute("aria-pressed", "true");
+			screen.queryByText(/Aladdeen must not be used in ways that harm people/),
+		).not.toBeInTheDocument();
 	});
 
 	it("links only the macOS arm64 download to its versioned Worker route", () => {
