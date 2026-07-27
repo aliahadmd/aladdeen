@@ -27,9 +27,16 @@ describe('application metadata database', () => {
       theme: 'system',
       accent: 'indigo',
       sidebarWidth: 320,
-      sidebarCollapsed: false
+      sidebarCollapsed: false,
+      completedOnboardingVersion: 0
     })
-    database.setSettings({ theme: 'dark', accent: 'rose', sidebarWidth: 368, sidebarCollapsed: true })
+    database.setSettings({
+      theme: 'dark',
+      accent: 'rose',
+      sidebarWidth: 368,
+      sidebarCollapsed: true,
+      completedOnboardingVersion: 1
+    })
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
     expect(project.enabledDocumentKinds).toEqual(['markdown'])
@@ -67,7 +74,8 @@ describe('application metadata database', () => {
       theme: 'dark',
       accent: 'rose',
       sidebarWidth: 368,
-      sidebarCollapsed: true
+      sidebarCollapsed: true,
+      completedOnboardingVersion: 1
     })
     expect(database.listEnvironments()).toHaveLength(1)
     expect(database.getActiveEnvironmentId()).toBe(environment.id)

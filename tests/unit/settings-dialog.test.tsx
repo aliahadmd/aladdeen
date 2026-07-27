@@ -9,7 +9,8 @@ const defaultSettings: AppSettings = {
   theme: 'system',
   accent: 'indigo',
   sidebarWidth: 320,
-  sidebarCollapsed: false
+  sidebarCollapsed: false,
+  completedOnboardingVersion: 1
 }
 
 describe('settings dialog', () => {
@@ -132,5 +133,23 @@ describe('settings dialog', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument())
     expect(opener).toHaveFocus()
+  })
+
+  it('offers the tutorial from About and closes Settings before replaying it', () => {
+    const onOpenChange = vi.fn()
+    const onShowTutorial = vi.fn()
+    render(
+      <SettingsDialog
+        open
+        onOpenChange={onOpenChange}
+        onShowTutorial={onShowTutorial}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: 'About' }))
+    fireEvent.click(screen.getByRole('button', { name: 'View tutorial' }))
+
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onShowTutorial).toHaveBeenCalledOnce()
   })
 })

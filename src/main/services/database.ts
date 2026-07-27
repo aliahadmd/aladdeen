@@ -20,7 +20,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   accent: 'indigo',
   sidebarWidth: 320,
-  sidebarCollapsed: false
+  sidebarCollapsed: false,
+  completedOnboardingVersion: 0
 }
 
 const DATABASE_FILENAME = 'aladdeen.sqlite'
@@ -431,6 +432,12 @@ export class AppDatabase {
       if (row.key === 'sidebar_collapsed' && ['true', 'false'].includes(row.value)) {
         settings.sidebarCollapsed = row.value === 'true'
       }
+      if (row.key === 'completed_onboarding_version') {
+        const version = Number(row.value)
+        if (Number.isInteger(version) && version >= 0 && version <= 1_000) {
+          settings.completedOnboardingVersion = version
+        }
+      }
     }
     return settings
   }
@@ -442,6 +449,7 @@ export class AppDatabase {
       this.setSetting('accent', settings.accent)
       this.setSetting('sidebar_width', String(settings.sidebarWidth))
       this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
+      this.setSetting('completed_onboarding_version', String(settings.completedOnboardingVersion))
       this.db.exec('COMMIT')
       return settings
     } catch (error) {

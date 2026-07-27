@@ -130,7 +130,8 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
     theme: 'system',
     accent: 'indigo',
     sidebarWidth: 320,
-    sidebarCollapsed: false
+    sidebarCollapsed: false,
+    completedOnboardingVersion: 0
   }
 })
 
@@ -423,13 +424,15 @@ export const useAppStore = create<AppState>((set, get) => {
       theme: 'system',
       accent: 'indigo',
       sidebarWidth: 320,
-      sidebarCollapsed: false
+      sidebarCollapsed: false,
+      completedOnboardingVersion: 0
     },
     persistedSettings: {
       theme: 'system',
       accent: 'indigo',
       sidebarWidth: 320,
-      sidebarCollapsed: false
+      sidebarCollapsed: false,
+      completedOnboardingVersion: 0
     },
     editing: false,
     mobilePane: 'preview',

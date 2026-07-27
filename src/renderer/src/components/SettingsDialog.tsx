@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AtSign, Check, Command, ExternalLink, Github, Info, Mail, Palette, X } from 'lucide-react'
+import { AtSign, BookOpen, Check, Command, ExternalLink, Github, Info, Mail, Palette, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
 import { cn } from '@renderer/lib/cn'
@@ -16,6 +16,7 @@ import { BrandMark } from './BrandMark'
 interface SettingsDialogProps {
   open: boolean
   onOpenChange(open: boolean): void
+  onShowTutorial?(): void
 }
 
 type SettingsCategory = 'appearance' | 'shortcuts' | 'about'
@@ -102,7 +103,7 @@ function useCompactSettingsLayout(): boolean {
   return compact
 }
 
-export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): React.JSX.Element {
+export function SettingsDialog({ open, onOpenChange, onShowTutorial }: SettingsDialogProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(lastSettingsCategory)
@@ -258,7 +259,15 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps): Rea
               {activeCategory === 'shortcuts' && (
                 <ShortcutSettings />
               )}
-              {activeCategory === 'about' && <AboutSettings />}
+              {activeCategory === 'about' && (
+                <AboutSettings onShowTutorial={onShowTutorial
+                  ? () => {
+                      onOpenChange(false)
+                      requestAnimationFrame(onShowTutorial)
+                    }
+                  : undefined}
+                />
+              )}
             </div>
           </main>
         </Dialog.Content>
@@ -353,7 +362,7 @@ function ShortcutSettings(): React.JSX.Element {
   )
 }
 
-function AboutSettings(): React.JSX.Element {
+function AboutSettings({ onShowTutorial }: { onShowTutorial?(): void }): React.JSX.Element {
   return (
     <div className="py-2">
       <div className="flex items-center gap-3 border-b border-border pb-5">
@@ -377,6 +386,22 @@ function AboutSettings(): React.JSX.Element {
             Documents remain at their original disk locations. Aladdeen stores workspace references and preferences locally, without copying document contents into its settings database.
           </p>
         </section>
+        {onShowTutorial && (
+          <section className="py-5">
+            <h3 className="m-0 text-[13px] font-[620] text-foreground">Getting started</h3>
+            <p className="mt-2 mb-3 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
+              Review how Aladdeen organizes local research and works with each document format.
+            </p>
+            <button
+              className="inline-flex h-9 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-[12px] font-[620] text-foreground transition-colors hover:bg-surface-hover"
+              type="button"
+              onClick={onShowTutorial}
+            >
+              <BookOpen size={15} />
+              View tutorial
+            </button>
+          </section>
+        )}
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">Developer</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">

@@ -123,7 +123,8 @@ describe('Eigenpal DOCX adapter', () => {
         theme: 'dark',
         accent: 'indigo',
         sidebarWidth: 320,
-        sidebarCollapsed: false
+        sidebarCollapsed: false,
+        completedOnboardingVersion: 1
       }
     })
   })

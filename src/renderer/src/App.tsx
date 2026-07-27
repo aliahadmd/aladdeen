@@ -4,13 +4,14 @@ import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import type { CloseRequest } from '@shared/contracts'
 import { DOCUMENT_EXTENSION_PATTERN, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
+import { CURRENT_ONBOARDING_VERSION } from '@shared/onboarding'
 import { AddProjectsDialog } from './components/AddProjectsDialog'
 import { BrandMark } from './components/BrandMark'
 import { CloseRecoveryDialog } from './components/CloseRecoveryDialog'
 import { ConflictDialog } from './components/ConflictDialog'
 import { DocumentView } from './components/DocumentView'
 import { GlobalSearchDialog } from './components/GlobalSearchDialog'
-import { OnboardingDialog } from './components/OnboardingDialog'
+import { OnboardingExperience } from './components/OnboardingExperience'
 import { QuickOpenDialog } from './components/QuickOpenDialog'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
@@ -55,6 +56,7 @@ export default function App(): React.JSX.Element {
   const dragDepth = useRef(0)
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null)
   const [dragOpen, setDragOpen] = useState(false)
+  const [tutorialReplayOpen, setTutorialReplayOpen] = useState(false)
 
   useEffect(() => {
     void initialize()
@@ -135,12 +137,18 @@ export default function App(): React.JSX.Element {
   }, [dark, settings.accent])
 
   useEffect(() => {
+    if (!environment || settings.completedOnboardingVersion >= CURRENT_ONBOARDING_VERSION) return
+    void updateSettings({ completedOnboardingVersion: CURRENT_ONBOARDING_VERSION })
+  }, [environment, settings.completedOnboardingVersion, updateSettings])
+
+  useEffect(() => {
     sidebarWidthRef.current = settings.sidebarWidth
     document.documentElement.style.setProperty('--sidebar-width', `${settings.sidebarWidth}px`)
   }, [settings.sidebarWidth])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (tutorialReplayOpen || !environment) return
       const modifier = event.metaKey || event.ctrlKey
       if (!modifier) {
         if (event.key === 'Escape') setSidebarOpen(false)
@@ -173,7 +181,9 @@ export default function App(): React.JSX.Element {
     openFile,
     saveDocument,
     setEditing,
-    setSidebarOpen
+    setSidebarOpen,
+    tutorialReplayOpen,
+    environment
   ])
 
   useEffect(() => {
@@ -244,6 +254,17 @@ export default function App(): React.JSX.Element {
     )
   }
 
+  if (!environment) {
+    return (
+      <div className="h-full bg-background">
+        <OnboardingExperience
+          mode={settings.completedOnboardingVersion < CURRENT_ONBOARDING_VERSION ? 'first-run' : 'setup'}
+        />
+        <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'app-toast' }} />
+      </div>
+    )
+  }
+
   const previewSidebarWidth = (width: number): void => {
     const next = clampSidebarWidth(width)
     sidebarWidthRef.current = next
@@ -300,17 +321,25 @@ export default function App(): React.JSX.Element {
     else void updateSettings({ sidebarCollapsed: false })
   }
 
+  const closeTutorialReplay = (): void => {
+    setTutorialReplayOpen(false)
+    requestAnimationFrame(() => {
+      const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-aladdeen-settings-trigger]'))
+      triggers.find((trigger) => trigger.getClientRects().length > 0)?.focus()
+    })
+  }
+
   return (
     <div className="grid h-full grid-rows-[minmax(0,1fr)] bg-background">
       <div
-        inert={documentTransitioning}
+        inert={documentTransitioning || tutorialReplayOpen}
         aria-busy={documentTransitioning}
         className={cn(
           'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
           settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]'
         )}
       >
-        <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><Sidebar /></div>
+        <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><Sidebar onShowTutorial={() => setTutorialReplayOpen(true)} /></div>
         <div
           className={cn(
             "sidebar-resizer absolute inset-y-0 left-[calc(var(--sidebar-width)-3px)] z-40 w-[6px] touch-none cursor-col-resize outline-0 after:absolute after:inset-y-0 after:left-0.5 after:w-px after:bg-transparent after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent max-[959px]:hidden",
@@ -346,13 +375,12 @@ export default function App(): React.JSX.Element {
       </div>
 
       {sidebarOpen && (
-        <div className="compact-sidebar-layer hidden max-[959px]:block" role="dialog" aria-modal="true" aria-label="Environment files">
+        <div className="compact-sidebar-layer hidden max-[959px]:block" inert={tutorialReplayOpen} role="dialog" aria-modal="true" aria-label="Environment files">
           <button className="sheet-backdrop fixed inset-0 z-[150] h-full w-full border-0 bg-[rgb(10_10_15/.38)] p-0 opacity-100 transition-opacity duration-[170ms] ease-[ease]" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />
-          <div className="sheet-panel fixed inset-y-0 left-0 z-[151] w-[min(88vw,320px)] translate-x-0 transition-transform duration-[210ms] ease-fluid-out"><Sidebar compact /></div>
+          <div className="sheet-panel fixed inset-y-0 left-0 z-[151] w-[min(88vw,320px)] translate-x-0 transition-transform duration-[210ms] ease-fluid-out"><Sidebar compact onShowTutorial={() => setTutorialReplayOpen(true)} /></div>
         </div>
       )}
 
-      {!environment && <OnboardingDialog />}
       <AddProjectsDialog />
       <QuickOpenDialog />
       <GlobalSearchDialog />
@@ -365,6 +393,7 @@ export default function App(): React.JSX.Element {
         onCancel={() => completeRecovery('cancelled')}
       />
       <Toaster theme={dark ? 'dark' : 'light'} position="bottom-right" closeButton toastOptions={{ className: 'app-toast' }} />
+      {tutorialReplayOpen && <OnboardingExperience mode="replay" onClose={closeTutorialReplay} />}
       {dragOpen && (
         <div className="pointer-events-none fixed inset-3 z-[145] grid place-items-center rounded-[17px] border-2 border-dashed border-accent bg-[color-mix(in_oklab,var(--accent-soft)_76%,var(--surface-elevated))] shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--accent)_22%,transparent)] backdrop-blur-[5px]">
           <div className="rounded-xl border border-border bg-[color-mix(in_oklab,var(--surface-elevated)_94%,transparent)] px-7 py-5 text-center shadow-[0_18px_45px_rgb(0_0_0/.16)]">

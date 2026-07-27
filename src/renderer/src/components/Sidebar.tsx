@@ -77,11 +77,14 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { BrandMark } from './BrandMark'
 import { DocumentKindIcon } from './DocumentKindIcon'
 
-interface SidebarProps { compact?: boolean }
+interface SidebarProps {
+  compact?: boolean
+  onShowTutorial?(): void
+}
 type FormKind = 'environment' | 'rename-environment' | 'project' | 'file' | 'folder' | null
 type NewDocumentKind = Exclude<DocumentKind, 'pdf'>
 
-export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
+export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): React.JSX.Element {
   const environment = useAppStore((state) => state.environment)
   const activeFileId = useAppStore((state) => state.activeFileId)
   const activeDocument = useAppStore(useShallow((state) => {
@@ -640,7 +643,11 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <button className={cn(sidebarFooterButtonClasses, 'ml-auto')} onClick={() => setSettingsOpen(true)}>
+        <button
+          className={cn(sidebarFooterButtonClasses, 'ml-auto')}
+          data-aladdeen-settings-trigger
+          onClick={() => setSettingsOpen(true)}
+        >
           <Settings2 size={15} />
           <span>Settings</span>
         </button>
@@ -709,7 +716,7 @@ export function Sidebar({ compact = false }: SidebarProps): React.JSX.Element {
         onConfirm={async () => { await removeEnvironment(); setDeleteEnvironmentOpen(false) }}
       />
       <ProjectSettingsDialog project={manageProjectTarget} onOpenChange={(open) => !open && setManageProjectTarget(null)} />
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} onShowTutorial={onShowTutorial} />
     </aside>
   )
 }

@@ -6,6 +6,13 @@ import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { strFromU8, unzipSync } from 'fflate'
 import sharp from 'sharp'
 
+async function createFirstEnvironment(window: import('@playwright/test').Page): Promise<void> {
+  const skipTutorial = window.getByRole('button', { name: 'Skip tutorial' })
+  await skipTutorial.waitFor({ state: 'visible' })
+  await skipTutorial.click()
+  await window.getByRole('button', { name: 'Create environment' }).click()
+}
+
 test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', async () => {
   test.setTimeout(60_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-profile-'))
@@ -29,7 +36,7 @@ test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', as
 
   try {
     let window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     const editor = window.locator('.ep-root.docx-editor')
     await expect(editor).toBeVisible({ timeout: 15_000 })
     await expect(editor).toContainText('Eigenpal integration')
@@ -112,7 +119,7 @@ test('opens and edits a dropped HTML document in place with contained local asse
 
   try {
     const window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await expect(window.getByRole('heading', { name: 'Current document' })).toBeVisible()
     await window.evaluate(() => {
       const input = document.createElement('input')
@@ -169,10 +176,46 @@ test('onboards into a persistent environment', async () => {
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
+    await expect(window.getByRole('heading', { name: 'Research stays on your Mac' })).toBeVisible()
+    await expect(window.getByLabel('Step 1 of 4')).toBeVisible()
+
+    await window.setViewportSize({ width: 1440, height: 900 })
+    await expect(window).toHaveScreenshot('onboarding-1440-light.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
     await window.setViewportSize({ width: 900, height: 700 })
+    await expect(window).toHaveScreenshot('onboarding.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+    await window.setViewportSize({ width: 640, height: 480 })
+    await expect(window).toHaveScreenshot('onboarding-640-light.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+
+    await window.evaluate(() => {
+      document.documentElement.classList.add('dark')
+      document.documentElement.dataset.theme = 'dark'
+    })
+    for (const size of [
+      { width: 1440, height: 900, name: 'onboarding-1440-dark.png' },
+      { width: 900, height: 700, name: 'onboarding-900-dark.png' },
+      { width: 640, height: 480, name: 'onboarding-640-dark.png' }
+    ]) {
+      await window.setViewportSize(size)
+      await expect(window).toHaveScreenshot(size.name, { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+    }
+    await window.evaluate(() => {
+      document.documentElement.classList.remove('dark')
+      document.documentElement.dataset.theme = 'light'
+    })
+    await window.setViewportSize({ width: 640, height: 480 })
+
+    await window.getByRole('button', { name: /Continue/ }).click()
+    await expect(window.getByRole('heading', { name: 'Organize without moving anything' })).toBeVisible()
+    await expect.poll(() => window.locator('.onboarding-scroll').evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+    await window.getByRole('button', { name: /Continue/ }).click()
+    await expect(window.getByRole('heading', { name: 'A workspace for every format' })).toBeVisible()
+    await expect.poll(() => window.locator('.onboarding-scroll').evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+    await window.getByRole('button', { name: /Continue/ }).click()
+    await expect(window.getByRole('heading', { name: 'Find the passage, not just the file' })).toBeVisible()
+    await expect.poll(() => window.locator('.onboarding-scroll').evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+    await window.getByRole('button', { name: /Continue/ }).click()
     await expect(window.getByRole('heading', { name: 'Create your first environment' })).toBeVisible()
     await expect(window.getByLabel('Environment name')).toHaveValue('Personal')
-    await expect(window).toHaveScreenshot('onboarding.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
     await window.getByRole('button', { name: 'Create environment' }).click()
     await expect(window.getByRole('heading', { name: 'Your research, one calm workspace.' })).toBeVisible()
     await window.getByRole('button', { name: 'Show sidebar' }).click()
@@ -198,7 +241,7 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
   try {
     const window = await application.firstWindow()
     await window.setViewportSize({ width: 685, height: 831 })
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await application.evaluate(({ dialog }, folderPath) => {
       Object.defineProperty(dialog, 'showOpenDialog', {
         configurable: true,
@@ -354,6 +397,7 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
 
   try {
     const window = await application.firstWindow()
+    await window.getByRole('button', { name: 'Skip tutorial' }).click()
     await expect(window.getByText(/After setup, we’ll open/)).toBeVisible()
     await window.getByRole('button', { name: 'Create environment' }).click()
     await expect(window.getByRole('heading', { name: 'Hello Aladdeen' })).toBeVisible()
@@ -461,7 +505,7 @@ test('flushes the latest edit before the application quits', async () => {
 
   try {
     const window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await window.getByRole('button', { name: 'Edit' }).click()
     const editor = window.locator('.cm-content')
     await editor.click()
@@ -492,7 +536,7 @@ test('keeps a long editor manually scrollable after preview-to-source navigation
 
   try {
     const window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await expect(window.getByRole('heading', { name: 'Long document' })).toBeVisible()
     await window.getByRole('button', { name: 'Appearance' }).click()
     await window.getByRole('menuitem', { name: 'Dark' }).click()
@@ -583,7 +627,7 @@ test('restores tabs independently for each environment', async () => {
 
   try {
     let window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await expect(window.getByRole('tab', { name: /persistent\.md/i })).toBeVisible()
 
     await window.getByRole('button', { name: 'Switch environment' }).click()
@@ -613,7 +657,7 @@ test('keeps the environment sidebar usable at compact window sizes', async () =>
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
 
     for (const size of [{ width: 900, height: 700 }, { width: 640, height: 480 }]) {
       await window.setViewportSize(size)
@@ -644,7 +688,7 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
   let application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     let window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await expect(window.locator('.topbar')).toHaveCount(0)
     await expect(window.locator('.sidebar')).toHaveCSS('width', '320px')
 
@@ -685,7 +729,7 @@ test('renders responsive settings navigation in light and dark themes', async ()
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await window.getByRole('button', { name: 'Settings' }).click()
     const settings = window.getByRole('dialog', { name: 'Settings' })
     const categoryTabs = settings.getByRole('tablist', { name: 'Settings categories' })
@@ -753,7 +797,7 @@ test('renders extended Markdown safely and responsively', async () => {
     window.on('request', (request) => {
       if (/^https?:/i.test(request.url())) remoteRequests.push(request.url())
     })
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
 
     await expect(window.getByRole('article', { name: 'Aladdeen Compatibility' })).toBeVisible()
     await expect(window.getByText('title: "Aladdeen Compatibility"')).toHaveCount(0)
@@ -821,7 +865,7 @@ test('exports extended Markdown structure to PDF and DOCX', async () => {
 
   try {
     const window = await application.firstWindow()
-    await window.getByRole('button', { name: 'Create environment' }).click()
+    await createFirstEnvironment(window)
     await expect(window.locator('.mermaid-svg svg')).toBeVisible({ timeout: 10_000 })
 
     await application.evaluate(({ dialog }, filePath) => {

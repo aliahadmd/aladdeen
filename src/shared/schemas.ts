@@ -140,7 +140,8 @@ export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']),
   accent: z.enum(['indigo', 'blue', 'emerald', 'amber', 'rose']),
   sidebarWidth: z.number().int().min(248).max(420),
-  sidebarCollapsed: z.boolean()
+  sidebarCollapsed: z.boolean(),
+  completedOnboardingVersion: z.number().int().min(0).max(1_000)
 })
 
 export const exportRequestSchema = z.object({

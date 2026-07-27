@@ -335,6 +335,7 @@ export interface AppSettings {
   accent: Accent
   sidebarWidth: number
   sidebarCollapsed: boolean
+  completedOnboardingVersion: number
 }
 
 export interface BootstrapData {

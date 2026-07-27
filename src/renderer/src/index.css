@@ -2159,6 +2159,158 @@ body.is-resizing-sidebar * {
     var(--surface-elevated);
 }
 
+/* First-run education is a full-window route, with one calm palette per idea. */
+.onboarding-experience {
+  --onboarding-bg: #eeecfa;
+  --onboarding-panel: rgb(255 255 255 / .72);
+  --onboarding-border: rgb(58 55 82 / .15);
+  --onboarding-line: rgb(72 67 110 / .075);
+  isolation: isolate;
+  background-color: var(--onboarding-bg);
+  transition: background-color 200ms ease;
+}
+
+.onboarding-experience[data-palette='sage'] {
+  --onboarding-bg: #e7f1eb;
+  --onboarding-panel: rgb(253 255 254 / .73);
+  --onboarding-border: rgb(45 75 62 / .15);
+  --onboarding-line: rgb(45 88 69 / .07);
+}
+
+.onboarding-experience[data-palette='amber'] {
+  --onboarding-bg: #f7edd9;
+  --onboarding-panel: rgb(255 253 248 / .74);
+  --onboarding-border: rgb(94 72 36 / .15);
+  --onboarding-line: rgb(111 78 30 / .07);
+}
+
+.onboarding-experience[data-palette='rose'] {
+  --onboarding-bg: #f4e7ec;
+  --onboarding-panel: rgb(255 252 253 / .74);
+  --onboarding-border: rgb(91 52 69 / .15);
+  --onboarding-line: rgb(112 56 79 / .07);
+}
+
+.onboarding-experience[data-palette='neutral'] {
+  --onboarding-bg: #eff0f4;
+  --onboarding-panel: rgb(255 255 255 / .78);
+  --onboarding-border: rgb(54 55 68 / .15);
+  --onboarding-line: rgb(66 67 83 / .065);
+}
+
+.dark .onboarding-experience {
+  --onboarding-bg: #252238;
+  --onboarding-panel: rgb(32 30 45 / .78);
+  --onboarding-border: rgb(226 222 255 / .14);
+  --onboarding-line: rgb(226 222 255 / .055);
+}
+
+.dark .onboarding-experience[data-palette='sage'] {
+  --onboarding-bg: #1d3029;
+  --onboarding-panel: rgb(25 41 35 / .8);
+  --onboarding-border: rgb(218 245 233 / .14);
+  --onboarding-line: rgb(218 245 233 / .05);
+}
+
+.dark .onboarding-experience[data-palette='amber'] {
+  --onboarding-bg: #352b1d;
+  --onboarding-panel: rgb(45 37 26 / .8);
+  --onboarding-border: rgb(255 237 205 / .14);
+  --onboarding-line: rgb(255 237 205 / .05);
+}
+
+.dark .onboarding-experience[data-palette='rose'] {
+  --onboarding-bg: #35232b;
+  --onboarding-panel: rgb(44 29 36 / .8);
+  --onboarding-border: rgb(255 224 237 / .14);
+  --onboarding-line: rgb(255 224 237 / .05);
+}
+
+.dark .onboarding-experience[data-palette='neutral'] {
+  --onboarding-bg: #212126;
+  --onboarding-panel: rgb(33 33 39 / .82);
+  --onboarding-border: rgb(235 235 245 / .14);
+  --onboarding-line: rgb(235 235 245 / .045);
+}
+
+.onboarding-experience::before,
+.onboarding-experience::after {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  content: '';
+}
+
+.onboarding-experience::before {
+  inset: -40% -25%;
+  background: repeating-radial-gradient(
+    ellipse at 18% 12%,
+    transparent 0 60px,
+    var(--onboarding-line) 61px,
+    transparent 62px 94px
+  );
+  opacity: .75;
+  transform: rotate(-7deg);
+}
+
+.onboarding-experience::after {
+  inset: 0;
+  background:
+    radial-gradient(circle at 83% 12%, color-mix(in oklab, var(--onboarding-panel) 72%, transparent), transparent 28%),
+    radial-gradient(circle at 12% 88%, color-mix(in oklab, var(--onboarding-panel) 54%, transparent), transparent 31%);
+}
+
+.onboarding-step {
+  animation: onboarding-step-in 190ms var(--ease-out) both;
+}
+
+.onboarding-illustration {
+  display: grid;
+  min-height: 220px;
+  align-items: center;
+}
+
+@keyframes onboarding-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px), (max-height: 560px) {
+  .onboarding-illustration {
+    min-height: 150px;
+  }
+
+  .onboarding-visual-card {
+    max-height: 190px;
+  }
+
+  .onboarding-format-card {
+    min-height: 82px;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .onboarding-visual-card,
+  .onboarding-format-card,
+  .onboarding-setup-card {
+    background: var(--surface-elevated) !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .onboarding-experience {
+    --onboarding-panel: var(--surface-elevated);
+    --onboarding-border: var(--text-soft);
+  }
+}
+
 .app-toast {
   border-color: var(--border) !important;
   background: var(--surface-elevated) !important;
@@ -2349,6 +2501,10 @@ body.is-resizing-sidebar * {
 
   .spinner {
     animation-duration: 1.4s;
+  }
+
+  .onboarding-step {
+    animation: none;
   }
 
   .editor-pane .cm-line.source-reveal-flash {
