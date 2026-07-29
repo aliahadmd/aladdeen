@@ -21,7 +21,7 @@ describe('application metadata database', () => {
     const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(8)
+    ).toBe(10)
     migrated.close()
 
     expect(database.getSettings()).toEqual({
@@ -219,7 +219,7 @@ describe('application metadata database', () => {
     const file = database.listTrackedFiles(environment.id)[0]!
     expect(environment.name).toBe('Personal')
     expect(project.path).toBe('/notes')
-    expect(project.enabledDocumentKinds).toEqual(['markdown', 'html', 'docx', 'pdf'])
+    expect(project.enabledDocumentKinds).toEqual(['markdown', 'html', 'docx', 'pdf', 'xlsx', 'pptx'])
     expect(database.getProjectExpandedPaths(project.id)).toEqual(['guides'])
     expect(file.path).toBe('/notes/hello.md')
     expect(database.getEnvironmentState(environment.id).activeFileId).toBe(file.id)
@@ -316,13 +316,125 @@ describe('application metadata database', () => {
     const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(8)
+    ).toBe(10)
     for (const table of ['environment_note_locations', 'research_notes', 'research_note_links']) {
       expect(verified.prepare(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
       ).get(table)).toBeUndefined()
     }
     verified.close()
+  })
+
+  it('chains XLSX and PPTX additions for the former complete format set and reclassifies workbooks', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-xlsx-migration-'))
+    created.push(directory)
+    const initial = new AppDatabase(directory)
+    const environment = initial.createEnvironment('Migration')
+    const complete = initial.addProject(environment.id, '/complete', 'complete')
+    const custom = initial.addProject(environment.id, '/custom', 'custom')
+    initial.updateProject(complete.id, {
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown', 'html', 'docx', 'pdf'],
+      groupName: undefined,
+      pinned: false,
+      archived: false
+    })
+    initial.updateProject(custom.id, {
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown', 'pdf'],
+      groupName: undefined,
+      pinned: false,
+      archived: false
+    })
+    initial.replaceProjectIndex(complete.id, [{
+      projectId: complete.id,
+      relativePath: 'legacy.xlsx',
+      parentPath: '',
+      name: 'legacy.xlsx',
+      documentKind: 'markdown',
+      mtimeMs: 1,
+      size: 10
+    }])
+    initial.upsertTrackedFile(environment.id, '/complete/legacy.xlsx', complete.id)
+    initial.close()
+
+    const legacy = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    legacy.exec(`
+      UPDATE environment_files SET document_kind = 'markdown' WHERE lower(path) LIKE '%.xlsx';
+      PRAGMA user_version = 8;
+    `)
+    legacy.close()
+
+    const migrated = new AppDatabase(directory)
+    expect(migrated.getProject(complete.id)).toMatchObject({
+      enabledDocumentKinds: ['markdown', 'html', 'docx', 'pdf', 'xlsx', 'pptx'],
+      indexStatus: 'indexing',
+      indexedAt: undefined
+    })
+    expect(migrated.getProject(custom.id)?.enabledDocumentKinds).toEqual(['markdown', 'pdf'])
+    expect(migrated.listProjectIndex(complete.id)[0]?.documentKind).toBe('xlsx')
+    expect(migrated.listTrackedFiles(environment.id)[0]?.documentKind).toBe('xlsx')
+    migrated.close()
+  })
+
+  it('adds PPTX only to the previous complete five-format set and reclassifies presentation paths', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-pptx-migration-'))
+    created.push(directory)
+    const initial = new AppDatabase(directory)
+    const environment = initial.createEnvironment('Presentation migration')
+    const complete = initial.addProject(environment.id, '/complete', 'complete')
+    const custom = initial.addProject(environment.id, '/custom', 'custom')
+    initial.updateProject(complete.id, {
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown', 'html', 'docx', 'pdf', 'xlsx'],
+      groupName: undefined,
+      pinned: false,
+      archived: false
+    })
+    initial.updateProject(custom.id, {
+      scopeMode: 'all',
+      includePaths: [],
+      excludePatterns: [],
+      enabledDocumentKinds: ['markdown', 'xlsx'],
+      groupName: undefined,
+      pinned: false,
+      archived: false
+    })
+    initial.replaceProjectIndex(complete.id, [{
+      projectId: complete.id,
+      relativePath: 'legacy.pptx',
+      parentPath: '',
+      name: 'legacy.pptx',
+      documentKind: 'markdown',
+      mtimeMs: 1,
+      size: 10
+    }])
+    initial.upsertTrackedFile(environment.id, '/complete/legacy.pptx', complete.id)
+    initial.close()
+
+    const legacy = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    legacy.exec(`
+      UPDATE environment_files SET document_kind = 'markdown' WHERE lower(path) LIKE '%.pptx';
+      PRAGMA user_version = 9;
+    `)
+    legacy.close()
+
+    const migrated = new AppDatabase(directory)
+    expect(migrated.getProject(complete.id)).toMatchObject({
+      enabledDocumentKinds: ['markdown', 'html', 'docx', 'pdf', 'xlsx', 'pptx'],
+      indexStatus: 'indexing',
+      indexedAt: undefined
+    })
+    expect(migrated.getProject(custom.id)?.enabledDocumentKinds).toEqual(['markdown', 'xlsx'])
+    expect(migrated.listProjectIndex(complete.id)[0]?.documentKind).toBe('pptx')
+    expect(migrated.listTrackedFiles(environment.id)[0]?.documentKind).toBe('pptx')
+    migrated.close()
   })
 
   it('refuses a database created by a newer schema without downgrading it', async () => {

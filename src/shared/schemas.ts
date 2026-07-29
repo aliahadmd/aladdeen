@@ -60,13 +60,46 @@ export const globalSearchRequestSchema = z.object({
   matchCase: z.boolean(),
   wholeWord: z.boolean(),
   scope: globalSearchScopeSchema,
-  bufferOverrides: z.array(z.object({
-    fileId: idSchema,
-    content: searchBufferSchema
-  })).max(100)
+  bufferOverrides: z.array(z.discriminatedUnion('kind', [
+    z.object({
+      fileId: idSchema,
+      kind: z.literal('text'),
+      content: searchBufferSchema
+    }),
+    z.object({
+      fileId: idSchema,
+      kind: z.literal('spreadsheet'),
+      cells: z.array(z.object({
+        sheetName: z.string().min(1).max(31),
+        address: z.string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
+        row: z.number().int().min(1).max(1_048_576),
+        column: z.number().int().min(1).max(16_384),
+        value: z.string().max(32_768),
+        formula: z.string().max(8_192).optional()
+      })).max(200_000)
+    }),
+    z.object({
+      fileId: idSchema,
+      kind: z.literal('presentation'),
+      entries: z.array(z.object({
+        slideIndex: z.number().int().min(0).max(1_999),
+        slideNumber: z.number().int().min(1).max(2_000),
+        slideId: z.string().min(1).max(255).optional(),
+        elementId: z.string().min(1).max(255).optional(),
+        elementName: z.string().max(1_024).optional(),
+        source: z.enum(['slide', 'notes']),
+        text: z.string().max(32_768)
+      })).max(500_000)
+    })
+  ])).max(100)
 }).superRefine((value, context) => {
   const totalBytes = value.bufferOverrides.reduce(
-    (total, override) => total + Buffer.byteLength(override.content, 'utf8'),
+    (total, override) => total + Buffer.byteLength(
+      override.kind === 'text'
+        ? override.content
+        : JSON.stringify(override.kind === 'spreadsheet' ? override.cells : override.entries),
+      'utf8'
+    ),
     0
   )
   if (totalBytes > 64 * 1024 * 1024) {
@@ -89,11 +122,11 @@ export const createEntrySchema = z.object({
   projectId: idSchema,
   parentPath: relativePathSchema,
   name: z.string().trim().min(1).max(255),
-  documentKind: z.enum(['markdown', 'html', 'docx']).optional()
+  documentKind: z.enum(['markdown', 'html', 'docx', 'xlsx', 'pptx']).optional()
 })
 
 export const createStandaloneDocumentSchema = z.object({
-  documentKind: z.enum(['markdown', 'html', 'docx'])
+  documentKind: z.enum(['markdown', 'html', 'docx', 'xlsx', 'pptx'])
 })
 
 export const renameEntrySchema = z.object({
@@ -108,11 +141,11 @@ export const environmentStateSchema = z.object({
 })
 
 const projectScopeModeSchema = z.enum(['all', 'selected'])
-const projectDocumentKindSchema = z.enum(['markdown', 'html', 'docx', 'pdf'])
+const projectDocumentKindSchema = z.enum(['markdown', 'html', 'docx', 'pdf', 'xlsx', 'pptx'])
 const enabledDocumentKindsSchema = z
   .array(projectDocumentKindSchema)
   .min(1, 'Choose at least one document type.')
-  .max(4)
+  .max(6)
   .refine((kinds) => new Set(kinds).size === kinds.length, 'Document types must be unique.')
 const projectIncludePathsSchema = z.array(relativePathSchema).max(20_000)
 const projectExcludePatternsSchema = z

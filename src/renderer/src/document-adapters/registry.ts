@@ -28,6 +28,12 @@ const DocxDocument = lazy(() => import('./DocxDocument').then((module) => ({
 const PdfDocument = lazy(() => import('./PdfDocument').then((module) => ({
   default: module.PdfDocument
 })))
+const XlsxDocument = lazy(() => import('./XlsxDocument').then((module) => ({
+  default: module.XlsxDocument
+})))
+const PptxDocument = lazy(() => import('./PptxDocument').then((module) => ({
+  default: module.PptxDocument
+})))
 
 export const DocumentAdapterRegistry: Readonly<Record<DocumentKind, DocumentAdapterDefinition>> = {
   markdown: {
@@ -49,5 +55,15 @@ export const DocumentAdapterRegistry: Readonly<Record<DocumentKind, DocumentAdap
     kind: 'pdf',
     capabilities: DOCUMENT_CAPABILITIES.pdf,
     component: PdfDocument
+  },
+  xlsx: {
+    kind: 'xlsx',
+    capabilities: DOCUMENT_CAPABILITIES.xlsx,
+    component: XlsxDocument
+  },
+  pptx: {
+    kind: 'pptx',
+    capabilities: DOCUMENT_CAPABILITIES.pptx,
+    component: PptxDocument
   }
 }

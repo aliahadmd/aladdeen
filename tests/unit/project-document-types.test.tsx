@@ -12,7 +12,9 @@ const counts: DocumentKindCounts = {
   markdown: 12,
   html: 4,
   docx: 3,
-  pdf: 2
+  pdf: 2,
+  xlsx: 1,
+  pptx: 1
 }
 
 afterEach(cleanup)

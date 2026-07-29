@@ -1,10 +1,13 @@
 // @vitest-environment node
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppDatabase } from '@main/services/database'
 import { WorkspaceService } from '@main/services/workspace'
+import { loadWorkbook } from '@office-kit/xlsx/io'
+import { fromBuffer } from '@office-kit/xlsx/node'
+import { PptxHandler } from 'pptx-viewer-core'
 
 const created: string[] = []
 
@@ -51,7 +54,7 @@ describe('environment service', () => {
     database.close()
   })
 
-  it('opens HTML, DOCX, and PDF in place with format-specific sessions', async () => {
+  it('opens HTML, DOCX, PDF, XLSX, and PPTX in place with format-specific sessions', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
     const documentsPath = await mkdtemp(join(tmpdir(), 'aladdeen-formats-'))
     created.push(profile, documentsPath)
@@ -64,6 +67,8 @@ describe('environment service', () => {
     await service.activateEnvironment(environment.id)
     const html = await service.openAbsoluteDocument(join(documentsPath, 'page.html'))
     const docx = await service.createStandaloneFile(join(documentsPath, 'proposal.docx'), 'docx')
+    const xlsx = await service.createStandaloneFile(join(documentsPath, 'workbook.xlsx'), 'xlsx')
+    const pptx = await service.createStandaloneFile(join(documentsPath, 'briefing.pptx'), 'pptx')
     const pdf = await service.openAbsoluteDocument(join(documentsPath, 'proof.pdf'))
 
     expect(html).toMatchObject({
@@ -78,10 +83,20 @@ describe('environment service', () => {
       documentKind: 'pdf',
       session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
     })
+    expect(xlsx).toMatchObject({
+      documentKind: 'xlsx',
+      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+    })
+    expect(pptx).toMatchObject({
+      documentKind: 'pptx',
+      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+    })
     expect((await service.getSnapshot()).files.map((file) => file.documentKind).sort()).toEqual([
       'docx',
       'html',
-      'pdf'
+      'pdf',
+      'pptx',
+      'xlsx'
     ])
 
     if (docx.documentKind === 'docx') {
@@ -89,6 +104,25 @@ describe('environment service', () => {
     }
     if (pdf.documentKind === 'pdf') {
       expect((await service.resolveBinarySession(pdf.session.id)).mimeType).toBe('application/pdf')
+    }
+    if (xlsx.documentKind === 'xlsx') {
+      expect((await service.resolveBinarySession(xlsx.session.id)).mimeType).toContain('spreadsheetml')
+      const workbook = await loadWorkbook(fromBuffer(await readFile(join(documentsPath, 'workbook.xlsx'))))
+      expect(workbook.sheets.map((sheet) => sheet.sheet.title)).toEqual(['Sheet1'])
+    }
+    if (pptx.documentKind === 'pptx') {
+      expect((await service.resolveBinarySession(pptx.session.id)).mimeType).toContain('presentationml')
+      const bytes = await readFile(join(documentsPath, 'briefing.pptx'))
+      const handler = new PptxHandler()
+      try {
+        const presentation = await handler.load(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+          { allowExternalImages: false }
+        )
+        expect(presentation.slides).toHaveLength(1)
+      } finally {
+        handler.dispose()
+      }
     }
     await service.close()
     database.close()
@@ -203,7 +237,7 @@ describe('environment service', () => {
     expect(service.searchProjectFiles('page')).toEqual([])
 
     const preview = await service.inspectProjectScope(project.id)
-    expect(preview.kindCounts).toEqual({ markdown: 1, html: 1, docx: 1, pdf: 1 })
+    expect(preview.kindCounts).toEqual({ markdown: 1, html: 1, docx: 1, pdf: 1, xlsx: 0, pptx: 0 })
 
     const directlyOpened = await service.openAbsoluteDocument(join(projectPath, 'page.html'))
     expect((await service.getSnapshot()).files.find((file) => file.id === directlyOpened.id)).toMatchObject({

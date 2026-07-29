@@ -31,6 +31,14 @@ fileAssociations:
     name: PDF Document
     description: Portable Document Format
     role: Editor
+  - ext: xlsx
+    name: Excel Workbook
+    description: Microsoft Excel workbook
+    role: Editor
+  - ext: pptx
+    name: PowerPoint Presentation
+    description: Microsoft PowerPoint presentation
+    role: Editor
 mac:
   icon: build/icon.png
   category: public.app-category.productivity

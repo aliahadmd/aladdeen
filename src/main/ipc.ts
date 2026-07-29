@@ -251,12 +251,20 @@ export function registerIpc({
           ? 'Markdown'
           : request.documentKind === 'html'
             ? 'HTML'
-            : 'Word document',
+            : request.documentKind === 'docx'
+              ? 'Word document'
+              : request.documentKind === 'xlsx'
+                ? 'Excel workbook'
+                : 'PowerPoint presentation',
         extensions: request.documentKind === 'markdown'
           ? ['md', 'markdown']
           : request.documentKind === 'html'
             ? ['html', 'htm']
-            : ['docx']
+            : request.documentKind === 'docx'
+              ? ['docx']
+              : request.documentKind === 'xlsx'
+                ? ['xlsx']
+                : ['pptx']
       }]
     })
     if (result.canceled || !result.filePath) throw new DesktopError('CANCELLED', 'New file was cancelled.')
@@ -316,12 +324,18 @@ export function registerIpc({
       if (request.saveAs) {
         const currentPath = workspace.getTrackedFilePath(request.fileId)
         const kind = workspace.getTrackedDocumentKind(request.fileId)
-        const extension = kind === 'docx' ? 'docx' : 'pdf'
+        const extension = kind
         const result = await showSaveDialog(getWindow(), {
           title: `Save ${kind.toUpperCase()} as`,
           defaultPath: `${basename(currentPath, `.${extension}`)} copy.${extension}`,
           filters: [{
-            name: kind === 'docx' ? 'Word document' : 'PDF document',
+            name: kind === 'docx'
+              ? 'Word document'
+              : kind === 'xlsx'
+                ? 'Excel workbook'
+                : kind === 'pptx'
+                  ? 'PowerPoint presentation'
+                  : 'PDF document',
             extensions: [extension]
           }]
         })

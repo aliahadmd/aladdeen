@@ -3,9 +3,9 @@ import type { ReadingSettings } from './reading'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Accent = 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose'
 export type SaveStatus = 'editing' | 'saving' | 'saved' | 'conflict' | 'error'
-export type DocumentKind = 'markdown' | 'html' | 'docx' | 'pdf'
+export type DocumentKind = 'markdown' | 'html' | 'docx' | 'pdf' | 'xlsx' | 'pptx'
 export type TextDocumentKind = Extract<DocumentKind, 'markdown' | 'html'>
-export type BinaryDocumentKind = Extract<DocumentKind, 'docx' | 'pdf'>
+export type BinaryDocumentKind = Extract<DocumentKind, 'docx' | 'pdf' | 'xlsx' | 'pptx'>
 export type DocumentActor = 'user' | 'agent' | 'system'
 export type DocumentKindCounts = Record<DocumentKind, number>
 
@@ -159,10 +159,53 @@ export type GlobalSearchScope =
   | { kind: 'project'; projectId: string }
   | { kind: 'standalone' }
 
-export interface SearchBufferOverride {
+export interface TextSearchBufferOverride {
   fileId: string
+  kind: 'text'
   content: string
 }
+
+export interface SpreadsheetCellLocator {
+  sheetName: string
+  address: string
+  row: number
+  column: number
+}
+
+export interface SpreadsheetSearchCell extends SpreadsheetCellLocator {
+  value: string
+  formula?: string
+}
+
+export interface SpreadsheetSearchBufferOverride {
+  fileId: string
+  kind: 'spreadsheet'
+  cells: SpreadsheetSearchCell[]
+}
+
+export interface PresentationTextLocator {
+  slideIndex: number
+  slideNumber: number
+  slideId?: string
+  elementId?: string
+  elementName?: string
+  source: 'slide' | 'notes'
+}
+
+export interface PresentationSearchEntry extends PresentationTextLocator {
+  text: string
+}
+
+export interface PresentationSearchBufferOverride {
+  fileId: string
+  kind: 'presentation'
+  entries: PresentationSearchEntry[]
+}
+
+export type SearchBufferOverride =
+  | TextSearchBufferOverride
+  | SpreadsheetSearchBufferOverride
+  | PresentationSearchBufferOverride
 
 export interface GlobalSearchRequest {
   query: string
@@ -191,6 +234,8 @@ export interface GlobalSearchMatch {
   pageX?: number
   pageY?: number
   documentPosition?: number
+  spreadsheetCell?: SpreadsheetCellLocator
+  presentationText?: PresentationTextLocator
 }
 
 export interface BinarySearchRevealContext {
@@ -272,6 +317,24 @@ export interface BinaryDocumentSession {
   encrypted?: boolean
   signed?: boolean
   restricted?: boolean
+  spreadsheetCompatibility?: SpreadsheetCompatibility
+  presentationCompatibility?: PresentationCompatibility
+}
+
+export type SpreadsheetCompatibilityLevel = 'supported' | 'preserve-only' | 'read-only'
+
+export interface SpreadsheetCompatibility {
+  level: SpreadsheetCompatibilityLevel
+  reasons: string[]
+  requiresSaveAs: boolean
+}
+
+export type PresentationCompatibilityLevel = 'supported' | 'preserve-only' | 'read-only'
+
+export interface PresentationCompatibility {
+  level: PresentationCompatibilityLevel
+  reasons: string[]
+  requiresSaveAs: boolean
 }
 
 export interface BinaryDocumentSnapshot extends BaseDocumentSnapshot {
@@ -330,6 +393,8 @@ export interface DocumentCapabilitiesByKind {
   html: DocumentCapabilities
   docx: DocumentCapabilities
   pdf: DocumentCapabilities
+  xlsx: DocumentCapabilities
+  pptx: DocumentCapabilities
 }
 
 export interface AppSettings extends ReadingSettings {

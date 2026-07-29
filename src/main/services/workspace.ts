@@ -6,6 +6,8 @@ import { access, lstat, mkdir, open, readFile, readdir, realpath, rename, stat, 
 import chokidar, { type FSWatcher } from 'chokidar'
 import writeFileAtomic from 'write-file-atomic'
 import { Document, Packer, Paragraph } from 'docx'
+import { workbookToBytes } from '@office-kit/xlsx/io'
+import { addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook'
 import { DesktopError } from '@main/errors'
 import type { AppDatabase, ProjectIndexFileRecord, ProjectRecord, TrackedFileRecord } from './database'
 import type {
@@ -45,10 +47,22 @@ import {
   isTextDocumentKind
 } from '@shared/documents'
 import { toPosixPath } from '@shared/path'
-import { MAX_BINARY_DOCUMENT_BYTES, MAX_DOCUMENT_BYTES } from '@shared/limits'
+import {
+  MAX_BINARY_DOCUMENT_BYTES,
+  MAX_DOCUMENT_BYTES,
+  MAX_PPTX_DOCUMENT_BYTES,
+  MAX_XLSX_DOCUMENT_BYTES
+} from '@shared/limits'
 import { decodeMarkdown, encodeMarkdown, sha256 } from './file-format'
 import { isPathInside, resolveExistingPath, resolveNewPath, resolveSyntacticPath } from './path-guard'
-import { inspectDocxBuffer, inspectDocxPackage } from './zip-guard'
+import {
+  inspectDocxBuffer,
+  inspectDocxPackage,
+  inspectPptxBuffer,
+  inspectPptxPackage,
+  inspectXlsxBuffer,
+  inspectXlsxPackage
+} from './zip-guard'
 
 const LOCAL_ASSET_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
@@ -381,7 +395,7 @@ export class WorkspaceService {
     const fileStats = await stat(canonical)
     const documentKind = documentKindFromName(canonical)
     if (!fileStats.isFile() || !documentKind) {
-      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, and PDF documents.')
+      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, PDF, XLSX, and PPTX documents.')
     }
     this.assertDocumentSize(fileStats.size, documentKind)
     await this.validateDocumentSignature(canonical, documentKind)
@@ -592,7 +606,7 @@ export class WorkspaceService {
     const project = this.requireProject(request.projectId)
     const inferredKind = documentKindFromName(request.name)
     const documentKind: Exclude<DocumentKind, 'pdf'> = request.documentKind
-      ?? (inferredKind === 'html' || inferredKind === 'docx' || inferredKind === 'markdown'
+      ?? (inferredKind === 'html' || inferredKind === 'docx' || inferredKind === 'markdown' || inferredKind === 'xlsx' || inferredKind === 'pptx'
         ? inferredKind
         : 'markdown')
     let name = validateEntryName(request.name)
@@ -638,7 +652,7 @@ export class WorkspaceService {
     let name = validateEntryName(request.newName)
     if (sourceStats.isFile() && !documentKindFromName(name)) name += extname(source)
     if (sourceStats.isFile() && !isSupportedDocumentName(name)) {
-      throw new DesktopError('INVALID_FILE', 'Use a Markdown, HTML, DOCX, or PDF filename.')
+      throw new DesktopError('INVALID_FILE', 'Use a Markdown, HTML, DOCX, PDF, XLSX, or PPTX filename.')
     }
     const renamedKind = sourceStats.isFile() ? documentKindFromName(name) : undefined
     if (renamedKind && !project.enabledDocumentKinds.includes(renamedKind)) {
@@ -749,7 +763,11 @@ export class WorkspaceService {
       size: fileStats.size,
       mimeType: tracked.documentKind === 'pdf'
         ? 'application/pdf'
-        : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : tracked.documentKind === 'xlsx'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : tracked.documentKind === 'pptx'
+            ? 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+            : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     }
   }
 
@@ -776,7 +794,7 @@ export class WorkspaceService {
     const fileStats = await stat(canonical)
     const documentKind = documentKindFromName(canonical)
     if (!fileStats.isFile() || !documentKind) {
-      throw new DesktopError('INVALID_FILE', 'Choose a Markdown, HTML, DOCX, or PDF document.')
+      throw new DesktopError('INVALID_FILE', 'Choose a Markdown, HTML, DOCX, PDF, or XLSX document.')
     }
     const duplicate = this.database.findTrackedFile(this.requireEnvironment(), canonical)
     if (duplicate && duplicate.id !== fileId) {
@@ -844,7 +862,7 @@ export class WorkspaceService {
     const fileStats = await stat(safePath)
     const documentKind = documentKindFromName(safePath)
     if (!fileStats.isFile() || !documentKind) {
-      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, and PDF documents.')
+      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, PDF, XLSX, and PPTX documents.')
     }
     this.assertDocumentSize(fileStats.size, documentKind)
     await this.validateDocumentSignature(safePath, documentKind)
@@ -879,6 +897,7 @@ export class WorkspaceService {
     }
 
     const session = this.createBinarySession(tracked.id, tracked.environmentId, documentKind)
+    const presentationInspection = documentKind === 'pptx' ? await inspectPptxPackage(safePath) : undefined
     return {
       ...base,
       documentKind,
@@ -892,7 +911,11 @@ export class WorkspaceService {
         id: session,
         url: `aladdeen-document://session/${encodeURIComponent(session)}`,
         byteLength: fileStats.size,
-        signed: documentKind === 'pdf' ? await this.pdfAppearsSigned(safePath) : undefined
+        signed: documentKind === 'pdf'
+          ? await this.pdfAppearsSigned(safePath)
+          : presentationInspection?.signed,
+        restricted: presentationInspection?.restricted,
+        presentationCompatibility: presentationInspection?.compatibility
       }
     } satisfies BinaryDocumentSnapshot
   }
@@ -929,9 +952,19 @@ export class WorkspaceService {
   }
 
   private assertDocumentSize(size: number, documentKind: DocumentKind): void {
-    const limit = isTextDocumentKind(documentKind) ? MAX_DOCUMENT_BYTES : MAX_BINARY_DOCUMENT_BYTES
+    const limit = isTextDocumentKind(documentKind)
+      ? MAX_DOCUMENT_BYTES
+      : documentKind === 'xlsx'
+        ? MAX_XLSX_DOCUMENT_BYTES
+        : documentKind === 'pptx'
+          ? MAX_PPTX_DOCUMENT_BYTES
+          : MAX_BINARY_DOCUMENT_BYTES
     if (size > limit) {
-      const label = isTextDocumentKind(documentKind) ? '20 MiB' : '512 MiB'
+      const label = isTextDocumentKind(documentKind)
+        ? '20 MiB'
+        : documentKind === 'xlsx' || documentKind === 'pptx'
+          ? '128 MiB'
+          : '512 MiB'
       throw new DesktopError('INVALID_FILE', `This ${documentKind.toUpperCase()} document is larger than Aladdeen’s ${label} limit.`)
     }
   }
@@ -960,6 +993,30 @@ export class WorkspaceService {
         throw new DesktopError(
           'INVALID_FILE',
           'This file is not a safe, supported DOCX document.',
+          error instanceof Error ? error.message : undefined
+        )
+      }
+      return
+    }
+    if (documentKind === 'xlsx') {
+      try {
+        await inspectXlsxPackage(path)
+      } catch (error) {
+        throw new DesktopError(
+          'INVALID_FILE',
+          'This file is not a safe, supported XLSX workbook.',
+          error instanceof Error ? error.message : undefined
+        )
+      }
+      return
+    }
+    if (documentKind === 'pptx') {
+      try {
+        await inspectPptxPackage(path)
+      } catch (error) {
+        throw new DesktopError(
+          'INVALID_FILE',
+          'This file is not a safe, supported PPTX presentation.',
           error instanceof Error ? error.message : undefined
         )
       }
@@ -1013,14 +1070,16 @@ export class WorkspaceService {
       data[1] !== 0x4b ||
       (data[2] !== 0x03 && data[2] !== 0x05 && data[2] !== 0x07)
     ) {
-      throw new DesktopError('INVALID_FILE', 'The DOCX editor produced an invalid OOXML package.')
+      throw new DesktopError('INVALID_FILE', `The ${documentKind.toUpperCase()} editor produced an invalid OOXML package.`)
     }
     try {
-      inspectDocxBuffer(data)
+      if (documentKind === 'xlsx') inspectXlsxBuffer(data)
+      else if (documentKind === 'pptx') inspectPptxBuffer(data)
+      else inspectDocxBuffer(data)
     } catch (error) {
       throw new DesktopError(
         'INVALID_FILE',
-        'The DOCX editor produced an unsafe or incomplete OOXML package.',
+        `The ${documentKind.toUpperCase()} editor produced an unsafe or incomplete OOXML package.`,
         error instanceof Error ? error.message : undefined
       )
     }
@@ -1055,6 +1114,22 @@ export class WorkspaceService {
         `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>${escapeHtml(title)}</title>\n</head>\n<body>\n  <h1>${escapeHtml(title)}</h1>\n</body>\n</html>\n`,
         { flag: 'wx' }
       )
+      return
+    }
+    if (documentKind === 'xlsx') {
+      const workbook = createWorkbook()
+      addWorksheet(workbook, 'Sheet1')
+      await writeFile(target, await workbookToBytes(workbook), { flag: 'wx' })
+      return
+    }
+    if (documentKind === 'pptx') {
+      const { PptxHandler } = await import('pptx-viewer-core')
+      const created = await PptxHandler.create({ title, creator: 'Aladdeen', initialSlideCount: 1 })
+      try {
+        await writeFile(target, await created.handler.save(created.data.slides), { flag: 'wx' })
+      } finally {
+        created.handler.dispose()
+      }
       return
     }
     const document = new Document({
@@ -1404,7 +1479,7 @@ function filterIndexedFiles(
 }
 
 function countDocumentKinds(files: readonly ProjectIndexFileRecord[]): Record<DocumentKind, number> {
-  const counts: Record<DocumentKind, number> = { markdown: 0, html: 0, docx: 0, pdf: 0 }
+  const counts: Record<DocumentKind, number> = { markdown: 0, html: 0, docx: 0, pdf: 0, xlsx: 0, pptx: 0 }
   for (const file of files) counts[file.documentKind] += 1
   return counts
 }

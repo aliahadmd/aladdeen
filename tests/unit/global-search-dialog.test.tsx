@@ -103,7 +103,7 @@ describe('global content search dialog', () => {
         matchCase: false,
         wholeWord: false,
         scope: { kind: 'environment' },
-        bufferOverrides: [{ fileId, content: 'draft needle' }]
+        bufferOverrides: [{ fileId, kind: 'text', content: 'draft needle' }]
       }))
     })
 

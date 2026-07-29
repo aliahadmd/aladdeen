@@ -614,7 +614,7 @@ function AboutSettings({ onShowTutorial }: { onShowTutorial?(): void }): React.J
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">A private research workspace</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Aladdeen Research brings Markdown, HTML, Word, and PDF documents into one offline-first workspace for reading, organizing, searching, and writing on M-series Apple silicon.
+            Aladdeen Research brings Markdown, HTML, Word, PDF, Excel, and PowerPoint documents into one offline-first workspace for reading, organizing, searching, writing, and presenting on M-series Apple silicon.
           </p>
         </section>
         <section className="py-5">

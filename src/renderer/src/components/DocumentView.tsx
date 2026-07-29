@@ -81,6 +81,10 @@ function AdapterLoading({ document }: { document: OpenDocument }): React.JSX.Ele
     ? 'Word editor'
     : document.documentKind === 'pdf'
       ? 'PDF viewer'
+      : document.documentKind === 'xlsx'
+        ? 'spreadsheet editor'
+      : document.documentKind === 'pptx'
+        ? 'presentation editor'
       : document.documentKind === 'html'
         ? 'HTML editor'
         : 'Markdown editor'
@@ -101,7 +105,13 @@ function DocumentFacts({ document }: { document: OpenDocument }): React.JSX.Elem
 
   return (
     <div className="flex min-w-0 items-center gap-[13px] whitespace-nowrap max-[700px]:gap-2">
-      <span>{document.documentKind === 'docx' ? 'Word document' : 'PDF document'}</span>
+      <span>{document.documentKind === 'docx'
+        ? 'Word document'
+        : document.documentKind === 'xlsx'
+          ? 'Excel workbook'
+          : document.documentKind === 'pptx'
+            ? 'PowerPoint presentation'
+            : 'PDF document'}</span>
       <span className="max-[700px]:hidden">{formatBytes(document.session.byteLength)}</span>
       <span>{document.documentKind.toUpperCase()}</span>
     </div>

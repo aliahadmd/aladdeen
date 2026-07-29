@@ -7,7 +7,12 @@ import createSearchWorker from './search-worker?nodeWorker'
 import type { AppDatabase, ProjectRecord, TrackedFileRecord } from './database'
 import type { WorkspaceService } from './workspace'
 import { DesktopError } from '@main/errors'
-import { IPC, type GlobalSearchEvent, type GlobalSearchRequest } from '@shared/contracts'
+import {
+  IPC,
+  type GlobalSearchEvent,
+  type GlobalSearchRequest,
+  type SearchBufferOverride
+} from '@shared/contracts'
 import { isPathInside } from './path-guard'
 import {
   type SearchWorkerCandidate,
@@ -84,11 +89,11 @@ export class GlobalSearchService {
 
     const trackedFiles = this.database.listTrackedFiles(environmentId)
     const trackedById = new Map(trackedFiles.map((file) => [file.id, file]))
-    const overrideByPath = new Map<string, string>()
+    const overrideByPath = new Map<string, SearchBufferOverride>()
     for (const override of request.bufferOverrides) {
       const tracked = trackedById.get(override.fileId)
       if (!tracked) throw new DesktopError('PERMISSION_DENIED', 'An open search buffer is not in this environment.')
-      if (!tracked.missing) overrideByPath.set(tracked.path, override.content)
+      if (!tracked.missing) overrideByPath.set(tracked.path, override)
     }
 
     const candidates: SearchWorkerCandidate[] = []
@@ -125,7 +130,7 @@ export class GlobalSearchService {
     return candidates
   }
 
-  private standaloneCandidate(file: TrackedFileRecord, contentOverride?: string): SearchWorkerCandidate {
+  private standaloneCandidate(file: TrackedFileRecord, contentOverride?: SearchBufferOverride): SearchWorkerCandidate {
     return {
       key: `tracked:${file.id}`,
       target: { kind: 'tracked', fileId: file.id },

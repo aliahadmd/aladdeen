@@ -29,7 +29,7 @@ const project: ProjectSummary = {
 const preview: ProjectScopePreview = {
   project,
   totalDocuments: 3,
-  kindCounts: { markdown: 1, html: 1, docx: 1, pdf: 0 },
+  kindCounts: { markdown: 1, html: 1, docx: 1, pdf: 0, xlsx: 0, pptx: 0 },
   truncated: false,
   tree: [{
     id: 'docs',

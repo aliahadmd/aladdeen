@@ -105,7 +105,7 @@ const api: AladdeenApi = {
     onCreateDocumentRequest: (callback) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        kind: 'markdown' | 'html' | 'docx'
+        kind: 'markdown' | 'html' | 'docx' | 'xlsx' | 'pptx'
       ): void => callback(kind)
       ipcRenderer.on(IPC.createDocumentRequest, listener)
       return () => ipcRenderer.removeListener(IPC.createDocumentRequest, listener)

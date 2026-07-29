@@ -2,6 +2,7 @@ import type {
   DocumentKind,
   DocumentTarget,
   GlobalSearchMatch,
+  SearchBufferOverride,
   GlobalSearchSummary
 } from '@shared/contracts'
 import { MAX_SEARCH_DOCUMENT_BYTES } from '@shared/limits'
@@ -19,7 +20,7 @@ export interface SearchWorkerCandidate {
   authorityRoot: string
   standalone: boolean
   documentKind: DocumentKind
-  contentOverride?: string
+  contentOverride?: SearchBufferOverride
 }
 
 export interface SearchWorkerRequest {

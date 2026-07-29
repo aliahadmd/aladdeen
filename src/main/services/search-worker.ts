@@ -4,8 +4,19 @@ import { lstat, readFile, realpath, stat } from 'node:fs/promises'
 import { Unzip, UnzipInflate } from 'fflate'
 import { decodeMarkdown } from './file-format'
 import { searchMarkdownSource } from './search-engine'
-import { inspectDocxBuffer, requireZipEntryWithinBudget } from './zip-guard'
-import type { GlobalSearchMatch } from '@shared/contracts'
+import { inspectDocxBuffer, inspectPptxBuffer, requireZipEntryWithinBudget } from './zip-guard'
+import { inspectXlsxBuffer } from './zip-guard'
+import type {
+  GlobalSearchMatch,
+  PresentationTextLocator,
+  PresentationSearchEntry,
+  SpreadsheetCellLocator,
+  SpreadsheetSearchCell
+} from '@shared/contracts'
+import { loadWorkbook } from '@office-kit/xlsx/io'
+import { fromBuffer } from '@office-kit/xlsx/node'
+import { cellValueAsString, getCoordinate, getFormulaText } from '@office-kit/xlsx/cell'
+import { iterCells } from '@office-kit/xlsx/worksheet'
 import {
   SEARCH_FILE_SIZE_LIMIT,
   SEARCH_MATCH_LIMIT,
@@ -14,6 +25,7 @@ import {
   type SearchWorkerEvent,
   type SearchWorkerRequest
 } from './search-worker-protocol'
+import { MAX_PPTX_DOCUMENT_BYTES, MAX_XLSX_DOCUMENT_BYTES } from '@shared/limits'
 
 const SEARCH_CONCURRENCY = 6
 const BATCH_SIZE = 25
@@ -102,6 +114,27 @@ async function runSearch(request: SearchWorkerRequest): Promise<void> {
             match.pageIndex = page?.pageIndex
           }
           if (candidate.documentKind === 'docx') match.documentPosition = match.sourceOffsetStart
+          if (extracted.spreadsheetSegments) {
+            const segment = extracted.spreadsheetSegments.find((candidate) =>
+              match.sourceOffsetStart >= candidate.start && match.sourceOffsetStart < candidate.end
+            )
+            if (segment) {
+              match.spreadsheetCell = segment.locator
+              match.location = `${match.location} › ${segment.locator.sheetName}!${segment.locator.address}`
+            }
+          }
+          if (extracted.presentationSegments) {
+            const segment = extracted.presentationSegments.find((candidate) =>
+              match.sourceOffsetStart >= candidate.start && match.sourceOffsetStart < candidate.end
+            )
+            if (segment) {
+              match.presentationText = segment.locator
+              const label = segment.locator.source === 'notes'
+                ? `Slide ${segment.locator.slideNumber} notes`
+                : `Slide ${segment.locator.slideNumber}`
+              match.location = `${match.location} › ${label}`
+            }
+          }
           return match
         })
         if (matches.length > 0) {
@@ -141,6 +174,8 @@ export interface ExtractedSearchContent {
   content: string
   sourceSegments?: SourceOffsetSegment[]
   pageRanges?: Array<{ pageIndex: number; start: number; end: number }>
+  spreadsheetSegments?: Array<{ start: number; end: number; locator: SpreadsheetCellLocator }>
+  presentationSegments?: Array<{ start: number; end: number; locator: PresentationTextLocator }>
 }
 
 export interface SourceOffsetSegment {
@@ -153,8 +188,18 @@ export interface SourceOffsetSegment {
 
 async function readCandidate(candidate: SearchWorkerCandidate): Promise<ExtractedSearchContent | null> {
   if (candidate.contentOverride !== undefined) {
-    return Buffer.byteLength(candidate.contentOverride, 'utf8') <= SEARCH_FILE_SIZE_LIMIT
-      ? extractTextForKind(candidate.contentOverride, candidate.documentKind)
+    if (candidate.contentOverride.kind === 'spreadsheet') {
+      return candidate.documentKind === 'xlsx'
+        ? extractSpreadsheetCells(candidate.contentOverride.cells)
+        : null
+    }
+    if (candidate.contentOverride.kind === 'presentation') {
+      return candidate.documentKind === 'pptx'
+        ? extractPresentationEntries(candidate.contentOverride.entries)
+        : null
+    }
+    return Buffer.byteLength(candidate.contentOverride.content, 'utf8') <= SEARCH_FILE_SIZE_LIMIT
+      ? extractTextForKind(candidate.contentOverride.content, candidate.documentKind)
       : null
   }
 
@@ -169,13 +214,20 @@ async function readCandidate(candidate: SearchWorkerCandidate): Promise<Extracte
       : relation === '' || (relation !== '..' && !relation.startsWith(`..${sep}`) && !isAbsolute(relation))
     if (!allowed) return null
     const fileStats = await stat(canonical)
-    if (!fileStats.isFile() || fileStats.size > SEARCH_FILE_SIZE_LIMIT) return null
+    const fileLimit = candidate.documentKind === 'xlsx'
+      ? MAX_XLSX_DOCUMENT_BYTES
+      : candidate.documentKind === 'pptx'
+        ? MAX_PPTX_DOCUMENT_BYTES
+        : SEARCH_FILE_SIZE_LIMIT
+    if (!fileStats.isFile() || fileStats.size > fileLimit) return null
     const buffer = await readFile(canonical)
-    if (buffer.byteLength > SEARCH_FILE_SIZE_LIMIT) return null
+    if (buffer.byteLength > fileLimit) return null
     if (candidate.documentKind === 'markdown' || candidate.documentKind === 'html') {
       return extractTextForKind(decodeMarkdown(buffer).content, candidate.documentKind)
     }
     if (candidate.documentKind === 'docx') return extractDocxText(buffer)
+    if (candidate.documentKind === 'xlsx') return extractXlsxText(buffer)
+    if (candidate.documentKind === 'pptx') return extractPptxText(buffer)
     return extractPdfText(buffer)
   } catch {
     return null
@@ -325,6 +377,242 @@ export function extractDocxText(buffer: Buffer): ExtractedSearchContent | null {
       .replace(/<[^>]+>/g, '')
   )
   return { content }
+}
+
+export async function extractXlsxText(buffer: Buffer): Promise<ExtractedSearchContent | null> {
+  inspectXlsxBuffer(new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength))
+  const workbook = await loadWorkbook(fromBuffer(buffer))
+  const cells: SpreadsheetSearchCell[] = []
+  for (const reference of workbook.sheets) {
+    if (reference.kind !== 'worksheet') continue
+    for (const cell of iterCells(reference.sheet)) {
+      const rawFormula = getFormulaText(cell)
+      const formula = rawFormula ? `=${rawFormula.replace(/^=/, '')}` : undefined
+      const value = cellValueAsString(cell.value)
+      if (!value && !formula) continue
+      cells.push({
+        sheetName: reference.sheet.title,
+        address: getCoordinate(cell),
+        row: cell.row,
+        column: cell.col,
+        value,
+        ...(formula ? { formula } : {})
+      })
+    }
+  }
+  return extractSpreadsheetCells(cells)
+}
+
+export function extractSpreadsheetCells(
+  cells: readonly SpreadsheetSearchCell[]
+): ExtractedSearchContent {
+  const chunks: string[] = []
+  const spreadsheetSegments: NonNullable<ExtractedSearchContent['spreadsheetSegments']> = []
+  let offset = 0
+  let utf8Bytes = 0
+  for (const cell of cells) {
+    const fields = [cell.value, cell.formula].filter((field): field is string => Boolean(field))
+    for (const field of fields) {
+      const nextBytes = Buffer.byteLength(`${field}\n`, 'utf8')
+      if (utf8Bytes + nextBytes > SEARCH_FILE_SIZE_LIMIT) {
+        return { content: chunks.join(''), spreadsheetSegments }
+      }
+      chunks.push(field, '\n')
+      spreadsheetSegments.push({
+        start: offset,
+        end: offset + field.length,
+        locator: {
+          sheetName: cell.sheetName,
+          address: cell.address,
+          row: cell.row,
+          column: cell.column
+        }
+      })
+      offset += field.length + 1
+      utf8Bytes += nextBytes
+    }
+  }
+  return { content: chunks.join(''), spreadsheetSegments }
+}
+
+export function extractPptxText(buffer: Buffer): ExtractedSearchContent | null {
+  const archive = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+  const inspection = inspectPptxBuffer(archive)
+  const slideRelationshipParts = inspection.slideParts.map((slidePart) => {
+    const name = slidePart.slice(slidePart.lastIndexOf('/') + 1)
+    return `ppt/slides/_rels/${name}.rels`
+  })
+  const notesParts = inspection.entries
+    .map((entry) => entry.name.replaceAll('\\', '/'))
+    .filter((name) => /^ppt\/notesSlides\/[^/]+\.xml$/i.test(name))
+  const requested = new Set([
+    ...inspection.slideParts,
+    ...slideRelationshipParts.filter((name) => inspection.entries.some((entry) => entry.name.replaceAll('\\', '/') === name)),
+    ...notesParts
+  ])
+  const extracted = extractZipEntriesWithinBudget(archive, requested, SEARCH_FILE_SIZE_LIMIT * 4)
+  const entries: PresentationSearchEntry[] = []
+  inspection.slideParts.forEach((slidePart, slideIndex) => {
+    const slideNumber = slideIndex + 1
+    const slideId = slidePart
+    const slideXml = new TextDecoder().decode(extracted.get(slidePart) ?? new Uint8Array())
+    for (const element of extractPptxElementText(slideXml)) {
+      entries.push({
+        slideIndex,
+        slideNumber,
+        slideId,
+        source: 'slide',
+        text: element.text,
+        ...(element.id ? { elementId: element.id } : {}),
+        ...(element.name ? { elementName: element.name } : {})
+      })
+    }
+    const slideName = slidePart.slice(slidePart.lastIndexOf('/') + 1)
+    const relPart = `ppt/slides/_rels/${slideName}.rels`
+    const relXml = new TextDecoder().decode(extracted.get(relPart) ?? new Uint8Array())
+    const notesTarget = relationshipTarget(relXml, '/notesSlide')
+    if (!notesTarget) return
+    const notesPart = normalizeRelatedPart(slidePart, notesTarget)
+    const notesXml = new TextDecoder().decode(extracted.get(notesPart) ?? new Uint8Array())
+    const notes = extractDrawingText(notesXml)
+    if (notes) entries.push({ slideIndex, slideNumber, slideId, source: 'notes', text: notes })
+  })
+  return extractPresentationEntries(entries)
+}
+
+export function extractPresentationEntries(
+  entries: readonly PresentationSearchEntry[]
+): ExtractedSearchContent {
+  const chunks: string[] = []
+  const presentationSegments: NonNullable<ExtractedSearchContent['presentationSegments']> = []
+  let offset = 0
+  let utf8Bytes = 0
+  for (const entry of entries) {
+    if (!entry.text) continue
+    const nextBytes = Buffer.byteLength(`${entry.text}\n`, 'utf8')
+    if (utf8Bytes + nextBytes > SEARCH_FILE_SIZE_LIMIT) break
+    chunks.push(entry.text, '\n')
+    presentationSegments.push({
+      start: offset,
+      end: offset + entry.text.length,
+      locator: {
+        slideIndex: entry.slideIndex,
+        slideNumber: entry.slideNumber,
+        source: entry.source,
+        ...(entry.slideId ? { slideId: entry.slideId } : {}),
+        ...(entry.elementId ? { elementId: entry.elementId } : {}),
+        ...(entry.elementName ? { elementName: entry.elementName } : {})
+      }
+    })
+    offset += entry.text.length + 1
+    utf8Bytes += nextBytes
+  }
+  return { content: chunks.join(''), presentationSegments }
+}
+
+function extractPptxElementText(xml: string): Array<{ id?: string; name?: string; text: string }> {
+  const output: Array<{ id?: string; name?: string; text: string }> = []
+  const expression = /<(?:[A-Za-z_][\w.-]*:)?(sp|graphicFrame|pic|cxnSp)\b[\s\S]*?<\/(?:[A-Za-z_][\w.-]*:)?\1>/gi
+  for (const match of xml.matchAll(expression)) {
+    const block = match[0]
+    const text = extractDrawingText(block)
+    if (!text) continue
+    const properties = /<(?:[A-Za-z_][\w.-]*:)?cNvPr\b([^>]*)>/i.exec(block)?.[1] ?? ''
+    const id = /\bid=["']([^"']+)["']/i.exec(properties)?.[1]
+    const name = /\bname=["']([^"']+)["']/i.exec(properties)?.[1]
+    output.push({ text, ...(id ? { id } : {}), ...(name ? { name: decodeHtmlEntities(name) } : {}) })
+  }
+  if (output.length === 0) {
+    const text = extractDrawingText(xml)
+    if (text) output.push({ text })
+  }
+  return output
+}
+
+function extractDrawingText(xml: string): string {
+  return decodeHtmlEntities(
+    [...xml.matchAll(/<(?:[A-Za-z_][\w.-]*:)?t\b[^>]*>([\s\S]*?)<\/(?:[A-Za-z_][\w.-]*:)?t>/gi)]
+      .map((match) => match[1] ?? '')
+      .filter(Boolean)
+      .join('\n')
+  ).trim()
+}
+
+function relationshipTarget(xml: string, typeSuffix: string): string | undefined {
+  for (const match of xml.matchAll(/<Relationship\b([^>]*)\/?\s*>/gi)) {
+    const attributes = match[1] ?? ''
+    const type = /\bType=["']([^"']+)["']/i.exec(attributes)?.[1]
+    const targetMode = /\bTargetMode=["']([^"']+)["']/i.exec(attributes)?.[1]
+    if (type?.endsWith(typeSuffix) && targetMode?.toLowerCase() !== 'external') {
+      return /\bTarget=["']([^"']+)["']/i.exec(attributes)?.[1]
+    }
+  }
+  return undefined
+}
+
+function normalizeRelatedPart(sourcePart: string, target: string): string {
+  const decoded = decodeURIComponent(target).replaceAll('\\', '/')
+  const base = sourcePart.slice(0, sourcePart.lastIndexOf('/'))
+  const candidate = decoded.startsWith('/') ? decoded.slice(1) : `${base}/${decoded}`
+  const parts: string[] = []
+  for (const part of candidate.split('/')) {
+    if (!part || part === '.') continue
+    if (part === '..') parts.pop()
+    else parts.push(part)
+  }
+  return parts.join('/')
+}
+
+function extractZipEntriesWithinBudget(
+  archive: Uint8Array,
+  targetNames: ReadonlySet<string>,
+  maxOutputBytes: number
+): Map<string, Uint8Array> {
+  const output = new Map<string, Uint8Array>()
+  const chunks = new Map<string, Uint8Array[]>()
+  const sizes = new Map<string, number>()
+  let totalBytes = 0
+  let failure: Error | null = null
+  const unzipper = new Unzip((file) => {
+    const name = file.name.replaceAll('\\', '/')
+    if (!targetNames.has(name)) return
+    chunks.set(name, [])
+    sizes.set(name, 0)
+    file.ondata = (error, data, final) => {
+      if (failure) return
+      if (error) {
+        failure = error
+        file.terminate()
+        return
+      }
+      totalBytes += data.byteLength
+      if (totalBytes > maxOutputBytes) {
+        failure = new Error('Presentation search content expands beyond the permitted size.')
+        file.terminate()
+        return
+      }
+      if (data.byteLength > 0) chunks.get(name)!.push(data)
+      sizes.set(name, (sizes.get(name) ?? 0) + data.byteLength)
+      if (final) {
+        const joined = new Uint8Array(sizes.get(name) ?? 0)
+        let offset = 0
+        for (const chunk of chunks.get(name) ?? []) {
+          joined.set(chunk, offset)
+          offset += chunk.byteLength
+        }
+        output.set(name, joined)
+      }
+    }
+    file.start()
+  })
+  unzipper.register(UnzipInflate)
+  const sourceChunkBytes = 64 * 1024
+  for (let offset = 0; offset < archive.byteLength && !failure; offset += sourceChunkBytes) {
+    const end = Math.min(archive.byteLength, offset + sourceChunkBytes)
+    unzipper.push(archive.subarray(offset, end), end === archive.byteLength)
+  }
+  if (failure) throw failure
+  return output
 }
 
 function extractZipEntryWithinBudget(

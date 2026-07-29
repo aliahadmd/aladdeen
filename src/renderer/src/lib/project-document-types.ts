@@ -13,6 +13,8 @@ export const PROJECT_DOCUMENT_TYPE_OPTIONS: ReadonlyArray<{
   { kind: 'markdown', label: 'Markdown', extensions: '.md, .markdown' },
   { kind: 'docx', label: 'Word', extensions: '.docx' },
   { kind: 'pdf', label: 'PDF', extensions: '.pdf' },
+  { kind: 'xlsx', label: 'Excel', extensions: '.xlsx' },
+  { kind: 'pptx', label: 'PowerPoint', extensions: '.pptx' },
   { kind: 'html', label: 'HTML', extensions: '.html, .htm' }
 ]
 

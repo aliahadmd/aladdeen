@@ -656,7 +656,15 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
       <SidebarForm
         kind={formKind}
         title={formKind === 'file'
-          ? `New ${newDocumentKind === 'markdown' ? 'Markdown' : newDocumentKind === 'html' ? 'HTML' : 'Word'} document`
+          ? `New ${newDocumentKind === 'markdown'
+            ? 'Markdown'
+            : newDocumentKind === 'html'
+              ? 'HTML'
+              : newDocumentKind === 'docx'
+                ? 'Word'
+                : newDocumentKind === 'xlsx'
+                  ? 'Excel'
+                  : 'PowerPoint'} document`
           : undefined}
         initialValue={formKind === 'rename-environment' ? environment.environment.name : ''}
         locationLabel={selectedProjectId ? environment.projects.find((project) => project.id === selectedProjectId)?.name : undefined}
@@ -730,8 +738,8 @@ function DocumentKindItems({
   onSelect(documentKind: NewDocumentKind): void
   onManage?(): void
 }): React.JSX.Element {
-  const enabled = new Set<DocumentKind>(enabledKinds ?? ['markdown', 'html', 'docx'])
-  const hasCreatableDocument = enabled.has('markdown') || enabled.has('html') || enabled.has('docx')
+  const enabled = new Set<DocumentKind>(enabledKinds ?? ['markdown', 'html', 'docx', 'xlsx', 'pptx'])
+  const hasCreatableDocument = enabled.has('markdown') || enabled.has('html') || enabled.has('docx') || enabled.has('xlsx') || enabled.has('pptx')
   return (
     <>
       {enabled.has('markdown') && (
@@ -747,6 +755,16 @@ function DocumentKindItems({
       {enabled.has('docx') && (
         <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('docx')}>
           <FileText size={14} /> Word document
+        </DropdownMenu.Item>
+      )}
+      {enabled.has('xlsx') && (
+        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('xlsx')}>
+          <DocumentKindIcon kind="xlsx" size={14} /> Excel workbook
+        </DropdownMenu.Item>
+      )}
+      {enabled.has('pptx') && (
+        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('pptx')}>
+          <DocumentKindIcon kind="pptx" size={14} /> PowerPoint presentation
         </DropdownMenu.Item>
       )}
       {onManage && (

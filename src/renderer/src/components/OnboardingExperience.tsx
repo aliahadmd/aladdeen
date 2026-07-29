@@ -56,7 +56,7 @@ const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   {
     id: 'formats',
     title: 'A workspace for every format',
-    description: 'Write Markdown and HTML, work with Word documents, and read or annotate PDFs using tools designed for each format.',
+    description: 'Write Markdown and HTML, edit Word, Excel, and PowerPoint documents, and read or annotate PDFs using tools designed for each format.',
     palette: 'amber',
     Illustration: FormatIllustration
   },
@@ -368,6 +368,8 @@ function OrganizationIllustration(): React.JSX.Element {
           <TypePolicy kind="markdown" label="Markdown" enabled />
           <TypePolicy kind="docx" label="Word" enabled />
           <TypePolicy kind="pdf" label="PDF" />
+          <TypePolicy kind="xlsx" label="Excel" />
+          <TypePolicy kind="pptx" label="PowerPoint" />
           <TypePolicy kind="html" label="HTML" />
         </div>
         <p className="mt-3 mb-0 text-[12px] leading-[1.5] text-foreground-muted max-[520px]:hidden">
@@ -383,10 +385,12 @@ function FormatIllustration(): React.JSX.Element {
     { kind: 'markdown', label: 'Markdown', detail: 'Source + preview' },
     { kind: 'html', label: 'HTML', detail: 'Live sandbox' },
     { kind: 'docx', label: 'Word', detail: 'Rich document editor' },
-    { kind: 'pdf', label: 'PDF', detail: 'Read + annotate' }
+    { kind: 'pdf', label: 'PDF', detail: 'Read + annotate' },
+    { kind: 'xlsx', label: 'Excel', detail: 'Formulas + sheets' },
+    { kind: 'pptx', label: 'PowerPoint', detail: 'Edit + present' }
   ]
   return (
-    <div className="mx-auto grid max-w-[660px] grid-cols-4 gap-2.5 max-[640px]:grid-cols-2">
+    <div className="mx-auto grid max-w-[760px] grid-cols-5 gap-2.5 max-[640px]:grid-cols-2">
       {formats.map((format) => (
         <div className="onboarding-format-card rounded-[14px] border border-[var(--onboarding-border)] bg-[var(--onboarding-panel)] p-4 text-left shadow-[0_14px_38px_rgb(25_24_38/.06)] backdrop-blur-[16px] max-[640px]:p-3" key={format.kind}>
           <span className="grid h-9 w-9 place-items-center rounded-[10px] bg-[color-mix(in_oklab,var(--text)_10%,transparent)] text-foreground">

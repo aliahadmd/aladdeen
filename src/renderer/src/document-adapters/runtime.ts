@@ -1,17 +1,28 @@
 import type {
   BinarySearchRevealContext,
   DocumentTransaction,
-  GlobalSearchMatch
+  GlobalSearchMatch,
+  PresentationSearchEntry,
+  SpreadsheetSearchCell
 } from '@shared/contracts'
+import type { SpreadsheetDocumentApi } from './spreadsheet-api'
+import type { PresentationDocumentApi } from './presentation-api'
 
 export interface BinaryDocumentRuntime {
   serialize(adapterRevision?: number): Promise<ArrayBuffer>
   completeSave?(committed: boolean, adapterRevision: number): void
   extractText?(): string | Promise<string>
+  extractSpreadsheetCells?(): SpreadsheetSearchCell[] | Promise<SpreadsheetSearchCell[]>
+  extractPresentationEntries?(): PresentationSearchEntry[] | Promise<PresentationSearchEntry[]>
   reveal?(match: GlobalSearchMatch, context: BinarySearchRevealContext): boolean | void
   undo?(): void
   redo?(): void
   focus?(): void
+  spreadsheet?: SpreadsheetDocumentApi
+  presentation?: PresentationDocumentApi
+  autosaveAllowed?(): boolean
+  requiresSaveAs?(): boolean
+  readOnly?(): boolean
   cleanup(): void
 }
 

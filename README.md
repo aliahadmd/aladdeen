@@ -4,7 +4,7 @@
 
 # Aladdeen Research
 
-Aladdeen Research is a responsive, offline-first research workspace made only for macOS arm64 on M-series Apple silicon (M1 or newer). It brings Markdown, HTML, DOCX, and PDF sources into one calm place while keeping every document at its original disk location. Documents are never copied, converted, or uploaded.
+Aladdeen Research is a responsive, offline-first research workspace made only for macOS arm64 on M-series Apple silicon (M1 or newer). It brings Markdown, HTML, DOCX, PDF, XLSX, and PPTX sources into one calm place while keeping every document at its original disk location. Documents are never copied, converted, or uploaded.
 
 Aladdeen is proprietary, closed-source software by Ali Ahad. Access is free during the current beta-testing period; this does not grant an open-source license, and future releases may be sold commercially.
 
@@ -14,6 +14,8 @@ Aladdeen is proprietary, closed-source software by Ali Ahad. Access is free duri
 - Rich Markdown editing and preview with PDF/DOCX export
 - Exact HTML source editing with an isolated, live local preview
 - Direct OOXML editing for DOCX with formatting, comments, and tracked-change modes
+- Local XLSX editing with formulas, styles, sheet tools, search-to-cell navigation, and preservation-aware saves
+- Local PPTX editing with slide tools, speaker notes, search-to-element navigation, compatibility-aware saves, and fullscreen presenting
 - PDF reading, selectable text, forms, annotations, signatures, and page tools
 - Named environments containing multiple folder projects and standalone files
 - Bulk-linked project folders with all-files or selective indexing, exclusions, groups, favorites, and archive/pause controls
@@ -42,6 +44,8 @@ pnpm typecheck
 pnpm lint
 pnpm test
 pnpm build
+pnpm check:spreadsheets
+pnpm check:presentations
 ```
 
 ## Packaging
@@ -74,3 +78,24 @@ DOCX editing uses the Apache-2.0-licensed
 [Eigenpal DOCX Editor](https://github.com/eigenpal/docx-editor). Aladdeen pins
 the audited `@eigenpal/docx-editor-react@1.9.0` package while Eigenpal completes
 its npm namespace transition. See `THIRD_PARTY_NOTICES.md` for attribution.
+
+## XLSX editing
+
+XLSX editing is fully offline. The renderer lazily loads the Apache-2.0
+[Univer](https://github.com/dream-num/univer) spreadsheet engine, while an
+isolated worker uses the MIT-licensed
+[`@office-kit/xlsx`](https://github.com/office-kit/xlsx) codec to read and write
+OOXML locally. Spreadsheet package versions are exact-pinned and release
+packaging rejects Univer Pro packages and CDN runtime code. Workbooks containing
+features Aladdeen cannot render are protected by compatibility-copy or read-only
+handling instead of being silently rewritten.
+
+## PPTX editing
+
+PPTX editing is fully offline and lazily loads the Apache-2.0
+[`pptx-viewer`](https://github.com/ChristopherVR/pptx-viewer) stack. Aladdeen
+keeps the viewer behind an internal JSON-safe presentation API, disables its
+cloud, collaboration, export, recording, and built-in AI surfaces, and owns all
+autosave through the existing atomic binary-document path. Exact-pinned release
+checks qualify edit/save/reopen behavior and byte-for-byte preservation of
+untouched OOXML parts before packaging.

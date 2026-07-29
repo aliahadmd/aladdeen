@@ -18,7 +18,9 @@ describe('document adapter selection', () => {
     ['page.HTML', 'html'],
     ['page.htm', 'html'],
     ['proposal.docx', 'docx'],
-    ['proof.PDF', 'pdf']
+    ['proof.PDF', 'pdf'],
+    ['budget.XLSX', 'xlsx'],
+    ['briefing.PPTX', 'pptx']
   ] as const)('selects %s as %s', (name, kind) => {
     expect(documentKindFromName(name)).toBe(kind)
     expect(isSupportedDocumentName(name)).toBe(true)
@@ -35,7 +37,11 @@ describe('document adapter selection', () => {
     expect(defaultNameForKind('markdown')).toBe('Untitled.md')
     expect(defaultNameForKind('html')).toBe('Untitled.html')
     expect(defaultNameForKind('docx')).toBe('Untitled.docx')
+    expect(defaultNameForKind('xlsx')).toBe('Untitled.xlsx')
+    expect(defaultNameForKind('pptx')).toBe('Untitled.pptx')
     expect(defaultExtensionForKind('docx')).toBe('.docx')
+    expect(defaultExtensionForKind('xlsx')).toBe('.xlsx')
+    expect(defaultExtensionForKind('pptx')).toBe('.pptx')
   })
 
   it('advertises only real per-format capabilities', () => {
@@ -43,6 +49,8 @@ describe('document adapter selection', () => {
     expect(DOCUMENT_CAPABILITIES.html).toMatchObject({ split: true, exportPdf: false })
     expect(DOCUMENT_CAPABILITIES.docx).toMatchObject({ comments: true, trackedChanges: true })
     expect(DOCUMENT_CAPABILITIES.pdf).toMatchObject({ annotations: true, forms: true, pageTools: true })
+    expect(DOCUMENT_CAPABILITIES.xlsx).toMatchObject({ edit: true, search: true, pageTools: false })
+    expect(DOCUMENT_CAPABILITIES.pptx).toMatchObject({ edit: true, search: true, undoRedo: true })
   })
 })
 

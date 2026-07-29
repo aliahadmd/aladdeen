@@ -39,7 +39,7 @@ const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
 // Version 7 was briefly used by the removed Research Notes feature. Keep that
 // migration number reserved and migrate its metadata away instead of treating a
 // user's existing profile as a database from an unknown future release.
-const CURRENT_DATABASE_VERSION = 8
+const CURRENT_DATABASE_VERSION = 10
 
 function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
   if (existsSync(destination)) return
@@ -340,6 +340,100 @@ export class AppDatabase {
         PRAGMA user_version = 8;
         COMMIT;
       `)
+    }
+
+    if (row.user_version < 9) {
+      this.db.exec('BEGIN;')
+      try {
+        const previousCompleteSet = new Set<DocumentKind>(['markdown', 'html', 'docx', 'pdf'])
+        const projects = this.db.prepare(
+          'SELECT id, enabled_document_kinds FROM environment_projects'
+        ).all() as Array<{ id: string; enabled_document_kinds: string }>
+        const affectedProjectIds = new Set<string>((this.db.prepare(`
+          SELECT DISTINCT project_id AS id
+          FROM project_index_files
+          WHERE lower(relative_path) LIKE '%.xlsx'
+        `).all() as Array<{ id: string }>).map((project) => project.id))
+        const updateKinds = this.db.prepare(`
+          UPDATE environment_projects
+          SET enabled_document_kinds = ?
+          WHERE id = ?
+        `)
+        for (const project of projects) {
+          const kinds = parseStringArray(project.enabled_document_kinds).filter(isDocumentKind)
+          const isPreviousCompleteSet = kinds.length === previousCompleteSet.size &&
+            kinds.every((kind) => previousCompleteSet.has(kind))
+          if (!isPreviousCompleteSet) continue
+          updateKinds.run(JSON.stringify([...kinds, 'xlsx']), project.id)
+          affectedProjectIds.add(project.id)
+        }
+        this.db.exec(`
+          UPDATE environment_files
+          SET document_kind = 'xlsx'
+          WHERE lower(path) LIKE '%.xlsx';
+          UPDATE project_index_files
+          SET document_kind = 'xlsx'
+          WHERE lower(relative_path) LIKE '%.xlsx';
+        `)
+        const markForReindex = this.db.prepare(`
+          UPDATE environment_projects
+          SET indexed_at = NULL,
+              index_status = CASE WHEN archived = 1 THEN 'paused' ELSE 'indexing' END
+          WHERE id = ?
+        `)
+        for (const projectId of affectedProjectIds) markForReindex.run(projectId)
+        this.db.exec('PRAGMA user_version = 9; COMMIT;')
+      } catch (error) {
+        this.db.exec('ROLLBACK;')
+        throw error
+      }
+    }
+
+    if (row.user_version < 10) {
+      this.db.exec('BEGIN;')
+      try {
+        const previousCompleteSet = new Set<DocumentKind>(['markdown', 'html', 'docx', 'pdf', 'xlsx'])
+        const projects = this.db.prepare(
+          'SELECT id, enabled_document_kinds FROM environment_projects'
+        ).all() as Array<{ id: string; enabled_document_kinds: string }>
+        const affectedProjectIds = new Set<string>((this.db.prepare(`
+          SELECT DISTINCT project_id AS id
+          FROM project_index_files
+          WHERE lower(relative_path) LIKE '%.pptx'
+        `).all() as Array<{ id: string }>).map((project) => project.id))
+        const updateKinds = this.db.prepare(`
+          UPDATE environment_projects
+          SET enabled_document_kinds = ?
+          WHERE id = ?
+        `)
+        for (const project of projects) {
+          const kinds = parseStringArray(project.enabled_document_kinds).filter(isDocumentKind)
+          const isPreviousCompleteSet = kinds.length === previousCompleteSet.size &&
+            kinds.every((kind) => previousCompleteSet.has(kind))
+          if (!isPreviousCompleteSet) continue
+          updateKinds.run(JSON.stringify([...kinds, 'pptx']), project.id)
+          affectedProjectIds.add(project.id)
+        }
+        this.db.exec(`
+          UPDATE environment_files
+          SET document_kind = 'pptx'
+          WHERE lower(path) LIKE '%.pptx';
+          UPDATE project_index_files
+          SET document_kind = 'pptx'
+          WHERE lower(relative_path) LIKE '%.pptx';
+        `)
+        const markForReindex = this.db.prepare(`
+          UPDATE environment_projects
+          SET indexed_at = NULL,
+              index_status = CASE WHEN archived = 1 THEN 'paused' ELSE 'indexing' END
+          WHERE id = ?
+        `)
+        for (const projectId of affectedProjectIds) markForReindex.run(projectId)
+        this.db.exec('PRAGMA user_version = 10; COMMIT;')
+      } catch (error) {
+        this.db.exec('ROLLBACK;')
+        throw error
+      }
     }
 
     this.repairLegacyWorkspaceHistory()
@@ -1097,6 +1191,6 @@ function escapeLike(value: string): string {
 }
 
 function normalizeDocumentKind(value: string, name: string): DocumentKind {
-  if (value === 'markdown' || value === 'html' || value === 'docx' || value === 'pdf') return value
+  if (isDocumentKind(value)) return value
   return documentKindFromName(name) ?? 'markdown'
 }

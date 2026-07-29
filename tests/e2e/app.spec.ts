@@ -2,8 +2,13 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
+import { loadWorkbook, workbookToBytes } from '@office-kit/xlsx/io'
+import { fromBuffer } from '@office-kit/xlsx/node'
+import { addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook'
+import { getCell, setCell } from '@office-kit/xlsx/worksheet'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
-import { strFromU8, unzipSync } from 'fflate'
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import { PptxHandler, TextBuilder } from 'pptx-viewer-core'
 import sharp from 'sharp'
 
 async function createFirstEnvironment(window: import('@playwright/test').Page): Promise<void> {
@@ -11,6 +16,247 @@ async function createFirstEnvironment(window: import('@playwright/test').Page): 
   await skipTutorial.waitFor({ state: 'visible' })
   await skipTutorial.click()
   await window.getByRole('button', { name: 'Create environment' }).click()
+}
+
+function namespaceWorkbookSheetElements(bytes: Uint8Array): Uint8Array {
+  const archive = unzipSync(bytes)
+  const workbookPart = archive['xl/workbook.xml']
+  if (!workbookPart) throw new Error('The XLSX fixture has no workbook metadata.')
+  const workbookXml = strFromU8(workbookPart)
+    .replace('<workbook ', '<workbook xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ')
+    .replaceAll('<sheet ', '<x:sheet ')
+    .replaceAll('</sheet>', '</x:sheet>')
+  archive['xl/workbook.xml'] = strToU8(workbookXml)
+  return zipSync(archive)
+}
+
+test('opens, edits, autosaves, and reopens a local XLSX workbook', async () => {
+  test.setTimeout(90_000)
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-workspace-'))
+  const xlsxPath = join(workspace, 'budget.xlsx')
+  const source = createWorkbook()
+  const sourceSheet = addWorksheet(source, 'Budget')
+  setCell(sourceSheet, 1, 1, 'Original budget')
+  const initialBytes = namespaceWorkbookSheetElements(await workbookToBytes(source))
+  await writeFile(xlsxPath, initialBytes)
+  let application = await electron.launch({ args: ['.', xlsxPath, `--user-data-dir=${userData}`] })
+
+  try {
+    let window = await application.firstWindow()
+    await createFirstEnvironment(window)
+    const editor = window.locator('.aladdeen-xlsx-host')
+    await expect(editor).toBeVisible({ timeout: 30_000 })
+    await expect(editor.getByText('Budget', { exact: true })).toBeVisible({ timeout: 15_000 })
+    const documentFooter = window.locator('footer').filter({ hasText: 'XLSX' })
+    await expect(documentFooter).toContainText('Saved')
+    await window.waitForTimeout(1_800)
+    expect((await readFile(xlsxPath)).equals(Buffer.from(initialBytes))).toBe(true)
+
+    const canvas = editor.locator('canvas[id^="univer-sheet-main-canvas_"]')
+    await expect(canvas).toBeVisible()
+    // Univer renders cell text on a small document canvas above the sheet canvas.
+    // Target the sheet surface directly so Playwright does not mistake that render
+    // layer for an interactive obstruction when the selected cell contains text.
+    await canvas.click({ position: { x: 85, y: 38 }, force: true })
+    await window.keyboard.insertText('Updated budget')
+    await window.keyboard.press('Enter')
+
+    await expect(documentFooter).toContainText('Saved', { timeout: 20_000 })
+    await expect.poll(async () => {
+      const saved = await loadWorkbook(fromBuffer(await readFile(xlsxPath)))
+      const sheet = saved.sheets.find((candidate) => candidate.kind === 'worksheet')
+      return sheet?.kind === 'worksheet' ? getCell(sheet.sheet, 1, 1)?.value : undefined
+    }, { timeout: 20_000 }).toBe('Updated budget')
+
+    await closeElectron(application)
+    application = await electron.launch({ args: ['.', xlsxPath, `--user-data-dir=${userData}`] })
+    window = await application.firstWindow()
+    const reopened = window.locator('.aladdeen-xlsx-host')
+    await expect(reopened).toBeVisible({ timeout: 30_000 })
+    await expect(reopened.getByText('Budget', { exact: true })).toBeVisible({ timeout: 15_000 })
+    await expect(reopened.locator('canvas[id^="univer-sheet-main-canvas_"]')).toBeVisible()
+  } finally {
+    await closeElectron(application)
+    await Promise.all([
+      rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    ])
+  }
+})
+
+test('requires one compatibility copy and preserves unknown XLSX parts on later autosaves', async () => {
+  test.setTimeout(90_000)
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-workspace-'))
+  const xlsxPath = join(workspace, 'preservation.xlsx')
+  const copyPath = join(workspace, 'preservation copy.xlsx')
+  const source = createWorkbook()
+  const sourceSheet = addWorksheet(source, 'Preserved')
+  setCell(sourceSheet, 1, 1, 'Original')
+  const unknownPart = new TextEncoder().encode('<agent-extension keep="true"/>')
+  source.passthrough = new Map([['customXml/item1.xml', unknownPart]])
+  source.passthroughContentTypes = new Map([['customXml/item1.xml', 'application/xml']])
+  await writeFile(xlsxPath, await workbookToBytes(source))
+  const application = await electron.launch({ args: ['.', xlsxPath, `--user-data-dir=${userData}`] })
+
+  try {
+    const window = await application.firstWindow()
+    await createFirstEnvironment(window)
+    const editor = window.locator('.aladdeen-xlsx-host')
+    await expect(editor).toBeVisible({ timeout: 30_000 })
+    await expect(editor.getByText(/Compatibility copy required to preserve custom XML/)).toBeVisible()
+    await application.evaluate(({ dialog }, destination) => {
+      Object.defineProperty(dialog, 'showSaveDialog', {
+        configurable: true,
+        value: async () => ({ canceled: false, filePath: destination })
+      })
+    }, copyPath)
+
+    await editor.getByRole('button', { name: /Save editable copy/ }).click()
+    await expect(editor.getByText(/Compatibility features preserved in this editable copy/)).toBeVisible()
+    await expect(access(copyPath)).resolves.toBeUndefined()
+
+    const canvas = editor.locator('canvas[id^="univer-sheet-main-canvas_"]')
+    await canvas.click({ position: { x: 85, y: 38 }, force: true })
+    await window.keyboard.insertText('Copy edit')
+    await window.keyboard.press('Enter')
+    await expect.poll(async () => {
+      const saved = await loadWorkbook(fromBuffer(await readFile(copyPath)))
+      const sheet = saved.sheets.find((candidate) => candidate.kind === 'worksheet')
+      return sheet?.kind === 'worksheet' ? getCell(sheet.sheet, 1, 1)?.value : undefined
+    }, { timeout: 20_000 }).toBe('Copy edit')
+    const preserved = await loadWorkbook(fromBuffer(await readFile(copyPath)))
+    expect(preserved.passthrough?.get('customXml/item1.xml')).toEqual(unknownPart)
+  } finally {
+    await closeElectron(application)
+    await Promise.all([
+      rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    ])
+  }
+})
+
+test('opens, edits, autosaves, presents, and reopens a local PPTX without outbound requests', async () => {
+  test.setTimeout(90_000)
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pptx-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pptx-workspace-'))
+  const pptxPath = join(workspace, 'briefing.pptx')
+  const created = await PptxHandler.create({ title: 'Offline briefing', initialSlideCount: 1 })
+  try {
+    created.data.slides[0]!.elements.push(
+      TextBuilder.create('Original briefing').position(120, 120).size(640, 100).build()
+    )
+    await writeFile(pptxPath, await created.handler.save(created.data.slides))
+  } finally {
+    created.handler.dispose()
+  }
+  let application = await electron.launch({ args: ['.', pptxPath, `--user-data-dir=${userData}`] })
+
+  try {
+    let window = await application.firstWindow()
+    const outbound: string[] = []
+    window.on('request', (request) => {
+      if (/^https?:/i.test(request.url())) outbound.push(request.url())
+    })
+    await window.evaluate(() => {
+      // Playwright's Electron window does not enter the OS fullscreen space;
+      // exercise the viewer's supported presentation-mode fallback instead.
+      Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+        configurable: true,
+        value: async () => { throw new DOMException('Fullscreen unavailable in the test window.') }
+      })
+    })
+    await createFirstEnvironment(window)
+    const editor = window.locator('.aladdeen-pptx-host')
+    await expect(editor).toBeVisible({ timeout: 30_000 })
+    const textElement = editor.locator('.pptxv-stage [data-element-id][aria-label="Original briefing"]')
+    await expect(textElement).toBeVisible({ timeout: 20_000 })
+    await expect(editor.locator([
+      '.pptxv-ai-toggle',
+      '.pptxv-tabrow-share',
+      '.pptxv-titlebar-autosave',
+      '.pptxv-titlebar-status',
+      '.pptxv-qat [aria-label="Save"]',
+      '.pptxv-mobile-toolbar [aria-label="Save"]',
+      '[aria-label="Settings & Shortcuts"]',
+      '[data-pptx-collaboration]'
+    ].join(', '))).toHaveCount(0)
+
+    const commandSearch = editor.locator('.pptxv-titlebar-search')
+    await expect(commandSearch).toBeVisible()
+    expect((await commandSearch.boundingBox())?.width).toBeLessThanOrEqual(32)
+    await expect(editor.getByRole('tab', { name: 'Insert', exact: true })).toBeVisible()
+    await expect(editor.getByRole('tab', { name: 'Design', exact: true })).toBeVisible()
+    await expect(editor.getByRole('tab', { name: 'Animations', exact: true })).toBeVisible()
+
+    const inspector = editor.locator('.pptxv-inspector')
+    await expect(inspector).toBeHidden()
+    await textElement.click()
+    await editor.getByRole('button', { name: 'Toggle inspector panel' }).click()
+    await expect(inspector).toBeVisible()
+    const fillAndStroke = inspector.getByRole('button', { name: 'FILL & STROKE properties' })
+    await expect(fillAndStroke).toHaveAttribute('aria-expanded', 'false')
+    await fillAndStroke.click()
+    await expect(fillAndStroke).toHaveAttribute('aria-expanded', 'true')
+    await editor.getByRole('button', { name: 'Toggle inspector panel' }).click()
+    await expect(inspector).toBeHidden()
+
+    await textElement.dblclick()
+    const inlineEditor = editor.locator('.pptxv-inline-editor')
+    await expect(inlineEditor).toBeVisible()
+    await expect(textElement.locator('.pptxv-text')).toHaveCSS('visibility', 'hidden')
+    const elementBounds = await textElement.boundingBox()
+    const editorBounds = await inlineEditor.boundingBox()
+    expect(elementBounds).not.toBeNull()
+    expect(editorBounds).not.toBeNull()
+    expect(Math.abs(editorBounds!.x - elementBounds!.x)).toBeLessThan(2)
+    expect(Math.abs(editorBounds!.y - elementBounds!.y)).toBeLessThan(2)
+    await inlineEditor.press('ControlOrMeta+A')
+    await window.keyboard.insertText('Updated briefing')
+    await inlineEditor.press('Escape')
+
+    const documentFooter = window.locator('footer').filter({ hasText: 'PPTX' })
+    await expect(documentFooter).toContainText('Saved', { timeout: 20_000 })
+    await expect.poll(async () => presentationTexts(pptxPath), { timeout: 20_000 }).toContain('Updated briefing')
+
+    const present = editor.getByRole('button', { name: 'Present', exact: true })
+    await expect(present).toBeVisible()
+    await present.click()
+    await expect(editor.locator('.pptxv.pptxv-presenting')).toBeVisible()
+    await window.keyboard.press('Escape')
+    await expect(editor.locator('.pptxv.pptxv-presenting')).toHaveCount(0)
+    expect(outbound).toEqual([])
+
+    await closeElectron(application)
+    application = await electron.launch({ args: ['.', pptxPath, `--user-data-dir=${userData}`] })
+    window = await application.firstWindow()
+    const reopened = window.locator('.aladdeen-pptx-host')
+    await expect(reopened).toBeVisible({ timeout: 30_000 })
+    await expect(reopened.locator('.pptxv-stage [data-element-id][aria-label="Updated briefing"]')).toBeVisible({ timeout: 20_000 })
+  } finally {
+    await closeElectron(application)
+    await Promise.all([
+      rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    ])
+  }
+})
+
+async function presentationTexts(path: string): Promise<string[]> {
+  const bytes = await readFile(path)
+  const handler = new PptxHandler()
+  try {
+    const presentation = await handler.load(
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      { allowExternalImages: false }
+    )
+    return presentation.slides.flatMap((slide) => slide.elements.flatMap((element) => (
+      'text' in element && typeof element.text === 'string' ? [element.text] : []
+    )))
+  } finally {
+    handler.dispose()
+  }
 }
 
 test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', async () => {

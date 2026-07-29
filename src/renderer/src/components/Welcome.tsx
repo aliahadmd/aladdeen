@@ -25,7 +25,7 @@ export function Welcome(): React.JSX.Element {
           Your research, one calm workspace.
         </h1>
         <p className="mx-auto mt-[19px] mb-[27px] max-w-[480px] text-[15px] leading-[1.6] text-foreground-soft">
-          Read, write, organize, and search Markdown, HTML, Word, and PDF sources in place. Aladdeen keeps your research connected without copying or converting it.
+          Read, write, organize, and search Markdown, HTML, Word, PDF, Excel, and PowerPoint sources in place. Aladdeen keeps your research connected without copying or converting it.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <button className={buttonClasses({ size: 'large' })} onClick={() => void addProject()}><FolderOpen size={16} /> Add folder</button>

@@ -402,7 +402,7 @@ export default function App(): React.JSX.Element {
             <span className="mt-1 block text-[11px] text-foreground-soft">
               Original files stay in place and open in format-specific tabs.
             </span>
-            <small className="mt-2 block text-[9px] text-foreground-muted">Markdown · DOCX · HTML · PDF</small>
+            <small className="mt-2 block text-[9px] text-foreground-muted">Markdown · DOCX · HTML · PDF · XLSX · PPTX</small>
           </div>
         </div>
       )}

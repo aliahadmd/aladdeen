@@ -331,6 +331,14 @@ function installMenu(): void {
             {
               label: 'Word Document',
               click: () => mainWindow?.webContents.send(IPC.createDocumentRequest, 'docx')
+            },
+            {
+              label: 'Excel Workbook',
+              click: () => mainWindow?.webContents.send(IPC.createDocumentRequest, 'xlsx')
+            },
+            {
+              label: 'PowerPoint Presentation',
+              click: () => mainWindow?.webContents.send(IPC.createDocumentRequest, 'pptx')
             }
           ]
         },

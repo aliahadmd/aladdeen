@@ -1193,7 +1193,7 @@ body.is-resizing-sidebar * {
   width: 100%;
   min-width: 0;
   min-height: 31px;
-  grid-template-columns: 39px minmax(0, 1fr);
+  grid-template-columns: minmax(39px, max-content) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 3px 9px;
@@ -1627,6 +1627,339 @@ body.is-resizing-sidebar * {
   border-radius: 6px;
   white-space: nowrap;
   font-size: 11px;
+}
+
+.xlsx-univer-container {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.xlsx-univer-container > div {
+  height: 100%;
+}
+
+.xlsx-univer-container.is-read-only {
+  pointer-events: none;
+  user-select: text;
+}
+
+.xlsx-compatibility {
+  display: flex;
+  min-height: 34px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  padding: 6px 10px;
+  color: var(--foreground-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.xlsx-compatibility.is-read-only {
+  border-bottom-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.xlsx-compatibility svg {
+  flex: none;
+  color: var(--warning);
+}
+
+.xlsx-compatibility.is-read-only svg {
+  color: var(--danger);
+}
+
+.xlsx-compatibility span {
+  min-width: 0;
+  flex: 1;
+}
+
+.xlsx-compatibility button {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-elevated);
+  padding: 4px 8px;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.xlsx-compatibility button:hover {
+  background: var(--surface-hover);
+}
+
+.pptx-viewer-container {
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.pptx-viewer-container > div,
+.pptx-viewer-container .pptxv-root {
+  height: 100%;
+  min-height: 0;
+}
+
+/* The embedded viewer keeps every command surface, but Aladdeen composes it
+   as one compact, task-grouped editor instead of stacking duplicate bars. */
+.aladdeen-pptx-host .pptxv-titlebar {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  width: 108px;
+  min-height: 34px;
+  border: 0;
+  background: transparent;
+  padding: 5px 7px;
+}
+
+.aladdeen-pptx-host .pptxv-titlebar-logo,
+.aladdeen-pptx-host .pptxv-titlebar-file,
+.aladdeen-pptx-host .pptxv-titlebar-sep,
+.aladdeen-pptx-host .pptxv-titlebar-spacer {
+  display: none !important;
+}
+
+.aladdeen-pptx-host .pptxv-titlebar-search {
+  left: 70px;
+  width: 30px;
+  transform: none;
+  opacity: .72;
+  transition: width 140ms ease, opacity 140ms ease;
+}
+
+.aladdeen-pptx-host .pptxv-titlebar-search::placeholder {
+  color: transparent;
+}
+
+.aladdeen-pptx-host .pptxv-titlebar-search:focus {
+  z-index: 8;
+  width: min(230px, 32vw);
+  opacity: 1;
+}
+
+.aladdeen-pptx-host .pptxv-titlebar-search:focus::placeholder {
+  color: var(--pptx-muted-foreground);
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-primary {
+  min-height: 34px;
+  padding-left: 112px;
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tabs {
+  scrollbar-width: none;
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tab {
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 11px;
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tab:nth-child(4),
+.aladdeen-pptx-host .pptxv-ribbon-tab:nth-child(7) {
+  margin-left: 7px;
+  border-left: 1px solid var(--pptx-border);
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tab-content {
+  min-height: 68px;
+}
+
+.aladdeen-pptx-host .pptxv-body {
+  position: relative;
+}
+
+.aladdeen-pptx-host .pptxv-inspector {
+  position: absolute;
+  z-index: 30;
+  inset: 0 0 0 auto;
+  width: min(340px, 46%);
+  min-width: min(320px, 100%);
+  border-left: 1px solid var(--pptx-border);
+  box-shadow: -12px 0 30px rgb(0 0 0 / 18%);
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section {
+  overflow: hidden;
+  margin-bottom: 8px;
+  border: 1px solid color-mix(in srgb, var(--pptx-border) 75%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--pptx-muted) 34%, transparent);
+  padding: 9px;
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section-title {
+  display: flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: space-between;
+  margin: -3px -2px 6px;
+  border-radius: 4px;
+  padding: 3px 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section-title::after {
+  content: '−';
+  color: var(--pptx-muted-foreground);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section-title:hover {
+  background: var(--pptx-accent);
+  color: var(--pptx-accent-foreground);
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed {
+  padding-bottom: 5px;
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed > :not(.pptxv-inspector-section-title) {
+  display: none !important;
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed .pptxv-inspector-section-title {
+  margin-bottom: -1px;
+}
+
+.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed .pptxv-inspector-section-title::after {
+  content: '+';
+}
+
+.aladdeen-pptx-host :is(
+  .pptxv-inspector-shape-effects,
+  .pptxv-inspector-text-effects,
+  .pptxv-inspector-animation,
+  .pptxv-inspector-table-cell,
+  .pptxv-inspector-table-cell-fill,
+  .pptxv-inspector-table-structure
+) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.aladdeen-pptx-host :is(
+  .pptxv-inspector-shape-effects,
+  .pptxv-inspector-text-effects,
+  .pptxv-inspector-animation,
+  .pptxv-inspector-table-cell,
+  .pptxv-inspector-table-cell-fill
+) > label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--pptx-muted-foreground);
+  font-size: 10px;
+}
+
+.aladdeen-pptx-host :is(
+  .pptxv-inspector-shape-effects,
+  .pptxv-inspector-text-effects,
+  .pptxv-inspector-animation,
+  .pptxv-inspector-table-cell,
+  .pptxv-inspector-table-cell-fill
+) :is(input, select) {
+  width: 100%;
+  min-width: 0;
+}
+
+/* pptx-viewer 1.7.0 supplies scaled coordinates for inline text editing but
+   omits absolute positioning from its static stylesheet. */
+.aladdeen-pptx-host .pptxv-inline-editor:not(.pptxv-table-cell-editor) {
+  position: absolute;
+  z-index: 9;
+  box-sizing: border-box;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--pptx-ring);
+  border-radius: 2px;
+  background: transparent;
+  outline: 1px solid color-mix(in srgb, var(--pptx-ring) 55%, transparent);
+  pointer-events: auto;
+}
+
+.aladdeen-pptx-host .pptxv-element.is-aladdeen-inline-editing .pptxv-text {
+  visibility: hidden;
+}
+
+.pptx-viewer-container.is-read-only .pptxv-format-toolbar,
+.pptx-viewer-container.is-read-only .pptxv-inspector {
+  display: none !important;
+}
+
+.aladdeen-pptx-host .pptxv-ai-toggle,
+.aladdeen-pptx-host .pptxv-ai-settings,
+.aladdeen-pptx-host .pptxv-titlebar-autosave,
+.aladdeen-pptx-host .pptxv-titlebar-status,
+.aladdeen-pptx-host .pptxv-qat [aria-label="Save"],
+.aladdeen-pptx-host .pptxv-mobile-toolbar [aria-label="Save"],
+.aladdeen-pptx-host [aria-label="Settings & Shortcuts"],
+.aladdeen-pptx-host [data-pptx-collaboration],
+.aladdeen-pptx-host [data-pptx-share] {
+  display: none !important;
+}
+
+.pptx-compatibility {
+  display: flex;
+  min-height: 34px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 30%, var(--border));
+  background: color-mix(in srgb, var(--warning) 9%, var(--surface));
+  padding: 6px 10px;
+  color: var(--foreground-muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.pptx-compatibility.is-read-only {
+  border-bottom-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+
+.pptx-compatibility svg {
+  flex: none;
+  color: var(--warning);
+}
+
+.pptx-compatibility.is-read-only svg {
+  color: var(--danger);
+}
+
+.pptx-compatibility span {
+  min-width: 0;
+  flex: 1;
+}
+
+.pptx-compatibility button {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface-elevated);
+  padding: 4px 8px;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.pptx-compatibility button:hover {
+  background: var(--surface-hover);
 }
 
 .aladdeen-docx-title-action {

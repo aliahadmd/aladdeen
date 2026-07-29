@@ -18,7 +18,8 @@ import type {
   GlobalSearchEvent,
   GlobalSearchMatch,
   GlobalSearchScope,
-  GlobalSearchSummary
+  GlobalSearchSummary,
+  SearchBufferOverride
 } from '@shared/contracts'
 import { cn } from '@renderer/lib/cn'
 import { dialogOverlayClasses } from '@renderer/lib/ui-styles'
@@ -157,15 +158,27 @@ export function GlobalSearchDialog(): React.JSX.Element {
       if (document.deleted) return null
       if ('content' in document) {
         return document.content !== document.savedContent
-          ? { fileId: document.id, content: document.content }
+          ? { fileId: document.id, kind: 'text' as const, content: document.content }
           : null
       }
       if (!document.binaryDirty) return null
+      if (document.documentKind === 'xlsx') {
+        const cells = await getDocumentRuntime(document.id)?.extractSpreadsheetCells?.()
+        return cells === undefined || cells === null
+          ? null
+          : { fileId: document.id, kind: 'spreadsheet' as const, cells }
+      }
+      if (document.documentKind === 'pptx') {
+        const entries = await getDocumentRuntime(document.id)?.extractPresentationEntries?.()
+        return entries === undefined || entries === null
+          ? null
+          : { fileId: document.id, kind: 'presentation' as const, entries }
+      }
       const content = await getDocumentRuntime(document.id)?.extractText?.()
       return content === undefined || content === null
         ? null
-        : { fileId: document.id, content }
-    }))).filter((override): override is { fileId: string; content: string } => override !== null)
+        : { fileId: document.id, kind: 'text' as const, content }
+    }))).filter((override): override is SearchBufferOverride => override !== null)
 
     const result = await window.aladdeen.search.start({
       query: normalizedQuery,
@@ -328,7 +341,15 @@ export function GlobalSearchDialog(): React.JSX.Element {
                     onFocus={() => setActiveIndex(index)}
                     onClick={() => choose(match)}
                   >
-                    <span className="global-search-line">{match.lineNumber}</span>
+                    <span className="global-search-line">
+                      {match.spreadsheetCell
+                        ? `${match.spreadsheetCell.sheetName}!${match.spreadsheetCell.address}`
+                        : match.presentationText
+                          ? match.presentationText.source === 'notes'
+                            ? `Slide ${match.presentationText.slideNumber} notes`
+                            : `Slide ${match.presentationText.slideNumber}`
+                          : match.lineNumber}
+                    </span>
                     <code>
                       {match.snippet.slice(0, match.snippetMatchStart)}
                       <mark>{match.snippet.slice(match.snippetMatchStart, match.snippetMatchEnd)}</mark>

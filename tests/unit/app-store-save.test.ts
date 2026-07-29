@@ -39,15 +39,16 @@ function document(content: string, savedContent: string): OpenDocument {
   }
 }
 
-function binaryDocument(adapterRevision = 1): OpenDocument {
+function binaryDocument(adapterRevision = 1, kind: 'docx' | 'xlsx' | 'pptx' = 'docx'): OpenDocument {
+  const name = kind === 'xlsx' ? 'budget.xlsx' : kind === 'pptx' ? 'briefing.pptx' : 'proposal.docx'
   return {
     id: fileId,
     environmentId,
-    name: 'proposal.docx',
+    name,
     location: '~/Notes',
-    fullPath: '/Users/test/Notes/proposal.docx',
-    documentKind: 'docx',
-    capabilities: DOCUMENT_CAPABILITIES.docx,
+    fullPath: `/Users/test/Notes/${name}`,
+    documentKind: kind,
+    capabilities: DOCUMENT_CAPABILITIES[kind],
     session: {
       id: '33333333-3333-4333-8333-333333333333',
       url: 'aladdeen-document://session/33333333-3333-4333-8333-333333333333',
@@ -185,6 +186,82 @@ describe('document save serialization', () => {
     useAppStore.getState().markBinaryDirty(fileId)
     await expect(useAppStore.getState().saveDocument(fileId)).resolves.toBe(false)
     expect(completeSave).toHaveBeenLastCalledWith(false, 2)
+  })
+
+  it.each(['xlsx', 'pptx'] as const)('finishes a dirty %s save before switching away from its mounted adapter', async (kind) => {
+    const nextFileId = '55555555-5555-4555-8555-555555555555'
+    const pendingSave = deferred<Result<FileRevision>>()
+    const saveBinary = vi.fn().mockReturnValue(pendingSave.promise)
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+    })
+    useAppStore.setState({
+      documents: [binaryDocument(1, kind), { ...document('next', 'next'), id: nextFileId }],
+      activeFileId: fileId
+    })
+    registerDocumentRuntime(fileId, {
+      serialize: async () => new ArrayBuffer(128),
+      cleanup: () => undefined
+    })
+
+    const switching = useAppStore.getState().setActiveFileId(nextFileId)
+    await vi.waitFor(() => expect(saveBinary).toHaveBeenCalledOnce())
+    expect(useAppStore.getState().activeFileId).toBe(fileId)
+
+    pendingSave.resolve({ ok: true, value: revision(2) })
+    await switching
+    expect(useAppStore.getState().activeFileId).toBe(nextFileId)
+  })
+
+  it('does not serialize or Save As a read-only binary editor', async () => {
+    const serialize = vi.fn(async () => new ArrayBuffer(128))
+    const saveBinary = vi.fn()
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+    })
+    useAppStore.setState({ documents: [binaryDocument(1, 'pptx')], activeFileId: fileId })
+    registerDocumentRuntime(fileId, {
+      serialize,
+      readOnly: () => true,
+      cleanup: () => undefined
+    })
+
+    await expect(useAppStore.getState().saveDocumentAs(fileId)).resolves.toBe(false)
+    expect(serialize).not.toHaveBeenCalled()
+    expect(saveBinary).not.toHaveBeenCalled()
+    expect(useAppStore.getState().documents[0]).toMatchObject({
+      binaryDirty: true,
+      status: 'error',
+      error: expect.stringMatching(/read-only/i)
+    })
+  })
+
+  it('keeps a dirty XLSX active when its compatibility Save As is cancelled', async () => {
+    const nextFileId = '66666666-6666-4666-8666-666666666666'
+    const saveBinary = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { code: 'CANCELLED', message: 'Save As was cancelled.' }
+    } satisfies Result<FileRevision>)
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+    })
+    useAppStore.setState({
+      documents: [binaryDocument(1, 'xlsx'), { ...document('next', 'next'), id: nextFileId }],
+      activeFileId: fileId
+    })
+    registerDocumentRuntime(fileId, {
+      serialize: async () => new ArrayBuffer(128),
+      requiresSaveAs: () => true,
+      cleanup: () => undefined
+    })
+
+    await useAppStore.getState().setActiveFileId(nextFileId)
+    expect(saveBinary).toHaveBeenCalledWith(expect.objectContaining({ saveAs: true }), expect.any(ArrayBuffer))
+    expect(useAppStore.getState().activeFileId).toBe(fileId)
+    expect(useAppStore.getState().documents[0]).toMatchObject({ binaryDirty: true })
   })
 
   it('does not replace a local edit made while an external reload is in flight', async () => {

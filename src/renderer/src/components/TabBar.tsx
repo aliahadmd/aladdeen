@@ -85,7 +85,7 @@ export function TabBar(): React.JSX.Element | null {
                 else tabs.current.delete(document.id)
               }}
               className="col-span-3 grid h-full min-w-0 grid-cols-subgrid items-center gap-[6px] border-0 bg-transparent p-0 text-inherit"
-              onClick={() => setActiveFileId(document.id)}
+              onClick={() => void setActiveFileId(document.id)}
               onKeyDown={(event) => {
                 const index = documents.findIndex((candidate) => candidate.id === document.id)
                 let targetIndex: number | undefined
@@ -96,7 +96,7 @@ export function TabBar(): React.JSX.Element | null {
                 const target = targetIndex === undefined ? undefined : documents[targetIndex]
                 if (!target) return
                 event.preventDefault()
-                setActiveFileId(target.id)
+                void setActiveFileId(target.id)
                 tabs.current.get(target.id)?.focus()
               }}
             >

@@ -80,7 +80,7 @@ interface AppState {
   ): Promise<void>
   revealPreviewSource(fileId: string, target: PreviewSourceTarget): void
   openDroppedFiles(files: File[]): Promise<void>
-  setActiveFileId(fileId: string): void
+  setActiveFileId(fileId: string): Promise<void>
   updateContent(fileId: string, content: string): void
   markBinaryDirty(fileId: string, dirty?: boolean): void
   updateEditorView(fileId: string, scrollTop: number, selection: number): void
@@ -137,8 +137,10 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
   }
 })
 
-function withoutCancelled(error: { code: string; message: string }): void {
-  if (error.code !== 'CANCELLED') toast.error(error.message)
+function withoutCancelled(error: { code: string; message: string; details?: string }): void {
+  if (error.code !== 'CANCELLED') {
+    toast.error(error.message, error.details ? { description: error.details } : undefined)
+  }
 }
 
 function enqueueConflict(fileIds: string[], fileId: string): string[] {
@@ -147,6 +149,19 @@ function enqueueConflict(fileIds: string[], fileId: string): string[] {
 
 function removeConflict(fileIds: string[], fileId: string): string[] {
   return fileIds.filter((candidate) => candidate !== fileId)
+}
+
+async function waitForDocumentRuntime(
+  fileId: string,
+  timeoutMs = 5_000
+): Promise<ReturnType<typeof getDocumentRuntime>> {
+  const deadline = Date.now() + timeoutMs
+  let runtime = getDocumentRuntime(fileId)
+  while (!runtime && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25))
+    runtime = getDocumentRuntime(fileId)
+  }
+  return runtime
 }
 
 function scheduleAutosave(
@@ -258,6 +273,16 @@ export const useAppStore = create<AppState>((set, get) => {
         }))
         return false
       }
+      if (runtime.readOnly?.()) {
+        const message = 'This document is read-only and cannot be saved or copied from the editor.'
+        set((state) => ({
+          documents: state.documents.map((item) => item.id === fileId
+            ? { ...item, status: 'error', error: message }
+            : item)
+        }))
+        toast.error(message)
+        return false
+      }
       let data: ArrayBuffer
       try {
         data = await runtime.serialize(serializedAdapterRevision)
@@ -274,7 +299,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       const binarySaveAs = saveAs || (document.documentKind === 'pdf' && Boolean(
         document.session.signed || document.session.restricted
-      ))
+      )) || Boolean(runtime.requiresSaveAs?.())
       let result
       try {
         result = await window.aladdeen.document.saveBinary({
@@ -402,18 +427,35 @@ export const useAppStore = create<AppState>((set, get) => {
     return true
   }
 
+  const activateDocument = async (fileId: string): Promise<boolean> => {
+    const state = get()
+    if (state.activeFileId === fileId) return true
+    const current = state.documents.find((document) => document.id === state.activeFileId)
+    const needsBinaryFlush = current && !isTextOpenDocument(current) && (
+      current.binaryDirty || current.status === 'saving' || saveOperations.has(current.id)
+    )
+    if (needsBinaryFlush) {
+      set({ documentTransitioning: true })
+      try {
+        if (!(await get().saveDocument(current.id))) return false
+      } finally {
+        set({ documentTransitioning: false })
+      }
+    }
+    set({ activeFileId: fileId, sidebarOpen: false })
+    await persistOpenState()
+    return true
+  }
+
   const ingestDocument = async (snapshot: DocumentSnapshot): Promise<void> => {
     const existing = get().documents.find((document) => document.id === snapshot.id)
-    if (existing) {
-      set({ activeFileId: snapshot.id, sidebarOpen: false })
-    } else {
+    if (!existing) {
       set((state) => ({
         documents: [...state.documents, openDocumentFromSnapshot(snapshot)],
-        activeFileId: snapshot.id,
         sidebarOpen: false
       }))
     }
-    await persistOpenState()
+    await activateDocument(snapshot.id)
     await get().refreshEnvironment()
   }
 
@@ -711,8 +753,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async openDocument(target) {
       const existing = target.kind === 'tracked' ? get().documents.find((document) => document.id === target.fileId) : undefined
       if (existing) {
-        set({ activeFileId: existing.id, sidebarOpen: false })
-        await persistOpenState()
+        await activateDocument(existing.id)
         return
       }
       const result = await window.aladdeen.document.open(target)
@@ -743,19 +784,21 @@ export const useAppStore = create<AppState>((set, get) => {
         fileId = result.value.id
         await ingestDocument(result.value)
       } else {
-        set({ activeFileId: fileId, sidebarOpen: false })
-        await persistOpenState()
+        if (!(await activateDocument(fileId))) return
       }
 
       const document = get().documents.find((candidate) => candidate.id === fileId)
       if (!document) return
+      if (!(await activateDocument(fileId))) return
       if (!isTextOpenDocument(document)) {
         set({
-          activeFileId: fileId,
           editing: true,
           globalSearchOpen: false
         })
-        getDocumentRuntime(fileId)?.reveal?.(match, { query, matchCase, wholeWord })
+        const runtime = getDocumentRuntime(fileId) ?? await waitForDocumentRuntime(fileId)
+        if (!runtime?.reveal || runtime.reveal(match, { query, matchCase, wholeWord }) === false) {
+          toast.info('The document opened, but the matching location could not be revealed.')
+        }
         return
       }
       let from = match.sourceOffsetStart
@@ -779,7 +822,6 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       editorRevealId += 1
       set((state) => ({
-        activeFileId: fileId,
         editing: true,
         mobilePane: 'editor',
         globalSearchOpen: false,
@@ -834,9 +876,8 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const snapshot of result.value) await ingestDocument(snapshot)
     },
 
-    setActiveFileId(fileId) {
-      set({ activeFileId: fileId })
-      void persistOpenState()
+    async setActiveFileId(fileId) {
+      await activateDocument(fileId)
     },
 
     updateContent(fileId, content) {
@@ -878,7 +919,8 @@ export const useAppStore = create<AppState>((set, get) => {
         dirty &&
         document &&
         !isTextOpenDocument(document) &&
-        !(document.documentKind === 'pdf' && (document.session.signed || document.session.restricted))
+        !(document.documentKind === 'pdf' && (document.session.signed || document.session.restricted)) &&
+        getDocumentRuntime(fileId)?.autosaveAllowed?.() !== false
       ) {
         scheduleAutosave(fileId, BINARY_AUTOSAVE_DELAY_MS, BINARY_AUTOSAVE_MAX_WAIT_MS, get)
       }
