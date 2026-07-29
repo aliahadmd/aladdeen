@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import { AppDatabase } from '@main/services/database'
+import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 
 const created: string[] = []
 
@@ -28,14 +29,20 @@ describe('application metadata database', () => {
       accent: 'indigo',
       sidebarWidth: 320,
       sidebarCollapsed: false,
-      completedOnboardingVersion: 0
+      completedOnboardingVersion: 0,
+      ...DEFAULT_READING_SETTINGS
     })
     database.setSettings({
       theme: 'dark',
       accent: 'rose',
       sidebarWidth: 368,
       sidebarCollapsed: true,
-      completedOnboardingVersion: 1
+      completedOnboardingVersion: 1,
+      readingFont: 'iowan',
+      readingFontSize: 19,
+      readingLineHeight: 'relaxed',
+      readingColumnWidth: 'narrow',
+      readingSurface: 'paper'
     })
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
@@ -75,7 +82,12 @@ describe('application metadata database', () => {
       accent: 'rose',
       sidebarWidth: 368,
       sidebarCollapsed: true,
-      completedOnboardingVersion: 1
+      completedOnboardingVersion: 1,
+      readingFont: 'iowan',
+      readingFontSize: 19,
+      readingLineHeight: 'relaxed',
+      readingColumnWidth: 'narrow',
+      readingSurface: 'paper'
     })
     expect(database.listEnvironments()).toHaveLength(1)
     expect(database.getActiveEnvironmentId()).toBe(environment.id)
@@ -115,6 +127,27 @@ describe('application metadata database', () => {
     expect(database.getProjectExpandedPaths(project.id)).toEqual(['guides'])
     expect(database.getEnvironmentState(environment.id)).toEqual({ openFileIds: [file.id], activeFileId: file.id })
     database.close()
+  })
+
+  it('falls back safely when persisted reading preferences are invalid', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-reading-'))
+    created.push(directory)
+    const database = new AppDatabase(directory)
+    database.close()
+
+    const raw = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const insert = raw.prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
+    insert.run('reading_font', 'downloaded-font', Date.now())
+    insert.run('reading_font_size', '80', Date.now())
+    insert.run('reading_line_height', 'extra-relaxed', Date.now())
+    insert.run('reading_column_width', 'unlimited', Date.now())
+    insert.run('reading_surface', 'custom', Date.now())
+    raw.close()
+
+    const reopened = new AppDatabase(directory)
+    expect(reopened.getSettings()).toMatchObject(DEFAULT_READING_SETTINGS)
+    reopened.close()
   })
 
   it('enforces case-insensitive unique environment names', async () => {

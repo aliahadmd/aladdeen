@@ -1,3 +1,5 @@
+import type { ReadingSettings } from './reading'
+
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Accent = 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose'
 export type SaveStatus = 'editing' | 'saving' | 'saved' | 'conflict' | 'error'
@@ -330,7 +332,7 @@ export interface DocumentCapabilitiesByKind {
   pdf: DocumentCapabilities
 }
 
-export interface AppSettings {
+export interface AppSettings extends ReadingSettings {
   theme: ThemeMode
   accent: Accent
   sidebarWidth: number

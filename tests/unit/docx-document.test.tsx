@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
+import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 import {
   cleanupDocumentRuntime,
   getDocumentRuntime
@@ -124,7 +125,8 @@ describe('Eigenpal DOCX adapter', () => {
         accent: 'indigo',
         sidebarWidth: 320,
         sidebarCollapsed: false,
-        completedOnboardingVersion: 1
+        completedOnboardingVersion: 1,
+        ...DEFAULT_READING_SETTINGS
       }
     })
   })

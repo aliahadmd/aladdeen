@@ -1665,25 +1665,132 @@ body.is-resizing-sidebar * {
 }
 
 /* AST-rendered Markdown, GFM, KaTeX, callouts, and Mermaid output. */
+.reading-surface {
+  --reading-font: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  --reading-line-height: 1.72;
+  --reading-column-width: 720px;
+  --reading-bg: var(--surface-elevated);
+  --reading-text: var(--text);
+  --reading-text-soft: var(--text-soft);
+  --reading-text-muted: var(--text-muted);
+  --reading-border: var(--border);
+  --reading-border-strong: var(--border-strong);
+  --reading-code-bg: var(--surface-muted);
+  --reading-table-row: color-mix(in oklab, var(--surface-muted) 48%, transparent);
+  --reading-mark: color-mix(in oklab, #ffd75a 55%, var(--surface-elevated));
+  background: var(--reading-bg);
+  color: var(--reading-text);
+}
+
+.reading-surface[data-reading-font='avenir'] {
+  --reading-font: "Avenir Next", Avenir, system-ui, -apple-system, sans-serif;
+}
+
+.reading-surface[data-reading-font='iowan'] {
+  --reading-font: "Iowan Old Style", Charter, "Bitstream Charter", Georgia, serif;
+}
+
+.reading-surface[data-reading-font='georgia'] {
+  --reading-font: Georgia, "Times New Roman", serif;
+}
+
+.reading-surface[data-reading-surface='paper'] {
+  --reading-bg: #fbf8f1;
+  --reading-text: #302b24;
+  --reading-text-soft: #665f55;
+  --reading-text-muted: #746b61;
+  --reading-border: #e4dccf;
+  --reading-border-strong: #cfc3b3;
+  --reading-code-bg: #f2ece1;
+  --reading-table-row: #f7f1e7;
+  --reading-mark: #f5d77a;
+}
+
+.reading-surface[data-reading-surface='sage'] {
+  --reading-bg: #f3f7f2;
+  --reading-text: #293128;
+  --reading-text-soft: #566454;
+  --reading-text-muted: #647261;
+  --reading-border: #d9e1d5;
+  --reading-border-strong: #c1cdc0;
+  --reading-code-bg: #eaf0e7;
+  --reading-table-row: #eef3eb;
+  --reading-mark: #e8d66f;
+}
+
+.reading-surface[data-reading-surface='slate'] {
+  --reading-bg: #f3f5f7;
+  --reading-text: #252a31;
+  --reading-text-soft: #56606b;
+  --reading-text-muted: #65717e;
+  --reading-border: #d9dee4;
+  --reading-border-strong: #c2cad3;
+  --reading-code-bg: #e8ecf0;
+  --reading-table-row: #eef1f4;
+  --reading-mark: #e9d36b;
+}
+
+[data-theme='dark'] .reading-surface[data-reading-surface='paper'] {
+  --reading-bg: #1c1915;
+  --reading-text: #ede6da;
+  --reading-text-soft: #c2b8aa;
+  --reading-text-muted: #948a7e;
+  --reading-border: #39332c;
+  --reading-border-strong: #51483d;
+  --reading-code-bg: #26211c;
+  --reading-table-row: #221e19;
+  --reading-mark: #5a4820;
+}
+
+[data-theme='dark'] .reading-surface[data-reading-surface='sage'] {
+  --reading-bg: #171b18;
+  --reading-text: #e3eae2;
+  --reading-text-soft: #b2bdb0;
+  --reading-text-muted: #849081;
+  --reading-border: #303833;
+  --reading-border-strong: #465149;
+  --reading-code-bg: #202621;
+  --reading-table-row: #1c211d;
+  --reading-mark: #4e4821;
+}
+
+[data-theme='dark'] .reading-surface[data-reading-surface='slate'] {
+  --reading-bg: #181b20;
+  --reading-text: #e6e9ee;
+  --reading-text-soft: #b4bac3;
+  --reading-text-muted: #858c97;
+  --reading-border: #30353d;
+  --reading-border-strong: #454c57;
+  --reading-code-bg: #20242a;
+  --reading-table-row: #1d2127;
+  --reading-mark: #514821;
+}
+
+.reading-surface .markdown-body ::selection,
+.reading-settings-preview ::selection {
+  background: color-mix(in oklab, var(--accent) 30%, var(--reading-bg));
+  color: var(--reading-text);
+}
+
 .markdown-body {
-  width: min(100% - 72px, 780px);
+  width: min(100% - 72px, var(--reading-column-width, 720px));
   min-height: 100%;
   margin: 0 auto;
   padding: 64px 0 96px;
-  color: var(--text);
-  font-size: 15px;
-  line-height: 1.72;
+  color: var(--reading-text, var(--text));
+  font-family: var(--reading-font, system-ui, -apple-system, sans-serif);
+  font-size: var(--reading-font-size, 16px);
+  line-height: var(--reading-line-height, 1.72);
   overflow-wrap: anywhere;
 }
 
 .is-editing .markdown-body {
-  width: min(100% - 50px, 720px);
+  width: min(100% - 50px, var(--reading-column-width, 720px));
   padding-top: 60px;
-  font-size: 14px;
 }
 
 .is-editing .preview-pane:has(.heading-outline) .markdown-body {
-  width: min(100% - 72px, 720px);
+  width: min(100% - 72px, var(--reading-column-width, 720px));
 }
 
 .markdown-body > :first-child {
@@ -1704,7 +1811,7 @@ body.is-resizing-sidebar * {
 .markdown-body h4,
 .markdown-body h5,
 .markdown-body h6 {
-  color: var(--text);
+  color: var(--reading-text, var(--text));
   font-weight: 680;
   line-height: 1.25;
   letter-spacing: -.018em;
@@ -1713,7 +1820,7 @@ body.is-resizing-sidebar * {
 .markdown-body h1 {
   margin: 0 0 .75em;
   padding-bottom: .35em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--reading-border, var(--border));
   font-size: 2.25em;
   letter-spacing: -.035em;
 }
@@ -1721,7 +1828,7 @@ body.is-resizing-sidebar * {
 .markdown-body h2 {
   margin: 1.65em 0 .65em;
   padding-bottom: .3em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--reading-border, var(--border));
   font-size: 1.55em;
 }
 
@@ -1737,13 +1844,13 @@ body.is-resizing-sidebar * {
 
 .markdown-body h5 {
   margin: 1.25em 0 .4em;
-  color: var(--text-soft);
+  color: var(--reading-text-soft, var(--text-soft));
   font-size: .98em;
 }
 
 .markdown-body h6 {
   margin: 1.2em 0 .35em;
-  color: var(--text-muted);
+  color: var(--reading-text-muted, var(--text-muted));
   font-size: .9em;
   letter-spacing: .01em;
   text-transform: uppercase;
@@ -1804,7 +1911,7 @@ body.is-resizing-sidebar * {
   margin-left: 0;
   padding: .15em 0 .15em 1.05em;
   border-left: 3px solid var(--accent-muted);
-  color: var(--text-soft);
+  color: var(--reading-text-soft, var(--text-soft));
 }
 
 .markdown-body blockquote > :first-child {
@@ -1817,7 +1924,7 @@ body.is-resizing-sidebar * {
 
 .markdown-body dl {
   padding: .2em 0 .2em 1.1em;
-  border-left: 2px solid var(--border);
+  border-left: 2px solid var(--reading-border, var(--border));
 }
 
 .markdown-body dt {
@@ -1831,22 +1938,22 @@ body.is-resizing-sidebar * {
 
 .markdown-body dd {
   margin: .22em 0 .6em 1.25em;
-  color: var(--text-soft);
+  color: var(--reading-text-soft, var(--text-soft));
 }
 
 .markdown-body code {
   padding: .14em .34em;
-  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  border: 1px solid color-mix(in oklab, var(--reading-border, var(--border)) 80%, transparent);
   border-radius: 5px;
-  background: var(--surface-muted);
-  color: color-mix(in oklab, var(--accent) 68%, var(--text));
+  background: var(--reading-code-bg, var(--surface-muted));
+  color: color-mix(in oklab, var(--accent) 68%, var(--reading-text, var(--text)));
   font: .88em "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 .markdown-body pre {
   overflow: auto;
   padding: 15px 17px;
-  border: 1px solid color-mix(in oklab, var(--border-strong) 72%, transparent);
+  border: 1px solid color-mix(in oklab, var(--reading-border-strong, var(--border-strong)) 72%, transparent);
   border-radius: 10px;
   background: #17171f;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .035);
@@ -1863,7 +1970,7 @@ body.is-resizing-sidebar * {
 
 .markdown-code-block {
   overflow: hidden;
-  border: 1px solid color-mix(in oklab, var(--border-strong) 72%, transparent);
+  border: 1px solid color-mix(in oklab, var(--reading-border-strong, var(--border-strong)) 72%, transparent);
   border-radius: 10px;
   background: #17171f;
   box-shadow: inset 0 1px 0 rgb(255 255 255 / .035);
@@ -1918,25 +2025,25 @@ body.is-resizing-sidebar * {
 .markdown-body th,
 .markdown-body td {
   padding: 7px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--reading-border, var(--border));
   text-align: left;
   vertical-align: top;
 }
 
 .markdown-body th {
-  background: var(--surface-muted);
+  background: var(--reading-code-bg, var(--surface-muted));
   font-weight: 650;
 }
 
 .markdown-body tr:nth-child(even) td {
-  background: color-mix(in oklab, var(--surface-muted) 48%, transparent);
+  background: var(--reading-table-row, color-mix(in oklab, var(--surface-muted) 48%, transparent));
 }
 
 .markdown-body hr {
   height: 1px;
   margin: 2em 0;
   border: 0;
-  background: var(--border);
+  background: var(--reading-border, var(--border));
 }
 
 .markdown-body img {
@@ -1953,17 +2060,17 @@ body.is-resizing-sidebar * {
 }
 
 .markdown-body figcaption {
-  color: var(--text-muted);
+  color: var(--reading-text-muted, var(--text-muted));
   font-size: .86em;
   text-align: center;
 }
 
 .markdown-body :is(kbd, samp) {
   padding: .12em .38em;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--reading-border-strong, var(--border-strong));
   border-bottom-width: 2px;
   border-radius: 5px;
-  background: var(--surface-muted);
+  background: var(--reading-code-bg, var(--surface-muted));
   font: .82em "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -1973,7 +2080,7 @@ body.is-resizing-sidebar * {
 
 .markdown-body mark {
   border-radius: 3px;
-  background: color-mix(in oklab, #ffd75a 55%, var(--surface-elevated));
+  background: var(--reading-mark, color-mix(in oklab, #ffd75a 55%, var(--surface-elevated)));
   color: inherit;
   padding: .04em .18em;
 }
@@ -1994,13 +2101,13 @@ body.is-resizing-sidebar * {
 
 .markdown-body details {
   padding: .7em .85em;
-  border: 1px solid var(--border);
+  border: 1px solid var(--reading-border, var(--border));
   border-radius: 8px;
-  background: color-mix(in oklab, var(--surface-muted) 46%, transparent);
+  background: color-mix(in oklab, var(--reading-code-bg, var(--surface-muted)) 70%, transparent);
 }
 
 .markdown-body summary {
-  color: var(--text-soft);
+  color: var(--reading-text-soft, var(--text-soft));
   font-weight: 650;
   cursor: pointer;
 }
@@ -2017,11 +2124,11 @@ body.is-resizing-sidebar * {
 .markdown-toc {
   padding: .7em .9em .8em;
   border-color: var(--accent-muted);
-  background: color-mix(in oklab, var(--accent-soft) 48%, var(--surface-elevated));
+  background: color-mix(in oklab, var(--accent-soft) 48%, var(--reading-bg, var(--surface-elevated)));
 }
 
 .markdown-toc .markdown-toc-title {
-  color: var(--text);
+  color: var(--reading-text, var(--text));
 }
 
 .markdown-toc ul {
@@ -2037,11 +2144,11 @@ body.is-resizing-sidebar * {
   --callout-color: var(--accent);
   position: relative;
   padding: .72em .9em .78em 1em;
-  border: 1px solid color-mix(in oklab, var(--callout-color) 36%, var(--border));
+  border: 1px solid color-mix(in oklab, var(--callout-color) 36%, var(--reading-border, var(--border)));
   border-left: 4px solid var(--callout-color);
   border-radius: 8px;
-  background: color-mix(in oklab, var(--callout-color) 8%, var(--surface-elevated));
-  color: var(--text-soft);
+  background: color-mix(in oklab, var(--callout-color) 8%, var(--reading-bg, var(--surface-elevated)));
+  color: var(--reading-text-soft, var(--text-soft));
 }
 
 .markdown-callout.callout-tip {
@@ -2083,12 +2190,12 @@ body.is-resizing-sidebar * {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-.mermaid-diagram {
+.markdown-body .mermaid-diagram {
   min-height: 92px;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--reading-border, var(--border));
   border-radius: 10px;
-  background: color-mix(in oklab, var(--surface-muted) 50%, var(--surface-elevated));
+  background: color-mix(in oklab, var(--reading-code-bg, var(--surface-muted)) 50%, var(--reading-bg, var(--surface-elevated)));
 }
 
 .mermaid-diagram figcaption {
@@ -2101,7 +2208,7 @@ body.is-resizing-sidebar * {
 }
 
 .mermaid-error {
-  border-color: color-mix(in oklab, var(--danger) 38%, var(--border));
+  border-color: color-mix(in oklab, var(--danger) 38%, var(--reading-border, var(--border)));
 }
 
 .mermaid-error figcaption {
@@ -2127,8 +2234,8 @@ body.is-resizing-sidebar * {
 .markdown-body section[data-footnotes] {
   margin-top: 2.4em;
   padding-top: .8em;
-  border-top: 1px solid var(--border);
-  color: var(--text-soft);
+  border-top: 1px solid var(--reading-border, var(--border));
+  color: var(--reading-text-soft, var(--text-soft));
   font-size: .9em;
 }
 
@@ -2142,6 +2249,54 @@ body.is-resizing-sidebar * {
 .markdown-body [data-footnote-backref] {
   margin-left: .25em;
   text-decoration: none;
+}
+
+.reading-settings-preview {
+  border-color: var(--reading-border);
+  background: var(--reading-bg);
+  color: var(--reading-text);
+  font-family: var(--reading-font);
+  font-size: var(--reading-font-size, 16px);
+  line-height: var(--reading-line-height);
+}
+
+.reading-settings-preview h4 {
+  margin: 0 0 .55em;
+  color: var(--reading-text);
+  font-size: 1.18em;
+  font-weight: 680;
+  letter-spacing: -.018em;
+}
+
+.reading-settings-preview p {
+  margin: .65em 0;
+}
+
+.reading-settings-preview blockquote {
+  margin: .8em 0;
+  padding-left: .9em;
+  border-left: 3px solid var(--accent-muted);
+  color: var(--reading-text-soft);
+}
+
+.reading-settings-preview code {
+  padding: .1em .3em;
+  border: 1px solid var(--reading-border);
+  border-radius: 4px;
+  background: var(--reading-code-bg);
+  color: color-mix(in oklab, var(--accent) 68%, var(--reading-text));
+  font: .84em "SFMono-Regular", Consolas, monospace;
+}
+
+.reading-size-slider {
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.reading-size-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 999px;
 }
 
 /* Cross-component keyframes and third-party overrides. */
@@ -2472,13 +2627,12 @@ body.is-resizing-sidebar * {
   }
 
   .markdown-body {
-    width: min(100% - 34px, 720px);
+    width: min(100% - 34px, var(--reading-column-width, 720px));
     padding-top: 64px;
-    font-size: 14px;
   }
 
   .preview-pane:has(.heading-outline) .markdown-body {
-    width: min(100% - 72px, 720px);
+    width: min(100% - 72px, var(--reading-column-width, 720px));
   }
 
   .is-editing .markdown-body {

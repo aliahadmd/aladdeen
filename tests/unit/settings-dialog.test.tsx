@@ -4,13 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SettingsDialog } from '@renderer/components/SettingsDialog'
 import { useAppStore } from '@renderer/store/app-store'
 import type { AladdeenApi, AppSettings } from '@shared/contracts'
+import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 
 const defaultSettings: AppSettings = {
   theme: 'system',
   accent: 'indigo',
   sidebarWidth: 320,
   sidebarCollapsed: false,
-  completedOnboardingVersion: 1
+  completedOnboardingVersion: 1,
+  ...DEFAULT_READING_SETTINGS
 }
 
 describe('settings dialog', () => {
@@ -83,6 +85,10 @@ describe('settings dialog', () => {
     appearanceTab.focus()
     fireEvent.keyDown(appearanceTab, { key: 'ArrowDown' })
 
+    const readingTab = screen.getByRole('tab', { name: 'Reading' })
+    expect(readingTab).toHaveFocus()
+    fireEvent.keyDown(readingTab, { key: 'ArrowDown' })
+
     const shortcutsTab = screen.getByRole('tab', { name: 'Keyboard shortcuts' })
     expect(shortcutsTab).toHaveFocus()
     expect(shortcutsTab).toHaveAttribute('aria-selected', 'false')
@@ -111,6 +117,35 @@ describe('settings dialog', () => {
     view.unmount()
     render(<SettingsDialog open onOpenChange={vi.fn()} />)
     expect(screen.getByRole('tab', { name: 'About' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('updates and resets Markdown reading preferences', async () => {
+    render(<SettingsDialog open onOpenChange={vi.fn()} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Reading' }))
+
+    expect(screen.getByRole('heading', { name: 'Reading' })).toBeVisible()
+    expect(screen.getByText('Your current reading appearance.')).toBeVisible()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Iowan Made for long reading' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ ...defaultSettings, readingFont: 'iowan' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Increase reading text size' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({ ...defaultSettings, readingFont: 'iowan', readingFontSize: 17 }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Relaxed' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Wide' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Sage' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({
+      ...defaultSettings,
+      readingFont: 'iowan',
+      readingFontSize: 17,
+      readingLineHeight: 'relaxed',
+      readingColumnWidth: 'wide',
+      readingSurface: 'sage'
+    }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith(defaultSettings))
   })
 
   it('closes with Escape and restores focus to the opener', async () => {

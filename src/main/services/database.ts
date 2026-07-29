@@ -15,13 +15,23 @@ import {
   documentKindFromName,
   isDocumentKind
 } from '@shared/documents'
+import {
+  DEFAULT_READING_SETTINGS,
+  READING_COLUMN_WIDTHS,
+  READING_FONTS,
+  READING_FONT_SIZE_MAX,
+  READING_FONT_SIZE_MIN,
+  READING_LINE_HEIGHTS,
+  READING_SURFACES
+} from '@shared/reading'
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   accent: 'indigo',
   sidebarWidth: 320,
   sidebarCollapsed: false,
-  completedOnboardingVersion: 0
+  completedOnboardingVersion: 0,
+  ...DEFAULT_READING_SETTINGS
 }
 
 const DATABASE_FILENAME = 'aladdeen.sqlite'
@@ -438,6 +448,24 @@ export class AppDatabase {
           settings.completedOnboardingVersion = version
         }
       }
+      if (row.key === 'reading_font' && READING_FONTS.includes(row.value as AppSettings['readingFont'])) {
+        settings.readingFont = row.value as AppSettings['readingFont']
+      }
+      if (row.key === 'reading_font_size') {
+        const size = Number(row.value)
+        if (Number.isInteger(size) && size >= READING_FONT_SIZE_MIN && size <= READING_FONT_SIZE_MAX) {
+          settings.readingFontSize = size
+        }
+      }
+      if (row.key === 'reading_line_height' && READING_LINE_HEIGHTS.includes(row.value as AppSettings['readingLineHeight'])) {
+        settings.readingLineHeight = row.value as AppSettings['readingLineHeight']
+      }
+      if (row.key === 'reading_column_width' && READING_COLUMN_WIDTHS.includes(row.value as AppSettings['readingColumnWidth'])) {
+        settings.readingColumnWidth = row.value as AppSettings['readingColumnWidth']
+      }
+      if (row.key === 'reading_surface' && READING_SURFACES.includes(row.value as AppSettings['readingSurface'])) {
+        settings.readingSurface = row.value as AppSettings['readingSurface']
+      }
     }
     return settings
   }
@@ -450,6 +478,11 @@ export class AppDatabase {
       this.setSetting('sidebar_width', String(settings.sidebarWidth))
       this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
       this.setSetting('completed_onboarding_version', String(settings.completedOnboardingVersion))
+      this.setSetting('reading_font', settings.readingFont)
+      this.setSetting('reading_font_size', String(settings.readingFontSize))
+      this.setSetting('reading_line_height', settings.readingLineHeight)
+      this.setSetting('reading_column_width', settings.readingColumnWidth)
+      this.setSetting('reading_surface', settings.readingSurface)
       this.db.exec('COMMIT')
       return settings
     } catch (error) {

@@ -1,9 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AladdeenApi, TextOpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 import { MarkdownPreview } from '@renderer/components/MarkdownPreview'
 import { MarkdownImage } from '@renderer/components/MarkdownImage'
+import { useAppStore } from '@renderer/store/app-store'
 
 const document: TextOpenDocument = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -53,5 +54,42 @@ describe('Markdown preview', () => {
       'src',
       'aladdeen-asset://document/second-document?path=.%2Favailable.png'
     )
+  })
+
+  it('applies Markdown-only reading preferences and preserves relative scroll progress', () => {
+    useAppStore.setState((state) => ({
+      settings: {
+        ...state.settings,
+        readingFont: 'iowan',
+        readingFontSize: 18,
+        readingLineHeight: 'relaxed',
+        readingColumnWidth: 'wide',
+        readingSurface: 'sage'
+      }
+    }))
+    const { container } = render(<MarkdownPreview document={document} />)
+    const scroll = container.querySelector<HTMLElement>('.preview-scroll')
+    expect(scroll).not.toBeNull()
+    expect(scroll).toHaveAttribute('data-reading-font', 'iowan')
+    expect(scroll).toHaveAttribute('data-reading-line-height', 'relaxed')
+    expect(scroll).toHaveAttribute('data-reading-column-width', 'wide')
+    expect(scroll).toHaveAttribute('data-reading-surface', 'sage')
+    expect(scroll?.style.getPropertyValue('--reading-font-size')).toBe('18px')
+    expect(scroll?.style.getPropertyValue('--reading-line-height')).toBe('1.9')
+    expect(scroll?.style.getPropertyValue('--reading-column-width')).toBe('960px')
+
+    let scrollHeight = 1_000
+    Object.defineProperty(scroll, 'scrollHeight', { configurable: true, get: () => scrollHeight })
+    Object.defineProperty(scroll, 'clientHeight', { configurable: true, value: 100 })
+    if (scroll) scroll.scrollTop = 450
+    fireEvent.scroll(scroll!)
+
+    scrollHeight = 1_900
+    act(() => {
+      useAppStore.setState((state) => ({
+        settings: { ...state.settings, readingFontSize: 19 }
+      }))
+    })
+    expect(scroll?.scrollTop).toBe(900)
   })
 })

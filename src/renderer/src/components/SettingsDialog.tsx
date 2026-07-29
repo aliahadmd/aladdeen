@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AtSign, BookOpen, Check, Command, ExternalLink, Github, Info, Mail, Palette, X } from 'lucide-react'
+import { AtSign, BookOpen, Check, Command, ExternalLink, Github, Info, Mail, Minus, Palette, Plus, RotateCcw, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
+import type { AppSettings } from '@shared/contracts'
+import {
+  DEFAULT_READING_SETTINGS,
+  READING_FONT_SIZE_MAX,
+  READING_FONT_SIZE_MIN,
+  READING_LINE_HEIGHT_VALUES
+} from '@shared/reading'
 import { cn } from '@renderer/lib/cn'
 import { COMPACT_SETTINGS_QUERY } from '@renderer/lib/breakpoints'
 import {
@@ -19,7 +26,7 @@ interface SettingsDialogProps {
   onShowTutorial?(): void
 }
 
-type SettingsCategory = 'appearance' | 'shortcuts' | 'about'
+type SettingsCategory = 'appearance' | 'reading' | 'shortcuts' | 'about'
 
 interface SettingsCategoryDefinition {
   id: SettingsCategory
@@ -40,6 +47,12 @@ const SETTINGS_CATEGORIES: SettingsCategoryDefinition[] = [
     label: 'Appearance',
     description: 'Choose how Aladdeen looks on this device.',
     icon: Palette
+  },
+  {
+    id: 'reading',
+    label: 'Reading',
+    description: 'Tune Markdown previews for comfortable, focused reading.',
+    icon: BookOpen
   },
   {
     id: 'shortcuts',
@@ -256,6 +269,12 @@ export function SettingsDialog({ open, onOpenChange, onShowTutorial }: SettingsD
                   onUpdate={(next) => void updateSettings(next)}
                 />
               )}
+              {activeCategory === 'reading' && (
+                <ReadingSettings
+                  settings={settings}
+                  onUpdate={(next) => void updateSettings(next)}
+                />
+              )}
               {activeCategory === 'shortcuts' && (
                 <ShortcutSettings />
               )}
@@ -273,6 +292,224 @@ export function SettingsDialog({ open, onOpenChange, onShowTutorial }: SettingsD
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  )
+}
+
+const READING_FONT_OPTIONS = [
+  { value: 'system', label: 'System', sample: 'Clear and familiar', className: 'font-sans' },
+  { value: 'avenir', label: 'Avenir', sample: 'Calm and modern', className: 'font-["Avenir_Next",system-ui,sans-serif]' },
+  { value: 'iowan', label: 'Iowan', sample: 'Made for long reading', className: 'font-["Iowan_Old_Style",Charter,serif]' },
+  { value: 'georgia', label: 'Georgia', sample: 'Classic and sturdy', className: 'font-[Georgia,serif]' }
+] as const
+
+const READING_LINE_HEIGHT_OPTIONS = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'relaxed', label: 'Relaxed' }
+] as const
+
+const READING_COLUMN_WIDTH_OPTIONS = [
+  { value: 'narrow', label: 'Narrow' },
+  { value: 'comfortable', label: 'Comfortable' },
+  { value: 'wide', label: 'Wide' }
+] as const
+
+const READING_SURFACE_OPTIONS = [
+  { value: 'default', label: 'Default', swatch: 'linear-gradient(135deg, #ffffff 0 50%, #18181b 50%)' },
+  { value: 'paper', label: 'Paper', swatch: 'linear-gradient(135deg, #FBF8F1 0 50%, #1C1915 50%)' },
+  { value: 'sage', label: 'Sage', swatch: 'linear-gradient(135deg, #F3F7F2 0 50%, #171B18 50%)' },
+  { value: 'slate', label: 'Slate', swatch: 'linear-gradient(135deg, #F3F5F7 0 50%, #181B20 50%)' }
+] as const
+
+function ReadingSettings({
+  settings,
+  onUpdate
+}: {
+  settings: AppSettings
+  onUpdate(next: Partial<AppSettings>): void
+}): React.JSX.Element {
+  const resetReading = (): void => onUpdate({ ...DEFAULT_READING_SETTINGS })
+
+  return (
+    <div className="space-y-6 py-3">
+      <section aria-labelledby="reading-font-label">
+        <div>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="reading-font-label">Reading font</h3>
+          <p className="mt-1 mb-3 text-[12px] leading-[1.45] text-foreground-muted">Choose a curated macOS typeface for Markdown prose.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 max-[500px]:grid-cols-1" role="group" aria-label="Reading font">
+          {READING_FONT_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              className={cn(
+                'relative min-h-[66px] rounded-lg border border-border bg-surface px-3 py-[10px] text-left transition-colors hover:border-border-strong hover:bg-surface-hover',
+                settings.readingFont === option.value && 'border-accent bg-accent-soft hover:border-accent hover:bg-accent-soft'
+              )}
+              type="button"
+              aria-pressed={settings.readingFont === option.value}
+              onClick={() => onUpdate({ readingFont: option.value })}
+            >
+              <span className="flex items-center justify-between gap-2 text-[12px] font-[650] text-foreground">
+                {option.label}
+                {settings.readingFont === option.value && <Check size={14} className="text-accent" aria-hidden="true" />}
+              </span>
+              <span className={cn('mt-[7px] block text-[15px] text-foreground-soft', option.className)}>{option.sample}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-t border-border pt-5" aria-labelledby="reading-size-label">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="m-0 text-[13px] font-[620] text-foreground" id="reading-size-label">Text size</h3>
+            <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">Applies consistently in preview and split layouts.</p>
+          </div>
+          <span className="min-w-[42px] text-right text-[12px] font-[650] tabular-nums text-foreground" aria-live="polite">{settings.readingFontSize} px</span>
+        </div>
+        <div className="mt-4 grid grid-cols-[32px_minmax(120px,1fr)_32px] items-center gap-3">
+          <button
+            className="grid h-8 w-8 place-items-center rounded-md border border-border bg-surface text-foreground-soft hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            aria-label="Decrease reading text size"
+            disabled={settings.readingFontSize <= READING_FONT_SIZE_MIN}
+            onClick={() => onUpdate({ readingFontSize: Math.max(READING_FONT_SIZE_MIN, settings.readingFontSize - 1) })}
+          >
+            <Minus size={14} />
+          </button>
+          <input
+            className="reading-size-slider w-full accent-[var(--accent)]"
+            type="range"
+            min={READING_FONT_SIZE_MIN}
+            max={READING_FONT_SIZE_MAX}
+            step={1}
+            value={settings.readingFontSize}
+            aria-labelledby="reading-size-label"
+            aria-valuetext={`${settings.readingFontSize} pixels`}
+            onChange={(event) => onUpdate({ readingFontSize: Number(event.currentTarget.value) })}
+          />
+          <button
+            className="grid h-8 w-8 place-items-center rounded-md border border-border bg-surface text-foreground-soft hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+            type="button"
+            aria-label="Increase reading text size"
+            disabled={settings.readingFontSize >= READING_FONT_SIZE_MAX}
+            onClick={() => onUpdate({ readingFontSize: Math.min(READING_FONT_SIZE_MAX, settings.readingFontSize + 1) })}
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </section>
+
+      <ReadingSegmentedControl
+        id="reading-spacing-label"
+        label="Line spacing"
+        description="Give dense notes more room or keep them compact."
+        options={READING_LINE_HEIGHT_OPTIONS}
+        value={settings.readingLineHeight}
+        onChange={(readingLineHeight) => onUpdate({ readingLineHeight })}
+      />
+
+      <ReadingSegmentedControl
+        id="reading-width-label"
+        label="Reading column"
+        description="Limit line length for easier scanning and sustained reading."
+        options={READING_COLUMN_WIDTH_OPTIONS}
+        value={settings.readingColumnWidth}
+        onChange={(readingColumnWidth) => onUpdate({ readingColumnWidth })}
+      />
+
+      <section className="border-t border-border pt-5" aria-labelledby="reading-surface-label">
+        <h3 className="m-0 text-[13px] font-[620] text-foreground" id="reading-surface-label">Reading surface</h3>
+        <p className="mt-1 mb-3 text-[12px] leading-[1.45] text-foreground-muted">Adaptive light and dark palettes apply only to Markdown previews.</p>
+        <div className="grid grid-cols-4 gap-2 max-[500px]:grid-cols-2" role="group" aria-label="Reading surface">
+          {READING_SURFACE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              className={cn(
+                'rounded-lg border border-border bg-surface p-2 text-[11px] font-[620] text-foreground-soft transition-colors hover:border-border-strong hover:bg-surface-hover',
+                settings.readingSurface === option.value && 'border-accent bg-accent-soft text-foreground hover:border-accent hover:bg-accent-soft'
+              )}
+              type="button"
+              aria-pressed={settings.readingSurface === option.value}
+              onClick={() => onUpdate({ readingSurface: option.value })}
+            >
+              <span className="mb-2 block h-7 rounded-[5px] border border-black/10" style={{ background: option.swatch }} aria-hidden="true" />
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-t border-border pt-5" aria-labelledby="reading-preview-label">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="m-0 text-[13px] font-[620] text-foreground" id="reading-preview-label">Preview</h3>
+            <p className="mt-1 mb-0 text-[12px] text-foreground-muted">Your current reading appearance.</p>
+          </div>
+          <button
+            className="inline-flex h-8 shrink-0 items-center gap-[6px] rounded-md border border-border bg-surface px-[10px] text-[11px] font-[620] text-foreground-soft hover:bg-surface-hover hover:text-foreground"
+            type="button"
+            onClick={resetReading}
+          >
+            <RotateCcw size={13} /> Reset
+          </button>
+        </div>
+        <div
+          className="reading-settings-preview reading-surface rounded-xl border p-5"
+          data-reading-font={settings.readingFont}
+          data-reading-line-height={settings.readingLineHeight}
+          data-reading-surface={settings.readingSurface}
+          style={{
+            '--reading-font-size': `${settings.readingFontSize}px`,
+            '--reading-line-height': READING_LINE_HEIGHT_VALUES[settings.readingLineHeight]
+          } as React.CSSProperties}
+        >
+          <h4>A place for careful reading</h4>
+          <p>Good typography lets the document become the focus. Notes, evidence, and ideas stay clear without changing the source file.</p>
+          <blockquote>Reading is part of the research process.</blockquote>
+          <p>Inline <code>code</code> keeps its own specialized typeface.</p>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ReadingSegmentedControl<T extends string>({
+  id,
+  label,
+  description,
+  options,
+  value,
+  onChange
+}: {
+  id: string
+  label: string
+  description: string
+  options: ReadonlyArray<{ value: T; label: string }>
+  value: T
+  onChange(value: T): void
+}): React.JSX.Element {
+  return (
+    <section className="border-t border-border pt-5" aria-labelledby={id}>
+      <h3 className="m-0 text-[13px] font-[620] text-foreground" id={id}>{label}</h3>
+      <p className="mt-1 mb-3 text-[12px] leading-[1.45] text-foreground-muted">{description}</p>
+      <div className="grid grid-cols-3 gap-[3px] rounded-lg border border-border bg-surface p-[3px]" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            key={option.value}
+            className={cn(
+              'min-h-8 rounded-md border-0 bg-transparent px-2 text-[11px] font-semibold text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground',
+              value === option.value && 'bg-surface-elevated text-foreground shadow-[0_1px_4px_rgb(0_0_0/.1)] hover:bg-surface-elevated'
+            )}
+            type="button"
+            aria-pressed={value === option.value}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 

@@ -771,6 +771,58 @@ test('renders responsive settings navigation in light and dark themes', async ()
       }
     }
 
+    await settings.getByRole('tab', { name: 'Reading' }).click()
+    await expect(settings.getByRole('heading', { name: 'Reading', exact: true })).toBeVisible()
+    for (const theme of ['light', 'dark'] as const) {
+      await window.evaluate((nextTheme) => {
+        document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+        document.documentElement.dataset.theme = nextTheme
+      }, theme)
+      for (const viewport of viewports) {
+        await window.setViewportSize(viewport)
+        await expect(window).toHaveScreenshot(`reading-settings-${viewport.width}-${theme}.png`, {
+          animations: 'disabled',
+          maxDiffPixelRatio: 0.01
+        })
+      }
+    }
+
+    const surfacePalettes = {
+      light: [
+        ['Default', 'rgb(255, 255, 255)', 'rgb(35, 35, 44)'],
+        ['Paper', 'rgb(251, 248, 241)', 'rgb(48, 43, 36)'],
+        ['Sage', 'rgb(243, 247, 242)', 'rgb(41, 49, 40)'],
+        ['Slate', 'rgb(243, 245, 247)', 'rgb(37, 42, 49)']
+      ],
+      dark: [
+        ['Default', 'rgb(37, 37, 41)', 'rgb(237, 237, 241)'],
+        ['Paper', 'rgb(28, 25, 21)', 'rgb(237, 230, 218)'],
+        ['Sage', 'rgb(23, 27, 24)', 'rgb(227, 234, 226)'],
+        ['Slate', 'rgb(24, 27, 32)', 'rgb(230, 233, 238)']
+      ]
+    } as const
+    const readingSample = settings.locator('.reading-settings-preview')
+    for (const theme of ['light', 'dark'] as const) {
+      await window.evaluate((nextTheme) => {
+        document.documentElement.classList.toggle('dark', nextTheme === 'dark')
+        document.documentElement.dataset.theme = nextTheme
+      }, theme)
+      for (const [surface, background, foreground] of surfacePalettes[theme]) {
+        await settings.getByRole('button', { name: surface, exact: true }).click()
+        await expect(readingSample).toHaveCSS('background-color', background)
+        await expect(readingSample).toHaveCSS('color', foreground)
+      }
+    }
+
+    await settings.getByRole('button', { name: /Iowan Made for long reading/ }).click()
+    await settings.locator('input[type="range"]').fill('20')
+    await settings.getByRole('button', { name: 'Sage' }).click()
+    await expect(readingSample).toHaveAttribute('data-reading-font', 'iowan')
+    await expect(readingSample).toHaveAttribute('data-reading-surface', 'sage')
+    await expect(readingSample).toHaveCSS('font-size', '20px')
+    await expect(readingSample).toHaveCSS('background-color', 'rgb(23, 27, 24)')
+    await settings.getByRole('button', { name: 'Reset' }).click()
+
     await settings.getByRole('tab', { name: 'About' }).click()
     await expect(settings.getByRole('heading', { name: 'About' })).toBeVisible()
     await expect(settings.getByText(/original disk locations/i)).toBeVisible()

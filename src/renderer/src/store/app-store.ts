@@ -22,6 +22,7 @@ import type {
 } from '@shared/contracts'
 import { isTextDocumentKind, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import { findNearestLiteralMatch, matchesLiteral } from '@shared/search'
+import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 import {
   cleanupDocumentRuntime,
   getDocumentRuntime
@@ -131,7 +132,8 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
     accent: 'indigo',
     sidebarWidth: 320,
     sidebarCollapsed: false,
-    completedOnboardingVersion: 0
+    completedOnboardingVersion: 0,
+    ...DEFAULT_READING_SETTINGS
   }
 })
 
@@ -425,14 +427,16 @@ export const useAppStore = create<AppState>((set, get) => {
       accent: 'indigo',
       sidebarWidth: 320,
       sidebarCollapsed: false,
-      completedOnboardingVersion: 0
+      completedOnboardingVersion: 0,
+      ...DEFAULT_READING_SETTINGS
     },
     persistedSettings: {
       theme: 'system',
       accent: 'indigo',
       sidebarWidth: 320,
       sidebarCollapsed: false,
-      completedOnboardingVersion: 0
+      completedOnboardingVersion: 0,
+      ...DEFAULT_READING_SETTINGS
     },
     editing: false,
     mobilePane: 'preview',

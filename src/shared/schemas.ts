@@ -3,6 +3,14 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_SEARCH_DOCUMENT_BYTES
 } from './limits'
+import {
+  READING_COLUMN_WIDTHS,
+  READING_FONTS,
+  READING_FONT_SIZE_MAX,
+  READING_FONT_SIZE_MIN,
+  READING_LINE_HEIGHTS,
+  READING_SURFACES
+} from './reading'
 
 const searchBufferSchema = z.string()
   .max(MAX_SEARCH_DOCUMENT_BYTES)
@@ -141,7 +149,12 @@ export const settingsSchema = z.object({
   accent: z.enum(['indigo', 'blue', 'emerald', 'amber', 'rose']),
   sidebarWidth: z.number().int().min(248).max(420),
   sidebarCollapsed: z.boolean(),
-  completedOnboardingVersion: z.number().int().min(0).max(1_000)
+  completedOnboardingVersion: z.number().int().min(0).max(1_000),
+  readingFont: z.enum(READING_FONTS),
+  readingFontSize: z.number().int().min(READING_FONT_SIZE_MIN).max(READING_FONT_SIZE_MAX),
+  readingLineHeight: z.enum(READING_LINE_HEIGHTS),
+  readingColumnWidth: z.enum(READING_COLUMN_WIDTHS),
+  readingSurface: z.enum(READING_SURFACES)
 })
 
 export const exportRequestSchema = z.object({
