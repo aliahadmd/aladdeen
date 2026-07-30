@@ -27,17 +27,60 @@ describe('settings dialog', () => {
   const setApiKey = vi.fn()
   const clearApiKey = vi.fn()
   const credentialStatus = vi.fn()
+  const beginLogin = vi.fn()
+  const respondLoginPrompt = vi.fn()
+  const reopenLoginUrl = vi.fn()
+  const cancelLogin = vi.fn()
+  const disconnectProvider = vi.fn()
+  const onAuthEvent = vi.fn()
 
   beforeEach(() => {
     update.mockImplementation(async (settings: AppSettings) => ({ ok: true, value: settings }))
     openExternal.mockResolvedValue({ ok: true, value: undefined })
     setApiKey.mockResolvedValue({ ok: true, value: undefined })
     clearApiKey.mockResolvedValue({ ok: true, value: undefined })
+    beginLogin.mockResolvedValue({ ok: true, value: { attemptId: '15cc12cb-35a0-4ef0-8d76-06eba334c5bc' } })
+    respondLoginPrompt.mockResolvedValue({ ok: true, value: undefined })
+    reopenLoginUrl.mockResolvedValue({ ok: true, value: undefined })
+    cancelLogin.mockResolvedValue({ ok: true, value: undefined })
+    disconnectProvider.mockResolvedValue({ ok: true, value: undefined })
+    onAuthEvent.mockReturnValue(() => undefined)
     credentialStatus.mockResolvedValue({
       ok: true,
       value: {
         encryptionAvailable: true,
-        providers: { anthropic: false, openai: false, google: false }
+        providers: {
+          anthropic: {
+            configured: false,
+            reauthRequired: false,
+            oauthAvailable: true,
+            apiKeyAvailable: true
+          },
+          'openai-codex': {
+            configured: false,
+            reauthRequired: false,
+            oauthAvailable: true,
+            apiKeyAvailable: false
+          },
+          'kimi-coding': {
+            configured: false,
+            reauthRequired: false,
+            oauthAvailable: true,
+            apiKeyAvailable: true
+          },
+          openai: {
+            configured: false,
+            reauthRequired: false,
+            oauthAvailable: false,
+            apiKeyAvailable: true
+          },
+          google: {
+            configured: false,
+            reauthRequired: false,
+            oauthAvailable: false,
+            apiKeyAvailable: true
+          }
+        }
       }
     })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -47,8 +90,21 @@ describe('settings dialog', () => {
     Object.defineProperty(window, 'aladdeen', {
       configurable: true,
       value: {
-        settings: { update },
-        agent: { setApiKey, clearApiKey, credentialStatus },
+        settings: {
+          update,
+          get: vi.fn().mockResolvedValue({ ok: true, value: defaultSettings })
+        },
+        agent: {
+          setApiKey,
+          clearApiKey,
+          beginLogin,
+          respondLoginPrompt,
+          reopenLoginUrl,
+          cancelLogin,
+          disconnectProvider,
+          credentialStatus,
+          onAuthEvent
+        },
         system: { openExternal }
       } as unknown as AladdeenApi
     })
@@ -172,7 +228,7 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Coding agent' }))
 
     expect(screen.getByText(/Off by default/)).toBeVisible()
-    const keyInput = screen.getByLabelText('anthropic API key')
+    const keyInput = await screen.findByLabelText('anthropic API key')
     expect(keyInput).toHaveAttribute('type', 'password')
     fireEvent.change(keyInput, { target: { value: 'secret-test-api-key' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save key' }))

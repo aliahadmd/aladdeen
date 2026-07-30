@@ -1,6 +1,8 @@
 appId: com.aladdeen.app
 productName: Aladdeen
 asar: true
+asarUnpack:
+  - out/worker/agent-worker/index.js
 directories:
   buildResources: build
   output: release/${version}

@@ -14,6 +14,8 @@ import {
   type MenuItemConstructorOptions
 } from 'electron'
 import { AppDatabase } from '@main/services/database'
+import { AgentAuthService } from '@main/services/agent-auth'
+import { AgentCredentialVault } from '@main/services/agent-credentials'
 import { AgentService } from '@main/services/agent'
 import { ExportService } from '@main/services/export'
 import { GlobalSearchService } from '@main/services/global-search'
@@ -53,6 +55,7 @@ let database: AppDatabase | null = null
 let workspace: WorkspaceService | null = null
 let globalSearch: GlobalSearchService | null = null
 let agent: AgentService | null = null
+let agentAuth: AgentAuthService | null = null
 let pendingSystemFile: string | null = null
 let pendingOpenRequest: OpenFileRequest | undefined
 let quitting = false
@@ -108,7 +111,14 @@ void app.whenReady().then(async () => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.environmentEvent, environmentEvent)
   })
   globalSearch = new GlobalSearchService(database, workspace, () => mainWindow)
-  agent = new AgentService(database, app.getPath('userData'), () => mainWindow)
+  const agentVault = new AgentCredentialVault(database)
+  agent = new AgentService(database, agentVault, app.getPath('userData'), () => mainWindow)
+  agentAuth = new AgentAuthService(
+    database,
+    agentVault,
+    () => mainWindow,
+    async () => agent?.close()
+  )
   const exportService = new ExportService(workspace, () => mainWindow)
   registerIpc({
     database,
@@ -116,6 +126,7 @@ void app.whenReady().then(async () => {
     exports: exportService,
     search: globalSearch,
     agent,
+    agentAuth,
     getWindow: () => mainWindow,
     getPendingOpenRequest: () => pendingOpenRequest,
     acceptSystemOpenFile,
@@ -534,6 +545,7 @@ async function finishQuit(): Promise<void> {
   if (!servicesClosed) {
     servicesClosed = true
     globalSearch?.close()
+    await agentAuth?.close()
     await agent?.close()
     await workspace?.close()
     database?.close()

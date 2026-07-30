@@ -557,7 +557,10 @@ export class AppDatabase {
       if (row.key === 'agent_enabled' && ['true', 'false'].includes(row.value)) {
         settings.agentEnabled = row.value === 'true'
       }
-      if (row.key === 'agent_provider' && ['anthropic', 'openai', 'google'].includes(row.value)) {
+      if (
+        row.key === 'agent_provider' &&
+        ['anthropic', 'openai-codex', 'kimi-coding', 'openai', 'google'].includes(row.value)
+      ) {
         settings.agentProvider = row.value as AppSettings['agentProvider']
       }
       if (row.key === 'agent_model_id' && row.value.length > 0 && row.value.length <= 200) {

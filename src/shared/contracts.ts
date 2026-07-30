@@ -411,7 +411,8 @@ export interface AppSettings extends ReadingSettings {
   agentPanelCollapsed: boolean
 }
 
-export type AgentProvider = 'anthropic' | 'openai' | 'google'
+export type AgentProvider = 'anthropic' | 'openai-codex' | 'kimi-coding' | 'openai' | 'google'
+export type AgentAuthType = 'oauth' | 'api_key'
 export type AgentThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AgentRunState = 'idle' | 'running' | 'aborting'
 export type AgentApprovalDecision = 'allow' | 'allow-always' | 'deny' | 'cancelled'
@@ -429,10 +430,51 @@ export interface AgentModel {
   supportsThinking: boolean
 }
 
+export interface AgentProviderCredentialStatus {
+  configured: boolean
+  authType?: AgentAuthType
+  reauthRequired: boolean
+  oauthAvailable: boolean
+  apiKeyAvailable: boolean
+}
+
 export interface AgentCredentialStatus {
   encryptionAvailable: boolean
-  providers: Record<AgentProvider, boolean>
+  providers: Record<AgentProvider, AgentProviderCredentialStatus>
 }
+
+export type AgentAuthPromptType = 'text' | 'secret' | 'select' | 'manual_code'
+
+export interface AgentAuthPromptOption {
+  id: string
+  label: string
+  description?: string
+}
+
+export type AgentAuthEvent =
+  | { type: 'started'; attemptId: string; provider: AgentProvider }
+  | { type: 'browser-opened'; attemptId: string; provider: AgentProvider }
+  | {
+      type: 'device-code'
+      attemptId: string
+      provider: AgentProvider
+      userCode: string
+      expiresAt?: number
+    }
+  | {
+      type: 'prompt'
+      attemptId: string
+      provider: AgentProvider
+      promptId: string
+      promptType: AgentAuthPromptType
+      message: string
+      placeholder?: string
+      options?: AgentAuthPromptOption[]
+    }
+  | { type: 'progress'; attemptId: string; provider: AgentProvider; message: string }
+  | { type: 'completed'; attemptId: string; provider: AgentProvider; authType: AgentAuthType }
+  | { type: 'failed'; attemptId: string; provider: AgentProvider; message: string }
+  | { type: 'cancelled'; attemptId: string; provider: AgentProvider }
 
 export type AgentEvent =
   | { type: 'run-state'; sessionId: string; state: AgentRunState }
@@ -649,8 +691,14 @@ export interface AladdeenApi {
     setThinkingLevel(sessionId: string, level: AgentThinkingLevel): Promise<Result<void>>
     setApiKey(provider: AgentProvider, apiKey: string): Promise<Result<void>>
     clearApiKey(provider: AgentProvider): Promise<Result<void>>
+    beginLogin(provider: AgentProvider): Promise<Result<{ attemptId: string }>>
+    respondLoginPrompt(attemptId: string, promptId: string, value: string): Promise<Result<void>>
+    reopenLoginUrl(attemptId: string): Promise<Result<void>>
+    cancelLogin(attemptId: string): Promise<Result<void>>
+    disconnectProvider(provider: AgentProvider): Promise<Result<void>>
     credentialStatus(): Promise<Result<AgentCredentialStatus>>
     onEvent(callback: (event: AgentEvent) => void): () => void
+    onAuthEvent(callback: (event: AgentAuthEvent) => void): () => void
   }
   document: {
     open(target: DocumentTarget): Promise<Result<DocumentSnapshot>>
@@ -728,8 +776,14 @@ export const IPC = {
   agentSetThinkingLevel: 'agent:set-thinking-level',
   agentSetApiKey: 'agent:set-api-key',
   agentClearApiKey: 'agent:clear-api-key',
+  agentBeginLogin: 'agent:begin-login',
+  agentRespondLoginPrompt: 'agent:respond-login-prompt',
+  agentReopenLoginUrl: 'agent:reopen-login-url',
+  agentCancelLogin: 'agent:cancel-login',
+  agentDisconnectProvider: 'agent:disconnect-provider',
   agentCredentialStatus: 'agent:credential-status',
   agentEvent: 'agent:event',
+  agentAuthEvent: 'agent:auth-event',
   environmentEvent: 'environment:event',
   systemOpenFileRequest: 'system:open-file-request',
   openDocumentRequest: 'document:open-request',

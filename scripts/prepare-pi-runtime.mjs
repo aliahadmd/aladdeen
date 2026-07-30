@@ -9,6 +9,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const packageRoot = join(repositoryRoot, 'node_modules', '@earendil-works', 'pi-coding-agent')
 const stagingRoot = join(repositoryRoot, 'release-staging', 'pi-runtime')
 const stagedPackage = join(stagingRoot, 'node_modules', '@earendil-works', 'pi-coding-agent')
+const stagedAiPackage = join(stagingRoot, 'node_modules', '@earendil-works', 'pi-ai')
 const packageMetadata = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8'))
 
 if (packageMetadata.version !== '0.83.0') {
@@ -42,5 +43,10 @@ await mkdir(stagedPackage, { recursive: true })
 await cp(join(packageRoot, 'dist'), join(stagedPackage, 'dist'), { recursive: true })
 await cp(join(packageRoot, 'package.json'), join(stagedPackage, 'package.json'))
 await cp(join(packageRoot, 'npm-shrinkwrap.json'), join(stagedPackage, 'npm-shrinkwrap.json'))
+
+const stagedAiMetadata = JSON.parse(await readFile(join(stagedAiPackage, 'package.json'), 'utf8'))
+if (stagedAiMetadata.version !== '0.83.0') {
+  throw new Error(`Expected staged pi AI 0.83.0, found ${String(stagedAiMetadata.version)}.`)
+}
 
 log(`Prepared pi coding agent ${packageMetadata.version} in ${stagingRoot}`)

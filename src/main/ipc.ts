@@ -11,6 +11,7 @@ import {
 } from 'electron'
 import { z, type ZodType } from 'zod'
 import { asResult, DesktopError } from '@main/errors'
+import type { AgentAuthService } from '@main/services/agent-auth'
 import type { AgentService } from '@main/services/agent'
 import type { AppDatabase } from '@main/services/database'
 import type { ExportService } from '@main/services/export'
@@ -20,6 +21,7 @@ import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contra
 import { defaultNameForKind, DOCUMENT_EXTENSIONS, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import {
   agentApiKeySchema,
+  agentLoginPromptResponseSchema,
   agentApprovalResponseSchema,
   agentModelRequestSchema,
   agentPromptSchema,
@@ -52,6 +54,7 @@ interface IpcDependencies {
   exports: ExportService
   search: GlobalSearchService
   agent: AgentService
+  agentAuth: AgentAuthService
   getWindow: () => BrowserWindow | null
   getPendingOpenRequest: () => OpenFileRequest | undefined
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
@@ -82,6 +85,7 @@ export function registerIpc({
   exports,
   search,
   agent,
+  agentAuth,
   getWindow,
   getPendingOpenRequest,
   acceptSystemOpenFile,
@@ -231,14 +235,29 @@ export function registerIpc({
   })
   handle(IPC.agentSetApiKey, async (_event, input) => {
     const request = parse(agentApiKeySchema, input)
-    agent.setApiKey(request.provider, request.apiKey)
+    await agentAuth.setApiKey(request.provider, request.apiKey)
   })
   handle(IPC.agentClearApiKey, async (_event, input) => {
     const provider = parse(agentProviderSchema, input)
-    agent.clearApiKey(provider)
-    if (database.getSettings().agentProvider === provider) await agent.close()
+    await agentAuth.disconnectProvider(provider)
   })
-  handle(IPC.agentCredentialStatus, async () => agent.credentialStatus())
+  handle(IPC.agentBeginLogin, async (_event, input) => {
+    return agentAuth.beginLogin(parse(agentProviderSchema, input))
+  })
+  handle(IPC.agentRespondLoginPrompt, async (_event, input) => {
+    const request = parse(agentLoginPromptResponseSchema, input)
+    await agentAuth.respondLoginPrompt(request.attemptId, request.promptId, request.value)
+  })
+  handle(IPC.agentReopenLoginUrl, async (_event, input) => {
+    await agentAuth.reopenLoginUrl(parse(idSchema, input))
+  })
+  handle(IPC.agentCancelLogin, async (_event, input) => {
+    await agentAuth.cancelLogin(parse(idSchema, input))
+  })
+  handle(IPC.agentDisconnectProvider, async (_event, input) => {
+    await agentAuth.disconnectProvider(parse(agentProviderSchema, input))
+  })
+  handle(IPC.agentCredentialStatus, async () => agentAuth.credentialStatus())
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))
   handle(IPC.openRelativeDocument, async (_event, input) => {
@@ -368,6 +387,9 @@ export function registerIpc({
       previousSettings.agentModelId !== settings.agentModelId
     ) {
       await agent.close()
+      if (!settings.agentEnabled || previousSettings.agentProvider !== settings.agentProvider) {
+        await agentAuth.close()
+      }
     } else if (previousSettings.agentThinkingLevel !== settings.agentThinkingLevel) {
       await agent.applyConfiguredThinkingLevel(settings.agentThinkingLevel).catch(() => undefined)
     }

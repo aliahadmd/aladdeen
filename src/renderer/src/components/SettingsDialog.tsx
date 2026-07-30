@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AtSign, Bot, BookOpen, Check, Command, ExternalLink, Github, Info, KeyRound, Mail, Minus, Palette, Plus, RotateCcw, ShieldAlert, X } from 'lucide-react'
+import { AtSign, Bot, BookOpen, Check, Command, ExternalLink, Github, Info, KeyRound, LoaderCircle, LogOut, Mail, Minus, Palette, Plus, RotateCcw, ShieldAlert, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
-import type { AgentCredentialStatus, AgentProvider, AgentThinkingLevel, AppSettings } from '@shared/contracts'
+import { AGENT_PROVIDER_DEFINITIONS, defaultModelForProvider } from '@shared/agent-providers'
+import type { AgentAuthEvent, AgentCredentialStatus, AgentProvider, AgentThinkingLevel, AppSettings } from '@shared/contracts'
 import {
   DEFAULT_READING_SETTINGS,
   READING_FONT_SIZE_MAX,
@@ -14,8 +15,12 @@ import {
 import { cn } from '@renderer/lib/cn'
 import { COMPACT_SETTINGS_QUERY } from '@renderer/lib/breakpoints'
 import {
+  dialogActionsClasses,
   dialogContentClasses,
-  dialogOverlayClasses
+  dialogDescriptionClasses,
+  dialogIconClasses,
+  dialogOverlayClasses,
+  dialogTitleClasses
 } from '@renderer/lib/ui-styles'
 import { accentOptions, themeOptions, useAppStore } from '@renderer/store/app-store'
 import { BrandMark } from './BrandMark'
@@ -590,11 +595,6 @@ function AppearanceSettings({
   )
 }
 
-const AGENT_PROVIDERS: Array<{ value: AgentProvider; label: string }> = [
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'google', label: 'Google' }
-]
 const AGENT_THINKING_LEVELS: AgentThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
 function AgentSettings({
@@ -609,6 +609,10 @@ function AgentSettings({
   const [modelId, setModelId] = useState(settings.agentModelId)
   const [credentialError, setCredentialError] = useState<string>()
   const [savingKey, setSavingKey] = useState(false)
+  const [authEvent, setAuthEvent] = useState<AgentAuthEvent>()
+  const [promptValue, setPromptValue] = useState('')
+  const activeAttempt = useRef<string | undefined>(undefined)
+  const hasActiveSession = useAppStore((state) => state.agentSession !== undefined)
 
   const refreshCredentials = async (): Promise<void> => {
     const result = await window.aladdeen.agent.credentialStatus()
@@ -622,15 +626,80 @@ function AgentSettings({
 
   useEffect(() => {
     void refreshCredentials()
-  }, [])
+  }, [settings.agentEnabled])
 
   useEffect(() => setModelId(settings.agentModelId), [settings.agentModelId])
 
-  const hasKey = credentials?.providers[settings.agentProvider] ?? false
+  useEffect(() => window.aladdeen.agent.onAuthEvent((event) => {
+    if (event.type === 'started') activeAttempt.current = event.attemptId
+    if (activeAttempt.current && event.attemptId !== activeAttempt.current) return
+    setAuthEvent(event)
+    if (event.type === 'prompt') setPromptValue('')
+    if (event.type === 'completed' || event.type === 'failed' || event.type === 'cancelled') {
+      activeAttempt.current = undefined
+      void refreshCredentials()
+      if (event.type === 'completed') {
+        void window.aladdeen.settings.get().then((result) => {
+          if (result.ok) {
+            onUpdate({
+              agentProvider: result.value.agentProvider,
+              agentModelId: result.value.agentModelId
+            })
+          }
+        })
+      }
+    }
+  }), [onUpdate])
+
+  useEffect(() => () => {
+    const attemptId = activeAttempt.current
+    if (attemptId) void window.aladdeen.agent.cancelLogin(attemptId)
+  }, [])
+
+  const providerStatus = credentials?.providers[settings.agentProvider]
   const persistModel = (): void => {
     const next = modelId.trim()
     if (next && next !== settings.agentModelId) onUpdate({ agentModelId: next })
     else if (!next) setModelId(settings.agentModelId)
+  }
+  const confirmSessionEnd = (action: string): boolean => {
+    if (!hasActiveSession) return true
+    return window.confirm(`${action} will end the active coding-agent session. Continue?`)
+  }
+  const cancelAuthentication = async (): Promise<void> => {
+    const attemptId = activeAttempt.current
+    if (attemptId) await window.aladdeen.agent.cancelLogin(attemptId)
+    activeAttempt.current = undefined
+    setAuthEvent(undefined)
+    setPromptValue('')
+  }
+  const selectProvider = async (provider: AgentProvider): Promise<void> => {
+    if (provider === settings.agentProvider) return
+    if (activeAttempt.current) await cancelAuthentication()
+    onUpdate({
+      agentProvider: provider,
+      agentModelId: defaultModelForProvider(provider)
+    })
+  }
+  const beginLogin = async (provider: AgentProvider): Promise<void> => {
+    if (!confirmSessionEnd('Signing in')) return
+    setCredentialError(undefined)
+    const result = await window.aladdeen.agent.beginLogin(provider)
+    if (!result.ok) {
+      setCredentialError(result.error.message)
+      return
+    }
+    activeAttempt.current = result.value.attemptId
+    setAuthEvent({ type: 'started', attemptId: result.value.attemptId, provider })
+  }
+  const disconnect = async (provider: AgentProvider): Promise<void> => {
+    if (!confirmSessionEnd('Disconnecting this provider')) return
+    const result = await window.aladdeen.agent.disconnectProvider(provider)
+    if (!result.ok) {
+      setCredentialError(result.error.message)
+      return
+    }
+    await refreshCredentials()
   }
 
   return (
@@ -679,22 +748,94 @@ function AgentSettings({
         </section>
       )}
 
-      <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-start gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-provider-label">
+      <section className="py-4" aria-labelledby="agent-provider-label">
         <div>
-          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-provider-label">Provider and model</h3>
-          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">Use your own provider account and preferred model ID.</p>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-provider-label">Provider connections</h3>
+          <p className="mt-1 mb-3 text-[12px] leading-[1.45] text-foreground-muted">Connect an account or API key without exposing the saved credential.</p>
         </div>
         <div className="grid gap-2">
-          <select
-            value={settings.agentProvider}
-            aria-label="Agent provider"
-            className="h-9 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-foreground outline-none focus:border-accent"
-            onChange={(event) => onUpdate({ agentProvider: event.currentTarget.value as AgentProvider })}
-          >
-            {AGENT_PROVIDERS.map((provider) => (
-              <option value={provider.value} key={provider.value}>{provider.label}</option>
-            ))}
-          </select>
+          {AGENT_PROVIDER_DEFINITIONS.map((provider) => {
+            const status = credentials?.providers[provider.id]
+            const selected = settings.agentProvider === provider.id
+            return (
+              <div
+                className={cn(
+                  'rounded-lg border border-border bg-surface p-3',
+                  selected && 'border-accent bg-accent-soft'
+                )}
+                key={provider.id}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-left"
+                    aria-pressed={selected}
+                    aria-label={`Use ${provider.name}`}
+                    onClick={() => void selectProvider(provider.id)}
+                  >
+                    <span className="flex items-center gap-2 text-[12px] font-[650] text-foreground">
+                      {provider.name}
+                      {selected && <Check size={13} className="text-accent" aria-hidden="true" />}
+                    </span>
+                    <span className={cn(
+                      'mt-1 block text-[10px] text-foreground-muted',
+                      status?.reauthRequired && 'text-warning'
+                    )}>
+                      {status?.reauthRequired
+                        ? 'Authentication expired · reconnect required'
+                        : status?.configured
+                          ? `Connected · ${status.authType === 'oauth' ? 'account' : 'API key'}`
+                          : 'Not connected'}
+                    </span>
+                  </button>
+                  <div className="flex shrink-0 gap-1.5">
+                    {provider.accountLabel && status?.oauthAvailable && (
+                      <button
+                        type="button"
+                        disabled={!settings.agentEnabled || credentials?.encryptionAvailable === false}
+                        className="h-7 rounded-md border border-transparent bg-accent px-2.5 text-[10px] font-semibold text-accent-contrast disabled:opacity-40"
+                        onClick={() => void beginLogin(provider.id)}
+                      >
+                        {status.reauthRequired || status.authType === 'oauth'
+                          ? 'Reconnect'
+                          : provider.accountLabel}
+                      </button>
+                    )}
+                    {status?.configured && (
+                      <button
+                        type="button"
+                        className="grid h-7 w-7 place-items-center rounded-md border border-border bg-transparent text-foreground-muted hover:bg-danger-soft hover:text-danger"
+                        aria-label={`Disconnect ${provider.name}`}
+                        title={`Disconnect ${provider.name}`}
+                        onClick={() => void disconnect(provider.id)}
+                      >
+                        <LogOut size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {provider.id === 'anthropic' && (
+                  <p className="mt-2 mb-0 text-[9px] leading-[1.45] text-foreground-muted">
+                    Claude subscription use through pi is billed through Anthropic extra usage, not Claude Pro/Max plan limits.
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+        {!settings.agentEnabled && (
+          <p className="mt-2 mb-0 text-[10px] text-foreground-muted">
+            Enable the coding agent before connecting a subscription account.
+          </p>
+        )}
+      </section>
+
+      <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-start gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-model-label">
+        <div>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-model-label">Model</h3>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">The model ID for the selected provider.</p>
+        </div>
+        <div>
           <input
             value={modelId}
             aria-label="Agent model ID"
@@ -712,6 +853,7 @@ function AgentSettings({
         </div>
       </section>
 
+      {providerStatus?.apiKeyAvailable && (
       <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-start gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-key-label">
         <div>
           <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-key-label">API key</h3>
@@ -729,36 +871,21 @@ function AgentSettings({
               autoComplete="off"
               disabled={credentials?.encryptionAvailable === false}
               className="h-9 w-full rounded-lg border border-border-strong bg-surface pr-2.5 pl-8 text-[12px] text-foreground outline-none focus:border-accent disabled:opacity-50"
-              placeholder={hasKey ? '••••••••  Replace saved key' : 'Paste API key'}
+              placeholder={providerStatus.configured ? '••••••••  Replace connection' : 'Paste API key'}
               onChange={(event) => setApiKey(event.currentTarget.value)}
             />
           </div>
           <div className="mt-2 flex items-center justify-between gap-2">
             <span className="text-[9px] text-foreground-muted">
-              {hasKey ? 'Key saved' : 'No key saved'}
+              {providerStatus.authType === 'api_key' ? 'API key saved' : 'No API key saved'}
             </span>
             <div className="flex gap-1.5">
-              {hasKey && (
-                <button
-                  type="button"
-                  className="h-7 rounded-md border border-border bg-transparent px-2.5 text-[10px] font-semibold text-danger hover:bg-danger-soft"
-                  onClick={() => void (async () => {
-                    const result = await window.aladdeen.agent.clearApiKey(settings.agentProvider)
-                    if (!result.ok) setCredentialError(result.error.message)
-                    else {
-                      setApiKey('')
-                      await refreshCredentials()
-                    }
-                  })()}
-                >
-                  Clear
-                </button>
-              )}
               <button
                 type="button"
                 disabled={apiKey.trim().length < 8 || savingKey || credentials?.encryptionAvailable === false}
                 className="h-7 rounded-md border border-transparent bg-accent px-2.5 text-[10px] font-semibold text-accent-contrast disabled:opacity-40"
                 onClick={() => void (async () => {
+                  if (!confirmSessionEnd('Replacing this provider connection')) return
                   setSavingKey(true)
                   const result = await window.aladdeen.agent.setApiKey(settings.agentProvider, apiKey.trim())
                   setSavingKey(false)
@@ -770,13 +897,14 @@ function AgentSettings({
                   await refreshCredentials()
                 })()}
               >
-                {savingKey ? 'Saving…' : hasKey ? 'Replace' : 'Save key'}
+                {savingKey ? 'Saving…' : providerStatus.configured ? 'Use API key' : 'Save key'}
               </button>
             </div>
           </div>
           {credentialError && <p className="mt-2 mb-0 text-[10px] text-danger">{credentialError}</p>}
         </div>
       </section>
+      )}
 
       <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-center gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-thinking-label">
         <div>
@@ -792,7 +920,165 @@ function AgentSettings({
           {AGENT_THINKING_LEVELS.map((level) => <option value={level} key={level}>{level}</option>)}
         </select>
       </section>
+      <AgentAuthenticationDialog
+        event={authEvent}
+        promptValue={promptValue}
+        onPromptValueChange={setPromptValue}
+        onClose={() => void cancelAuthentication()}
+        onReopen={() => {
+          if (authEvent) void window.aladdeen.agent.reopenLoginUrl(authEvent.attemptId)
+        }}
+        onSubmit={(value) => {
+          if (authEvent?.type !== 'prompt') return
+          const submitted = value
+          setPromptValue('')
+          void window.aladdeen.agent.respondLoginPrompt(
+            authEvent.attemptId,
+            authEvent.promptId,
+            submitted
+          ).then((result) => {
+            if (!result.ok) setCredentialError(result.error.message)
+          })
+        }}
+      />
     </div>
+  )
+}
+
+function AgentAuthenticationDialog({
+  event,
+  promptValue,
+  onPromptValueChange,
+  onClose,
+  onReopen,
+  onSubmit
+}: {
+  event?: AgentAuthEvent
+  promptValue: string
+  onPromptValueChange(value: string): void
+  onClose(): void
+  onReopen(): void
+  onSubmit(value: string): void
+}): React.JSX.Element {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    if (event?.type !== 'device-code' || !event.expiresAt) return
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => window.clearInterval(timer)
+  }, [event])
+  const terminal = event?.type === 'completed' || event?.type === 'failed' || event?.type === 'cancelled'
+  const secondsRemaining = event?.type === 'device-code' && event.expiresAt
+    ? Math.max(0, Math.ceil((event.expiresAt - now) / 1_000))
+    : undefined
+
+  return (
+    <Dialog.Root open={event !== undefined} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className={dialogOverlayClasses} />
+        <Dialog.Content className={cn(dialogContentClasses, 'w-[min(calc(100vw-32px),430px)]')}>
+          <div className={dialogIconClasses(event?.type === 'failed' ? 'destructive' : 'default')}>
+            {terminal ? event?.type === 'completed' ? <Check size={19} /> : <ShieldAlert size={19} /> : <LoaderCircle size={19} className="animate-spin" />}
+          </div>
+          <Dialog.Title className={dialogTitleClasses}>
+            {event?.type === 'completed'
+              ? 'Account connected'
+              : event?.type === 'failed'
+                ? 'Could not connect account'
+                : event?.type === 'cancelled'
+                  ? 'Login cancelled'
+                  : 'Connect provider account'}
+          </Dialog.Title>
+          <Dialog.Description className={dialogDescriptionClasses}>
+            {event?.type === 'failed'
+              ? event.message
+              : event?.type === 'cancelled'
+                ? 'No account connection was changed.'
+                : event?.type === 'completed'
+                  ? 'The encrypted provider credential is ready to use.'
+                  : event?.type === 'progress'
+                    ? event.message
+                    : event?.type === 'prompt'
+                      ? event.message
+                      : event?.type === 'device-code'
+                        ? 'Enter this one-time code in the provider page opened in your browser.'
+                        : 'Complete the secure sign-in flow in your browser.'}
+          </Dialog.Description>
+
+          {event?.type === 'device-code' && (
+            <div className="mt-4 rounded-lg border border-border bg-surface p-3 text-center">
+              <code className="text-[20px] font-bold tracking-[.15em] text-foreground">{event.userCode}</code>
+              {secondsRemaining !== undefined && (
+                <p className="mt-1 mb-0 text-[10px] text-foreground-muted">
+                  Expires in {Math.floor(secondsRemaining / 60)}:{String(secondsRemaining % 60).padStart(2, '0')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {event?.type === 'prompt' && event.promptType === 'select' && (
+            <div className="mt-4 grid gap-2">
+              {event.options?.map((option) => (
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-surface p-3 text-left hover:border-accent hover:bg-accent-soft"
+                  key={option.id}
+                  onClick={() => onSubmit(option.id)}
+                >
+                  <span className="block text-[12px] font-semibold text-foreground">{option.label}</span>
+                  {option.description && <span className="mt-1 block text-[10px] text-foreground-muted">{option.description}</span>}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {event?.type === 'prompt' && event.promptType !== 'select' && (
+            <form
+              className="mt-4"
+              onSubmit={(submitEvent) => {
+                submitEvent.preventDefault()
+                onSubmit(promptValue)
+              }}
+            >
+              <input
+                type={event.promptType === 'secret' ? 'password' : 'text'}
+                value={promptValue}
+                autoComplete="off"
+                autoFocus
+                aria-label="Login response"
+                placeholder={event.placeholder}
+                className="h-9 w-full rounded-lg border border-border-strong bg-surface px-3 text-[12px] text-foreground outline-none focus:border-accent"
+                onChange={(changeEvent) => onPromptValueChange(changeEvent.currentTarget.value)}
+              />
+              <button
+                type="submit"
+                disabled={!promptValue.trim()}
+                className="mt-2 h-8 w-full rounded-md border border-transparent bg-accent px-3 text-[11px] font-semibold text-accent-contrast disabled:opacity-40"
+              >
+                Continue
+              </button>
+            </form>
+          )}
+
+          <div className={dialogActionsClasses}>
+            {!terminal && (
+              <button type="button" className="h-8 rounded-md border border-border bg-surface px-3 text-[11px] text-foreground-soft" onClick={onReopen}>
+                Open browser again
+              </button>
+            )}
+            <Dialog.Close
+              className={cn(
+                'h-8 rounded-md border px-3 text-[11px] font-semibold',
+                terminal
+                  ? 'border-transparent bg-accent text-accent-contrast'
+                  : 'border-border bg-surface text-foreground-soft'
+              )}
+            >
+              {terminal ? 'Done' : 'Cancel'}
+            </Dialog.Close>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }
 

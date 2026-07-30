@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   IPC,
+  type AgentAuthEvent,
   type AgentEvent,
   type CloseRequest,
   type EnvironmentEvent,
@@ -70,11 +71,22 @@ const api: AladdeenApi = {
       ipcRenderer.invoke(IPC.agentSetThinkingLevel, { sessionId, level }),
     setApiKey: (provider, apiKey) => ipcRenderer.invoke(IPC.agentSetApiKey, { provider, apiKey }),
     clearApiKey: (provider) => ipcRenderer.invoke(IPC.agentClearApiKey, provider),
+    beginLogin: (provider) => ipcRenderer.invoke(IPC.agentBeginLogin, provider),
+    respondLoginPrompt: (attemptId, promptId, value) =>
+      ipcRenderer.invoke(IPC.agentRespondLoginPrompt, { attemptId, promptId, value }),
+    reopenLoginUrl: (attemptId) => ipcRenderer.invoke(IPC.agentReopenLoginUrl, attemptId),
+    cancelLogin: (attemptId) => ipcRenderer.invoke(IPC.agentCancelLogin, attemptId),
+    disconnectProvider: (provider) => ipcRenderer.invoke(IPC.agentDisconnectProvider, provider),
     credentialStatus: () => ipcRenderer.invoke(IPC.agentCredentialStatus),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => callback(agentEvent)
       ipcRenderer.on(IPC.agentEvent, listener)
       return () => ipcRenderer.removeListener(IPC.agentEvent, listener)
+    },
+    onAuthEvent: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, authEvent: AgentAuthEvent): void => callback(authEvent)
+      ipcRenderer.on(IPC.agentAuthEvent, listener)
+      return () => ipcRenderer.removeListener(IPC.agentAuthEvent, listener)
     }
   },
   document: {

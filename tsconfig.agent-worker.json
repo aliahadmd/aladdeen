@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "isolatedModules": false,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": false,
+    "outDir": "./out/worker/agent-worker",
+    "rootDir": "./src/agent-worker",
+    "sourceMap": false,
+    "types": ["node"]
+  },
+  "include": ["src/agent-worker/**/*.ts"]
+}

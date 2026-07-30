@@ -45,8 +45,8 @@ describe('application metadata database', () => {
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
       agentEnabled: true,
-      agentProvider: 'openai',
-      agentModelId: 'gpt-5',
+      agentProvider: 'openai-codex',
+      agentModelId: 'gpt-5.5',
       agentThinkingLevel: 'high',
       agentPanelWidth: 440,
       agentPanelCollapsed: true,
@@ -57,10 +57,10 @@ describe('application metadata database', () => {
       readingSurface: 'paper'
     })
     const encryptedAgentKey = Buffer.from('ciphertext-only')
-    database.setAgentSecret('openai', encryptedAgentKey)
-    expect(database.getAgentSecret('openai')).toEqual(encryptedAgentKey)
-    database.clearAgentSecret('openai')
-    expect(database.getAgentSecret('openai')).toBeNull()
+    database.setAgentSecret('openai-codex', encryptedAgentKey)
+    expect(database.getAgentSecret('openai-codex')).toEqual(encryptedAgentKey)
+    database.clearAgentSecret('openai-codex')
+    expect(database.getAgentSecret('openai-codex')).toBeNull()
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
     expect(project.enabledDocumentKinds).toEqual(['markdown'])
@@ -101,8 +101,8 @@ describe('application metadata database', () => {
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
       agentEnabled: true,
-      agentProvider: 'openai',
-      agentModelId: 'gpt-5',
+      agentProvider: 'openai-codex',
+      agentModelId: 'gpt-5.5',
       agentThinkingLevel: 'high',
       agentPanelWidth: 440,
       agentPanelCollapsed: true,

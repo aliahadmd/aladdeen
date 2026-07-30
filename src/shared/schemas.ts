@@ -184,7 +184,7 @@ export const settingsSchema = z.object({
   sidebarCollapsed: z.boolean(),
   completedOnboardingVersion: z.number().int().min(0).max(1_000),
   agentEnabled: z.boolean(),
-  agentProvider: z.enum(['anthropic', 'openai', 'google']),
+  agentProvider: z.enum(['anthropic', 'openai-codex', 'kimi-coding', 'openai', 'google']),
   agentModelId: z.string().trim().min(1).max(200),
   agentThinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
   agentPanelWidth: z.number().int().min(300).max(560),
@@ -196,7 +196,7 @@ export const settingsSchema = z.object({
   readingSurface: z.enum(READING_SURFACES)
 })
 
-export const agentProviderSchema = z.enum(['anthropic', 'openai', 'google'])
+export const agentProviderSchema = z.enum(['anthropic', 'openai-codex', 'kimi-coding', 'openai', 'google'])
 export const agentThinkingLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
 export const agentStartSessionSchema = z.object({ projectId: idSchema })
 export const agentSessionSchema = z.object({ sessionId: idSchema })
@@ -222,6 +222,11 @@ export const agentThinkingRequestSchema = z.object({
 export const agentApiKeySchema = z.object({
   provider: agentProviderSchema,
   apiKey: z.string().trim().min(8).max(8_192)
+})
+export const agentLoginPromptResponseSchema = z.object({
+  attemptId: idSchema,
+  promptId: idSchema,
+  value: z.string().max(16_384)
 })
 
 export const exportRequestSchema = z.object({

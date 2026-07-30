@@ -47,10 +47,14 @@ export function AgentPanel({ compact = false }: { compact?: boolean }): React.JS
               className={buttonClasses({ variant: 'secondary', className: 'h-7 px-2 text-[9px]' })}
               onClick={() => {
                 document.querySelector<HTMLElement>('[data-aladdeen-settings-trigger]')?.click()
+                requestAnimationFrame(() => {
+                  document.querySelector<HTMLElement>('#settings-tab-agent')?.click()
+                })
               }}
             >
-              <Settings2 size={11} /> Open Settings
+              <Settings2 size={11} /> {error.code === 'AUTH_FAILED' ? 'Reconnect' : 'Open Settings'}
             </button>
+            {error.code !== 'AUTH_FAILED' && (
             <button
               type="button"
               className={buttonClasses({ variant: 'secondary', className: 'h-7 px-2 text-[9px]' })}
@@ -58,6 +62,7 @@ export function AgentPanel({ compact = false }: { compact?: boolean }): React.JS
             >
               <RotateCcw size={11} /> Restart session
             </button>
+            )}
           </div>
         </div>
       )}

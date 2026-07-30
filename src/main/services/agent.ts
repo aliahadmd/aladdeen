@@ -4,16 +4,20 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import {
   app,
-  safeStorage,
   type BrowserWindow
 } from 'electron'
 import { DesktopError } from '@main/errors'
+import type { AgentCredentialVault } from '@main/services/agent-credentials'
+import {
+  bindCredentialBridge,
+  spawnAgentWorker,
+  type AgentWorkerChild
+} from '@main/services/agent-worker-host'
 import type { AppDatabase } from '@main/services/database'
 import { PiRpcClient, type PiRpcRecord } from '@main/services/agent-rpc'
 import {
   IPC,
   type AgentApprovalDecision,
-  type AgentCredentialStatus,
   type AgentEvent,
   type AgentModel,
   type AgentProvider,
@@ -21,16 +25,19 @@ import {
 } from '@shared/contracts'
 
 const TOOL_OUTPUT_LIMIT = 16 * 1024
-const API_KEY_ENV: Record<AgentProvider, string> = {
+const API_KEY_ENV: Partial<Record<AgentProvider, string>> = {
   anthropic: 'ANTHROPIC_API_KEY',
+  'kimi-coding': 'KIMI_API_KEY',
   openai: 'OPENAI_API_KEY',
   google: 'GOOGLE_API_KEY'
 }
 
 interface ActiveAgentSession {
   id: string
-  child: ChildProcessWithoutNullStreams
+  provider: AgentProvider
+  child: ChildProcessWithoutNullStreams | AgentWorkerChild
   client: PiRpcClient
+  detachCredentialBridge?: () => void
   currentAssistantId?: string
   stderr: string
   pendingApprovals: Map<string, { toolName: string }>
@@ -274,6 +281,7 @@ export class AgentService {
 
   constructor(
     private readonly database: AppDatabase,
+    private readonly vault: AgentCredentialVault,
     private readonly userDataPath: string,
     private readonly getWindow: () => BrowserWindow | null
   ) {}
@@ -285,18 +293,16 @@ export class AgentService {
     }
     const project = this.database.getProject(projectId)
     if (!project) throw new DesktopError('NOT_FOUND', 'The active project no longer exists.')
-    if (!safeStorage.isEncryptionAvailable()) {
+    if (!this.vault.encryptionAvailable()) {
       throw new DesktopError(
         'PERMISSION_DENIED',
         'Secure credential storage is unavailable on this Mac, so the agent cannot start.'
       )
     }
-    const encryptedKey = this.database.getAgentSecret(settings.agentProvider)
-    if (!encryptedKey) {
-      throw new DesktopError('NOT_FOUND', `Add an API key for ${settings.agentProvider} in Agent Settings.`)
+    const credential = await this.vault.read(settings.agentProvider)
+    if (!credential) {
+      throw new DesktopError('NOT_FOUND', `Connect ${settings.agentProvider} in Agent Settings.`)
     }
-    const apiKey = safeStorage.decryptString(encryptedKey)
-    if (!apiKey) throw new DesktopError('INTERNAL', 'The saved agent API key could not be decrypted.')
 
     if (this.active) await this.terminateSession(this.active, 'stopped')
 
@@ -306,25 +312,39 @@ export class AgentService {
     mkdirSync(sessionDirectory, { recursive: true })
     mkdirSync(configDirectory, { recursive: true })
 
-    const child = spawn(process.execPath, [
-      this.resolveCliPath(),
-      '--mode', 'rpc',
-      '--provider', settings.agentProvider,
-      '--model', settings.agentModelId,
-      '--session-dir', sessionDirectory,
-      '--no-approve',
-      '--tools', 'read,grep,find,ls,edit,write,bash',
-      '-e', this.resolveApprovalsExtensionPath()
-    ], {
-      cwd: project.path,
-      env: this.spawnEnvironment(settings.agentProvider, apiKey, configDirectory),
-      stdio: ['pipe', 'pipe', 'pipe']
-    })
+    const legacyCliPath = this.resolveLegacyCliPath()
+    const child = legacyCliPath
+      ? spawn(process.execPath, [
+          legacyCliPath,
+          '--mode', 'rpc',
+          '--provider', settings.agentProvider,
+          '--model', settings.agentModelId,
+          '--session-dir', sessionDirectory,
+          '--no-approve',
+          '--tools', 'read,grep,find,ls,edit,write,bash',
+          '-e', this.resolveApprovalsExtensionPath()
+        ], {
+          cwd: project.path,
+          env: this.legacySpawnEnvironment(settings.agentProvider, credential, configDirectory),
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+      : spawnAgentWorker({
+          mode: 'session',
+          provider: settings.agentProvider,
+          modelId: settings.agentModelId,
+          thinkingLevel: settings.agentThinkingLevel,
+          cwd: project.path,
+          sessionDirectory,
+          agentDirectory: configDirectory,
+          approvalExtensionPath: this.resolveApprovalsExtensionPath()
+        }, project.path)
     const client = new PiRpcClient(child.stdin, child.stdout)
     const session: ActiveAgentSession = {
       id: sessionId,
+      provider: settings.agentProvider,
       child,
       client,
+      ...(legacyCliPath ? {} : { detachCredentialBridge: bindCredentialBridge(child as AgentWorkerChild, this.vault) }),
       stderr: '',
       pendingApprovals: new Map(),
       stopping: false,
@@ -427,29 +447,8 @@ export class AgentService {
     await this.active.client.send({ type: 'set_thinking_level', level })
   }
 
-  setApiKey(provider: AgentProvider, apiKey: string): void {
-    if (!safeStorage.isEncryptionAvailable()) {
-      throw new DesktopError(
-        'PERMISSION_DENIED',
-        'Secure credential storage is unavailable. Aladdeen will not store the API key in plaintext.'
-      )
-    }
-    this.database.setAgentSecret(provider, safeStorage.encryptString(apiKey))
-  }
-
-  clearApiKey(provider: AgentProvider): void {
-    this.database.clearAgentSecret(provider)
-  }
-
-  credentialStatus(): AgentCredentialStatus {
-    return {
-      encryptionAvailable: safeStorage.isEncryptionAvailable(),
-      providers: {
-        anthropic: this.database.getAgentSecret('anthropic') !== null,
-        openai: this.database.getAgentSecret('openai') !== null,
-        google: this.database.getAgentSecret('google') !== null
-      }
-    }
+  hasActiveSession(): boolean {
+    return this.active !== undefined
   }
 
   async close(): Promise<void> {
@@ -465,7 +464,12 @@ export class AgentService {
       }
       const mapped = mapPiEvent(record, session.id, session.currentAssistantId)
       session.currentAssistantId = mapped.currentAssistantId
-      for (const event of mapped.events) this.emit(event)
+      for (const event of mapped.events) {
+        if (event.type === 'session-error' && event.code === 'AUTH_FAILED') {
+          this.vault.markReauthRequired(session.provider)
+        }
+        this.emit(event)
+      }
     })
     session.client.on('protocol-error', (error: Error) => {
       if (this.active !== session) return
@@ -485,6 +489,7 @@ export class AgentService {
       this.emitSessionError(session, 'SPAWN_FAILED', error)
     })
     session.child.on('exit', (code, signal) => {
+      session.detachCredentialBridge?.()
       session.client.close()
       if (session.ended) return
       session.ended = true
@@ -498,6 +503,7 @@ export class AgentService {
         return
       }
       const detail = session.stderr.trim() || `Pi exited with ${signal ?? `code ${String(code)}`}.`
+      if (isAuthFailure(detail)) this.vault.markReauthRequired(session.provider)
       this.emit({
         type: 'session-error',
         sessionId: session.id,
@@ -583,6 +589,7 @@ export class AgentService {
     error: unknown
   ): void {
     const message = error instanceof Error ? error.message : String(error)
+    if (isAuthFailure(message)) this.vault.markReauthRequired(session.provider)
     this.emit({
       type: 'session-error',
       sessionId: session.id,
@@ -596,7 +603,16 @@ export class AgentService {
     if (window && !window.isDestroyed()) window.webContents.send(IPC.agentEvent, event)
   }
 
-  private spawnEnvironment(provider: AgentProvider, apiKey: string, configDirectory: string): NodeJS.ProcessEnv {
+  private legacySpawnEnvironment(
+    provider: AgentProvider,
+    credential: Awaited<ReturnType<AgentCredentialVault['read']>>,
+    configDirectory: string
+  ): NodeJS.ProcessEnv {
+    if (credential?.type !== 'api_key' || !credential.key) {
+      throw new DesktopError('INVALID_PATH', 'The legacy pi CLI test override only supports API-key credentials.')
+    }
+    const keyName = API_KEY_ENV[provider]
+    if (!keyName) throw new DesktopError('INVALID_PATH', `${provider} does not support API-key authentication.`)
     const environment = Object.fromEntries(
       Object.entries(process.env).filter(([key]) => !key.toUpperCase().endsWith('_API_KEY'))
     ) as NodeJS.ProcessEnv
@@ -608,19 +624,15 @@ export class AgentService {
       DO_NOT_TRACK: '1',
       OTEL_SDK_DISABLED: 'true',
       NO_TELEMETRY: '1',
-      [API_KEY_ENV[provider]]: apiKey
+      [keyName]: credential.key
     }
   }
 
-  private resolveCliPath(): string {
-    if (process.env.ALADDEEN_PI_CLI_PATH) {
-      return isAbsolute(process.env.ALADDEEN_PI_CLI_PATH)
-        ? process.env.ALADDEEN_PI_CLI_PATH
-        : resolve(app.getAppPath(), process.env.ALADDEEN_PI_CLI_PATH)
-    }
-    return app.isPackaged
-      ? join(process.resourcesPath, 'pi-runtime', 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'cli.js')
-      : join(app.getAppPath(), 'node_modules', '@earendil-works', 'pi-coding-agent', 'dist', 'cli.js')
+  private resolveLegacyCliPath(): string | undefined {
+    if (!process.env.ALADDEEN_PI_CLI_PATH) return undefined
+    return isAbsolute(process.env.ALADDEEN_PI_CLI_PATH)
+      ? process.env.ALADDEEN_PI_CLI_PATH
+      : resolve(app.getAppPath(), process.env.ALADDEEN_PI_CLI_PATH)
   }
 
   private resolveApprovalsExtensionPath(): string {
