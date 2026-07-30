@@ -1773,8 +1773,14 @@ body.is-resizing-sidebar * {
   border-left: 1px solid var(--pptx-border);
 }
 
+/* The viewer lays every tab out as a single no-wrap row behind an overlay
+   scrollbar, which leaves whole command groups (Animations' Exit/Preview,
+   View's guides, most of Home at laptop widths) invisible and unreachable.
+   Wrap groups onto extra rows instead, like the viewer's own Insert tab. */
 .aladdeen-pptx-host .pptxv-ribbon-tab-content {
   min-height: 68px;
+  flex-wrap: wrap;
+  row-gap: 2px;
 }
 
 /* pptx-viewer 1.7.0 emits several secondary ribbon tabs without the group
@@ -1816,7 +1822,10 @@ body.is-resizing-sidebar * {
 
 .aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-gallery {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
   align-items: center;
   gap: 2px;
   border-right: 1px solid var(--pptx-border);
@@ -1854,7 +1863,8 @@ body.is-resizing-sidebar * {
 }
 
 .aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] > .pptxv-rgroup {
-  min-width: max-content;
+  min-width: 0;
+  max-width: 100%;
   flex-direction: column-reverse;
   justify-content: space-between;
   padding-block: 4px;
@@ -1862,7 +1872,10 @@ body.is-resizing-sidebar * {
 
 .aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] .pptxv-animation-gallery {
   display: flex;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
   align-items: center;
   gap: 2px;
 }
@@ -2036,6 +2049,26 @@ body.is-resizing-sidebar * {
 .aladdeen-pptx-host [data-pptx-collaboration],
 .aladdeen-pptx-host [data-pptx-share] {
   display: none !important;
+}
+
+/* Autosave must never block interaction: a passive pill instead of the
+   full-viewport progress overlay (which is reserved for the initial load). */
+.aladdeen-pptx-host .pptx-saving-indicator {
+  position: absolute;
+  z-index: 20;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-elevated);
+  padding: 4px 10px;
+  color: var(--foreground-muted);
+  font-size: 11px;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 12%);
+  pointer-events: none;
 }
 
 .pptx-compatibility {

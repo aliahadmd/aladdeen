@@ -234,11 +234,16 @@ test('opens, edits, autosaves, presents, and reopens a local PPTX without outbou
         }
         return {
           clipped: buttons.filter((button) => button.text && button.clipped).map((button) => button.label),
-          overlaps
+          overlaps,
+          hiddenOverflowPx: Math.max(0, root.scrollWidth - root.clientWidth)
         }
       })
       expect(layout.clipped, `${tabName} ribbon labels should fit their controls`).toEqual([])
       expect(layout.overlaps, `${tabName} ribbon controls should not overlap`).toEqual([])
+      expect(
+        layout.hiddenOverflowPx,
+        `${tabName} ribbon should keep every control reachable without horizontal scrolling`
+      ).toBeLessThanOrEqual(1)
     }
     await editor.getByRole('tab', { name: 'Home', exact: true }).click()
 
