@@ -21,6 +21,10 @@ process.on('message', (message) => {
     return
   }
   if (message.type !== 'prompt-response') return
+  if (options.authType === 'api_key') {
+    void persistApiKey(message.value)
+    return
+  }
   if (options.provider === 'openai-codex') {
     if (message.value === 'device_code') {
       send({
@@ -73,6 +77,26 @@ async function persistOAuth() {
   finish()
 }
 
+async function persistApiKey(key) {
+  const requestId = randomUUID()
+  const response = new Promise((resolve) => pendingCredentials.set(requestId, resolve))
+  send({
+    channel: 'credential',
+    requestId,
+    operation: 'write',
+    providerId: options.provider,
+    credential: { type: 'api_key', key }
+  })
+  const result = await response
+  if (!result.ok) {
+    send({ channel: 'auth', type: 'failed', message: result.error || 'Credential write failed.' })
+    finish(1)
+    return
+  }
+  send({ channel: 'auth', type: 'completed' })
+  finish()
+}
+
 function finish(code = 0) {
   process.exitCode = code
   setTimeout(() => {
@@ -89,8 +113,10 @@ setTimeout(() => {
       providers: [
         {
           provider: 'anthropic',
+          name: 'Anthropic',
           oauthAvailable: true,
           apiKeyAvailable: true,
+          dynamicCatalog: false,
           models: [{
             provider: 'anthropic',
             id: 'claude-sonnet-4-5',
@@ -110,8 +136,10 @@ setTimeout(() => {
         },
         {
           provider: 'openai-codex',
+          name: 'OpenAI Codex',
           oauthAvailable: true,
           apiKeyAvailable: false,
+          dynamicCatalog: false,
           models: [{
             provider: 'openai-codex',
             id: 'gpt-5.5',
@@ -126,8 +154,10 @@ setTimeout(() => {
         },
         {
           provider: 'kimi-coding',
+          name: 'Kimi Coding',
           oauthAvailable: true,
           apiKeyAvailable: true,
+          dynamicCatalog: false,
           models: [{
             provider: 'kimi-coding',
             id: 'kimi-for-coding',
@@ -137,8 +167,10 @@ setTimeout(() => {
         },
         {
           provider: 'openai',
+          name: 'OpenAI',
           oauthAvailable: false,
           apiKeyAvailable: true,
+          dynamicCatalog: false,
           models: [{
             provider: 'openai',
             id: 'gpt-5',
@@ -148,17 +180,103 @@ setTimeout(() => {
         },
         {
           provider: 'google',
+          name: 'Google',
           oauthAvailable: false,
           apiKeyAvailable: true,
+          dynamicCatalog: false,
           models: [{
             provider: 'google',
             id: 'gemini-2.5-pro',
             name: 'Gemini 2.5 Pro',
             supportsThinking: true
           }]
+        },
+        {
+          provider: 'deepseek',
+          name: 'DeepSeek',
+          oauthAvailable: false,
+          apiKeyAvailable: true,
+          dynamicCatalog: false,
+          models: [{
+            provider: 'deepseek',
+            id: 'deepseek-reasoner',
+            name: 'DeepSeek Reasoner',
+            supportsThinking: true,
+            protocol: 'openai-completions'
+          }]
+        },
+        {
+          provider: 'openrouter',
+          name: 'OpenRouter',
+          oauthAvailable: true,
+          apiKeyAvailable: true,
+          dynamicCatalog: true,
+          models: [{
+            provider: 'openrouter',
+            id: 'openrouter/auto',
+            name: 'OpenRouter Auto',
+            supportsThinking: false,
+            protocol: 'openai-completions'
+          }]
+        },
+        {
+          provider: 'groq',
+          name: 'Groq',
+          oauthAvailable: false,
+          apiKeyAvailable: true,
+          dynamicCatalog: false,
+          models: [{
+            provider: 'groq',
+            id: 'llama-3.3-70b-versatile',
+            name: 'Llama 3.3 70B',
+            supportsThinking: false,
+            protocol: 'openai-completions'
+          }]
         }
       ]
     })
+    finish()
+    return
+  }
+  if (options.mode === 'discover') {
+    send({
+      channel: 'auth',
+      type: 'models',
+      provider: options.provider,
+      models: [{
+        provider: options.provider,
+        id: 'discovered-coder',
+        name: 'Discovered Coder',
+        supportsThinking: false,
+        protocol: options.profile?.protocol,
+        supportsVision: false,
+        contextWindow: 128000,
+        maxOutputTokens: 16384,
+        source: 'discovered',
+        verified: false
+      }]
+    })
+    finish()
+    return
+  }
+  if (options.mode === 'refresh') {
+    send({
+      channel: 'auth',
+      type: 'models',
+      provider: options.provider,
+      models: options.profile?.models || []
+    })
+    finish()
+    return
+  }
+  if (options.mode === 'verify') {
+    const model = options.profile?.models?.find((item) => item.id === options.modelId)
+    if (!model) {
+      send({ channel: 'auth', type: 'failed', message: 'Model missing from fake profile.' })
+      finish(1)
+      return
+    }
+    send({ channel: 'auth', type: 'verified', provider: options.provider, model })
     finish()
     return
   }
@@ -168,6 +286,16 @@ setTimeout(() => {
   }
 
   send({ channel: 'auth', type: 'ready' })
+  if (options.authType === 'api_key') {
+    send({
+      channel: 'auth',
+      type: 'prompt',
+      promptId: randomUUID(),
+      promptType: 'secret',
+      message: `Enter the API key for ${options.provider}`
+    })
+    return
+  }
   if (options.provider === 'openai-codex') {
     send({
       channel: 'auth',
@@ -204,6 +332,14 @@ setTimeout(() => {
       expiresInSeconds: 900
     })
     setTimeout(() => void persistOAuth(), 1_000)
+  } else if (options.provider === 'openrouter') {
+    send({
+      channel: 'auth',
+      type: 'url',
+      kind: 'browser',
+      url: 'https://openrouter.ai/auth?state=renderer-must-not-see-this'
+    })
+    setTimeout(() => void persistOAuth(), 100)
   } else {
     send({ channel: 'auth', type: 'failed', message: 'Unsupported fake provider.' })
     finish(1)

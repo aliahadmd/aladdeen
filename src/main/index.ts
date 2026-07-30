@@ -117,7 +117,7 @@ void app.whenReady().then(async () => {
     database,
     agentVault,
     () => mainWindow,
-    async () => agent?.close()
+    async (providerId) => providerId ? agent?.closeProvider(providerId) : agent?.close()
   )
   const exportService = new ExportService(workspace, () => mainWindow)
   registerIpc({

@@ -69,9 +69,7 @@ const api: AladdeenApi = {
     getModels: (sessionId) => ipcRenderer.invoke(IPC.agentGetModels, { sessionId }),
     setThinkingLevel: (sessionId, level) =>
       ipcRenderer.invoke(IPC.agentSetThinkingLevel, { sessionId, level }),
-    setApiKey: (provider, apiKey) => ipcRenderer.invoke(IPC.agentSetApiKey, { provider, apiKey }),
-    clearApiKey: (provider) => ipcRenderer.invoke(IPC.agentClearApiKey, provider),
-    beginLogin: (provider) => ipcRenderer.invoke(IPC.agentBeginLogin, provider),
+    beginLogin: (request) => ipcRenderer.invoke(IPC.agentBeginLogin, request),
     respondLoginPrompt: (attemptId, promptId, value) =>
       ipcRenderer.invoke(IPC.agentRespondLoginPrompt, { attemptId, promptId, value }),
     reopenLoginUrl: (attemptId) => ipcRenderer.invoke(IPC.agentReopenLoginUrl, attemptId),
@@ -79,6 +77,18 @@ const api: AladdeenApi = {
     disconnectProvider: (provider) => ipcRenderer.invoke(IPC.agentDisconnectProvider, provider),
     credentialStatus: () => ipcRenderer.invoke(IPC.agentCredentialStatus),
     getModelCatalog: () => ipcRenderer.invoke(IPC.agentGetModelCatalog),
+    getProviderCatalog: () => ipcRenderer.invoke(IPC.agentGetProviderCatalog),
+    getProviderProfiles: () => ipcRenderer.invoke(IPC.agentGetProviderProfiles),
+    createProviderProfile: (input) => ipcRenderer.invoke(IPC.agentCreateProviderProfile, input),
+    updateProviderProfile: (providerId, profile) =>
+      ipcRenderer.invoke(IPC.agentUpdateProviderProfile, { providerId, profile }),
+    deleteProviderProfile: (providerId) =>
+      ipcRenderer.invoke(IPC.agentDeleteProviderProfile, providerId),
+    discoverModels: (providerId) => ipcRenderer.invoke(IPC.agentDiscoverModels, providerId),
+    refreshModelCatalog: (providerId) =>
+      ipcRenderer.invoke(IPC.agentRefreshModelCatalog, providerId),
+    verifyModel: (providerId, modelId) =>
+      ipcRenderer.invoke(IPC.agentVerifyModel, { providerId, modelId }),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => callback(agentEvent)
       ipcRenderer.on(IPC.agentEvent, listener)

@@ -12,8 +12,11 @@ vi.mock('electron', () => ({
 import type { AgentCredentialVault } from '@main/services/agent-credentials'
 import {
   bindCredentialBridge,
+  bindModelsStoreBridge,
+  workerEnvironment,
   type AgentWorkerChild
 } from '@main/services/agent-worker-host'
+import type { AppDatabase } from '@main/services/database'
 
 class FakeChild extends EventEmitter {
   connected = true
@@ -145,5 +148,116 @@ describe('agent worker credential bridge', () => {
     })
     await tick()
     expect(child.send).not.toHaveBeenCalled()
+  })
+
+  it('persists sanitized provider model metadata through the model-store bridge', () => {
+    const database = {
+      getAgentRuntimeModelCache: vi.fn().mockReturnValue({
+        models: [{ id: 'cached', provider: 'openrouter' }]
+      }),
+      setAgentRuntimeModelCache: vi.fn()
+    }
+    bindModelsStoreBridge(
+      child as unknown as AgentWorkerChild,
+      database as unknown as AppDatabase
+    )
+    child.emit('message', {
+      channel: 'models-store',
+      requestId: 'read-models',
+      operation: 'read',
+      providerId: 'openrouter'
+    })
+    child.emit('message', {
+      channel: 'models-store',
+      requestId: 'write-models',
+      operation: 'write',
+      providerId: 'openrouter',
+      entry: {
+        checkedAt: 100,
+        etag: '"catalog-v1"',
+        models: [{
+          id: 'deepseek/deepseek-r1',
+          provider: 'attacker-controlled',
+          name: 'DeepSeek R1',
+          api: 'openai-completions',
+          headers: {
+            authorization: 'Bearer must-not-persist',
+            'x-safe-routing-header': 'allowed'
+          }
+        }]
+      }
+    })
+    child.emit('message', {
+      channel: 'models-store',
+      requestId: 'delete-models',
+      operation: 'delete',
+      providerId: 'openrouter'
+    })
+
+    expect(child.send).toHaveBeenCalledWith({
+      channel: 'models-store-response',
+      requestId: 'read-models',
+      ok: true,
+      value: { models: [{ id: 'cached', provider: 'openrouter' }] }
+    })
+    const persisted = database.setAgentRuntimeModelCache.mock.calls[0]?.[1]
+    expect(persisted).toMatchObject({
+      checkedAt: 100,
+      models: [{
+        id: 'deepseek/deepseek-r1',
+        provider: 'openrouter',
+        headers: { 'x-safe-routing-header': 'allowed' }
+      }]
+    })
+    expect(JSON.stringify(persisted)).not.toContain('must-not-persist')
+    expect(database.setAgentRuntimeModelCache).toHaveBeenLastCalledWith('openrouter', undefined)
+  })
+
+  it('kills a worker that sends an oversized model-store message', () => {
+    const database = {
+      getAgentRuntimeModelCache: vi.fn(),
+      setAgentRuntimeModelCache: vi.fn()
+    }
+    bindModelsStoreBridge(
+      child as unknown as AgentWorkerChild,
+      database as unknown as AppDatabase
+    )
+    child.emit('message', {
+      channel: 'models-store',
+      requestId: 'oversized-models',
+      operation: 'write',
+      providerId: 'openrouter',
+      entry: { models: [{ id: 'x', description: 'x'.repeat(3 * 1024 * 1024) }] }
+    })
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(database.setAgentRuntimeModelCache).not.toHaveBeenCalled()
+  })
+
+  it('keeps normal workers offline for catalogs and strips ambient credentials and proxies', () => {
+    const previous = {
+      openai: process.env.OPENAI_API_KEY,
+      aws: process.env.AWS_SECRET_ACCESS_KEY,
+      proxy: process.env.npm_config_https_proxy
+    }
+    process.env.OPENAI_API_KEY = 'ambient-openai-key'
+    process.env.AWS_SECRET_ACCESS_KEY = 'ambient-aws-key'
+    process.env.npm_config_https_proxy = 'http://127.0.0.1:9999'
+    try {
+      const normal = workerEnvironment({ mode: 'capabilities' })
+      expect(normal.PI_OFFLINE).toBe('1')
+      expect(normal.OPENAI_API_KEY).toBeUndefined()
+      expect(normal.AWS_SECRET_ACCESS_KEY).toBeUndefined()
+      expect(normal.npm_config_https_proxy).toBeUndefined()
+
+      const refresh = workerEnvironment({ mode: 'refresh', provider: 'openrouter' })
+      expect(refresh.PI_OFFLINE).toBeUndefined()
+    } finally {
+      if (previous.openai === undefined) delete process.env.OPENAI_API_KEY
+      else process.env.OPENAI_API_KEY = previous.openai
+      if (previous.aws === undefined) delete process.env.AWS_SECRET_ACCESS_KEY
+      else process.env.AWS_SECRET_ACCESS_KEY = previous.aws
+      if (previous.proxy === undefined) delete process.env.npm_config_https_proxy
+      else process.env.npm_config_https_proxy = previous.proxy
+    }
   })
 })

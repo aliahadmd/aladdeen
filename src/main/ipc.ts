@@ -21,12 +21,15 @@ import { agentSessionMustStopForSettingsChange } from '@shared/agent-settings'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { defaultNameForKind, DOCUMENT_EXTENSIONS, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import {
-  agentApiKeySchema,
+  agentBeginLoginSchema,
   agentLoginPromptResponseSchema,
   agentApprovalResponseSchema,
   agentModelRequestSchema,
   agentPromptSchema,
   agentProviderSchema,
+  agentProviderModelSchema,
+  agentProviderProfileInputSchema,
+  agentProviderProfileUpdateSchema,
   agentSessionSchema,
   agentStartSessionSchema,
   agentThinkingRequestSchema,
@@ -234,16 +237,11 @@ export function registerIpc({
     const request = parse(agentThinkingRequestSchema, input)
     return agent.setThinkingLevel(request.sessionId, request.level)
   })
-  handle(IPC.agentSetApiKey, async (_event, input) => {
-    const request = parse(agentApiKeySchema, input)
-    await agentAuth.setApiKey(request.provider, request.apiKey)
-  })
-  handle(IPC.agentClearApiKey, async (_event, input) => {
-    const provider = parse(agentProviderSchema, input)
-    await agentAuth.disconnectProvider(provider)
-  })
   handle(IPC.agentBeginLogin, async (_event, input) => {
-    return agentAuth.beginLogin(parse(agentProviderSchema, input))
+    const request = typeof input === 'string'
+      ? { providerId: parse(agentProviderSchema, input), authType: 'oauth' as const }
+      : parse(agentBeginLoginSchema, input)
+    return agentAuth.beginLogin(request.providerId, request.authType)
   })
   handle(IPC.agentRespondLoginPrompt, async (_event, input) => {
     const request = parse(agentLoginPromptResponseSchema, input)
@@ -260,6 +258,28 @@ export function registerIpc({
   })
   handle(IPC.agentCredentialStatus, async () => agentAuth.credentialStatus())
   handle(IPC.agentGetModelCatalog, async () => agentAuth.getModelCatalog())
+  handle(IPC.agentGetProviderCatalog, async () => agentAuth.getProviderCatalog())
+  handle(IPC.agentGetProviderProfiles, async () => agentAuth.getProviderProfiles())
+  handle(IPC.agentCreateProviderProfile, async (_event, input) => {
+    return agentAuth.createProviderProfile(parse(agentProviderProfileInputSchema, input))
+  })
+  handle(IPC.agentUpdateProviderProfile, async (_event, input) => {
+    const request = parse(agentProviderProfileUpdateSchema, input)
+    return agentAuth.updateProviderProfile(request.providerId, request.profile)
+  })
+  handle(IPC.agentDeleteProviderProfile, async (_event, input) => {
+    await agentAuth.deleteProviderProfile(parse(agentProviderSchema, input))
+  })
+  handle(IPC.agentDiscoverModels, async (_event, input) => {
+    return agentAuth.discoverModels(parse(agentProviderSchema, input))
+  })
+  handle(IPC.agentRefreshModelCatalog, async (_event, input) => {
+    return agentAuth.refreshModelCatalog(parse(agentProviderSchema, input))
+  })
+  handle(IPC.agentVerifyModel, async (_event, input) => {
+    const request = parse(agentProviderModelSchema, input)
+    return agentAuth.verifyModel(request.providerId, request.modelId)
+  })
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))
   handle(IPC.openRelativeDocument, async (_event, input) => {
@@ -381,7 +401,17 @@ export function registerIpc({
   handle(IPC.getSettings, async () => database.getSettings())
   handle(IPC.updateSettings, async (_event, input) => {
     const previousSettings = database.getSettings()
-    const settings = database.setSettings(parse(settingsSchema, input))
+    const requestedSettings = parse(settingsSchema, input)
+    if (
+      requestedSettings.agentProvider !== previousSettings.agentProvider ||
+      requestedSettings.agentModelId !== previousSettings.agentModelId
+    ) {
+      agentAuth.validateDefaultModelSelection(
+        requestedSettings.agentProvider,
+        requestedSettings.agentModelId
+      )
+    }
+    const settings = database.setSettings(requestedSettings)
     nativeTheme.themeSource = settings.theme
     if (agentSessionMustStopForSettingsChange(previousSettings, settings)) {
       await agent.close()

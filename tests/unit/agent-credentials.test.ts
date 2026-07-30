@@ -34,6 +34,18 @@ class FakeDatabase {
   clearAgentSecret(provider: AgentProvider): void {
     this.values.delete(provider)
   }
+
+  listAgentSecretProviderIds(): AgentProvider[] {
+    return [...this.values.keys()].sort()
+  }
+
+  listAgentProviderProfiles(): [] {
+    return []
+  }
+
+  getAgentProviderProfile(): undefined {
+    return undefined
+  }
 }
 
 class FakeEncryption implements CredentialEncryption {
@@ -87,7 +99,7 @@ describe('agent credential vault', () => {
       credential: { type: 'oauth', access: 'access-token', refresh: 'refresh-token' }
     })
     const status = await vault.status()
-    expect(status.providers['openai-codex']).toMatchObject({
+    expect(status.providers.find((item) => item.providerId === 'openai-codex')).toMatchObject({
       configured: true,
       authType: 'oauth',
       reauthRequired: false
@@ -150,7 +162,7 @@ describe('agent credential vault', () => {
     const { vault } = setup()
     await vault.write('anthropic', { type: 'api_key', key: 'test-api-key' })
     vault.markReauthRequired('anthropic')
-    expect((await vault.status()).providers.anthropic).toMatchObject({
+    expect((await vault.status()).providers.find((item) => item.providerId === 'anthropic')).toMatchObject({
       configured: true,
       authType: 'api_key',
       reauthRequired: true
@@ -161,7 +173,7 @@ describe('agent credential vault', () => {
   it('retains reauthentication state when a failed refresh removed the expired token', async () => {
     const { vault } = setup()
     vault.markReauthRequired('kimi-coding')
-    expect((await vault.status()).providers['kimi-coding']).toMatchObject({
+    expect((await vault.status()).providers.find((item) => item.providerId === 'kimi-coding')).toMatchObject({
       configured: false,
       reauthRequired: true
     })

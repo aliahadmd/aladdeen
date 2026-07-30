@@ -404,15 +404,25 @@ export interface AppSettings extends ReadingSettings {
   sidebarCollapsed: boolean
   completedOnboardingVersion: number
   agentEnabled: boolean
-  agentProvider: AgentProvider
+  agentProvider: AgentProviderId
   agentModelId: string
   agentThinkingLevel: AgentThinkingLevel
   agentPanelWidth: number
   agentPanelCollapsed: boolean
 }
 
-export type AgentProvider = 'anthropic' | 'openai-codex' | 'kimi-coding' | 'openai' | 'google'
+export type AgentProviderId = string
+/** @deprecated Use AgentProviderId. Kept as an alias while renderer/session code migrates. */
+export type AgentProvider = AgentProviderId
 export type AgentAuthType = 'oauth' | 'api_key'
+export type AgentEndpointScope = 'public_https' | 'loopback'
+export type AgentApiProtocol =
+  | 'openai-completions'
+  | 'openai-responses'
+  | 'anthropic-messages'
+export type AgentAuthScheme = 'bearer' | 'x-api-key' | 'none'
+export type AgentProviderSource = 'native' | 'custom'
+export type AgentCatalogKind = 'bundled' | 'dynamic' | 'manual' | 'remote'
 export type AgentThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AgentRunState = 'idle' | 'running' | 'aborting'
 export type AgentApprovalDecision = 'allow' | 'allow-always' | 'deny' | 'cancelled'
@@ -424,13 +434,102 @@ export type AgentSessionErrorCode =
   | 'AGENT_UNAVAILABLE'
 
 export interface AgentModel {
-  provider: string
+  provider: AgentProviderId
   id: string
   name: string
   supportsThinking: boolean
+  protocol?: AgentApiProtocol
+  supportsVision?: boolean
+  contextWindow?: number
+  maxOutputTokens?: number
+  source?: 'pi' | 'custom' | 'discovered'
+  metadataConfirmed?: boolean
+  verified?: boolean
 }
 
-export interface AgentProviderCredentialStatus {
+export interface AgentProviderCompatibility {
+  supportsStore?: boolean
+  supportsDeveloperRole?: boolean
+  supportsReasoningEffort?: boolean
+  supportsUsageInStreaming?: boolean
+  supportsStrictMode?: boolean
+  supportsOpenAIGrammarTools?: boolean
+  supportsToolSearch?: boolean
+  maxTokensField?: 'max_tokens' | 'max_completion_tokens'
+  requiresToolResultName?: boolean
+  requiresAssistantAfterToolResult?: boolean
+  requiresThinkingAsText?: boolean
+  requiresReasoningContentOnAssistantMessages?: boolean
+  thinkingFormat?:
+    | 'openai'
+    | 'openrouter'
+    | 'together'
+    | 'deepseek'
+    | 'zai'
+    | 'qwen'
+    | 'chat-template'
+    | 'qwen-chat-template'
+    | 'string-thinking'
+    | 'ant-ling'
+  cacheControlFormat?: 'anthropic'
+  sendSessionAffinityHeaders?: boolean
+  sessionAffinityFormat?: 'openai' | 'openai-nosession' | 'openrouter'
+  deferredToolsMode?: 'kimi'
+  supportsEagerToolInputStreaming?: boolean
+  supportsLongCacheRetention?: boolean
+  supportsCacheControlOnTools?: boolean
+  supportsTemperature?: boolean
+  forceAdaptiveThinking?: boolean
+  allowEmptySignature?: boolean
+  supportsStrictTools?: boolean
+  supportsToolReferences?: boolean
+}
+
+export interface AgentProviderDescriptor {
+  id: AgentProviderId
+  name: string
+  source: AgentProviderSource
+  featured: boolean
+  oauthAvailable: boolean
+  apiKeyAvailable: boolean
+  modelCount: number
+  catalogKind: AgentCatalogKind
+}
+
+export interface AgentProviderProfile {
+  id: AgentProviderId
+  name: string
+  protocol: AgentApiProtocol
+  baseUrl: string
+  endpointScope: AgentEndpointScope
+  authScheme: AgentAuthScheme
+  catalogMode: Extract<AgentCatalogKind, 'manual' | 'remote'>
+  compatibility: AgentProviderCompatibility
+  models: AgentModel[]
+  createdAt: number
+  updatedAt: number
+}
+
+export interface AgentProviderProfileInput {
+  name: string
+  protocol: AgentApiProtocol
+  baseUrl: string
+  endpointScope: AgentEndpointScope
+  authScheme: AgentAuthScheme
+  catalogMode: Extract<AgentCatalogKind, 'manual' | 'remote'>
+  compatibility?: AgentProviderCompatibility
+  models: Array<{
+    id: string
+    name?: string
+    supportsThinking: boolean
+    supportsVision: boolean
+    contextWindow: number
+    maxOutputTokens: number
+  }>
+}
+
+export interface AgentProviderConnectionStatus {
+  providerId: AgentProviderId
   configured: boolean
   authType?: AgentAuthType
   reauthRequired: boolean
@@ -438,9 +537,14 @@ export interface AgentProviderCredentialStatus {
   apiKeyAvailable: boolean
 }
 
+export interface AgentBeginLoginRequest {
+  providerId: AgentProviderId
+  authType: AgentAuthType
+}
+
 export interface AgentCredentialStatus {
   encryptionAvailable: boolean
-  providers: Record<AgentProvider, AgentProviderCredentialStatus>
+  providers: AgentProviderConnectionStatus[]
 }
 
 export type AgentAuthPromptType = 'text' | 'secret' | 'select' | 'manual_code'
@@ -452,29 +556,29 @@ export interface AgentAuthPromptOption {
 }
 
 export type AgentAuthEvent =
-  | { type: 'started'; attemptId: string; provider: AgentProvider }
-  | { type: 'browser-opened'; attemptId: string; provider: AgentProvider }
+  | { type: 'started'; attemptId: string; provider: AgentProviderId }
+  | { type: 'browser-opened'; attemptId: string; provider: AgentProviderId }
   | {
       type: 'device-code'
       attemptId: string
-      provider: AgentProvider
+      provider: AgentProviderId
       userCode: string
       expiresAt?: number
     }
   | {
       type: 'prompt'
       attemptId: string
-      provider: AgentProvider
+      provider: AgentProviderId
       promptId: string
       promptType: AgentAuthPromptType
       message: string
       placeholder?: string
       options?: AgentAuthPromptOption[]
     }
-  | { type: 'progress'; attemptId: string; provider: AgentProvider; message: string }
-  | { type: 'completed'; attemptId: string; provider: AgentProvider; authType: AgentAuthType }
-  | { type: 'failed'; attemptId: string; provider: AgentProvider; message: string }
-  | { type: 'cancelled'; attemptId: string; provider: AgentProvider }
+  | { type: 'progress'; attemptId: string; provider: AgentProviderId; message: string }
+  | { type: 'completed'; attemptId: string; provider: AgentProviderId; authType: AgentAuthType }
+  | { type: 'failed'; attemptId: string; provider: AgentProviderId; message: string }
+  | { type: 'cancelled'; attemptId: string; provider: AgentProviderId }
 
 export type AgentEvent =
   | { type: 'run-state'; sessionId: string; state: AgentRunState }
@@ -686,18 +790,27 @@ export interface AladdeenApi {
       requestId: string,
       decision: Exclude<AgentApprovalDecision, 'cancelled'>
     ): Promise<Result<void>>
-    setModel(sessionId: string, provider: AgentProvider, modelId: string): Promise<Result<AgentModel>>
+    setModel(sessionId: string, provider: AgentProviderId, modelId: string): Promise<Result<AgentModel>>
     getModels(sessionId: string): Promise<Result<AgentModel[]>>
     setThinkingLevel(sessionId: string, level: AgentThinkingLevel): Promise<Result<void>>
-    setApiKey(provider: AgentProvider, apiKey: string): Promise<Result<void>>
-    clearApiKey(provider: AgentProvider): Promise<Result<void>>
-    beginLogin(provider: AgentProvider): Promise<Result<{ attemptId: string }>>
+    beginLogin(request: AgentBeginLoginRequest): Promise<Result<{ attemptId: string }>>
     respondLoginPrompt(attemptId: string, promptId: string, value: string): Promise<Result<void>>
     reopenLoginUrl(attemptId: string): Promise<Result<void>>
     cancelLogin(attemptId: string): Promise<Result<void>>
-    disconnectProvider(provider: AgentProvider): Promise<Result<void>>
+    disconnectProvider(provider: AgentProviderId): Promise<Result<void>>
     credentialStatus(): Promise<Result<AgentCredentialStatus>>
     getModelCatalog(): Promise<Result<AgentModel[]>>
+    getProviderCatalog(): Promise<Result<AgentProviderDescriptor[]>>
+    getProviderProfiles(): Promise<Result<AgentProviderProfile[]>>
+    createProviderProfile(input: AgentProviderProfileInput): Promise<Result<AgentProviderProfile>>
+    updateProviderProfile(
+      providerId: AgentProviderId,
+      input: AgentProviderProfileInput
+    ): Promise<Result<AgentProviderProfile>>
+    deleteProviderProfile(providerId: AgentProviderId): Promise<Result<void>>
+    discoverModels(providerId: AgentProviderId): Promise<Result<AgentModel[]>>
+    refreshModelCatalog(providerId: AgentProviderId): Promise<Result<AgentModel[]>>
+    verifyModel(providerId: AgentProviderId, modelId: string): Promise<Result<AgentModel>>
     onEvent(callback: (event: AgentEvent) => void): () => void
     onAuthEvent(callback: (event: AgentAuthEvent) => void): () => void
   }
@@ -775,8 +888,6 @@ export const IPC = {
   agentSetModel: 'agent:set-model',
   agentGetModels: 'agent:get-models',
   agentSetThinkingLevel: 'agent:set-thinking-level',
-  agentSetApiKey: 'agent:set-api-key',
-  agentClearApiKey: 'agent:clear-api-key',
   agentBeginLogin: 'agent:begin-login',
   agentRespondLoginPrompt: 'agent:respond-login-prompt',
   agentReopenLoginUrl: 'agent:reopen-login-url',
@@ -784,6 +895,14 @@ export const IPC = {
   agentDisconnectProvider: 'agent:disconnect-provider',
   agentCredentialStatus: 'agent:credential-status',
   agentGetModelCatalog: 'agent:get-model-catalog',
+  agentGetProviderCatalog: 'agent:get-provider-catalog',
+  agentGetProviderProfiles: 'agent:get-provider-profiles',
+  agentCreateProviderProfile: 'agent:create-provider-profile',
+  agentUpdateProviderProfile: 'agent:update-provider-profile',
+  agentDeleteProviderProfile: 'agent:delete-provider-profile',
+  agentDiscoverModels: 'agent:discover-models',
+  agentRefreshModelCatalog: 'agent:refresh-model-catalog',
+  agentVerifyModel: 'agent:verify-model',
   agentEvent: 'agent:event',
   agentAuthEvent: 'agent:auth-event',
   environmentEvent: 'environment:event',

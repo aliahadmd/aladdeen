@@ -6,18 +6,20 @@ import type {
   AgentAuthType,
   AgentCredentialStatus,
   AgentModel,
-  AgentProvider,
-  AgentProviderCredentialStatus
+  AgentProviderConnectionStatus,
+  AgentProviderId
 } from '@shared/contracts'
 
 const CREDENTIAL_ENVELOPE_VERSION = 1
 const MAX_CREDENTIAL_BYTES = 512 * 1024
-export const AGENT_PROVIDERS: readonly AgentProvider[] = [
+export const AGENT_PROVIDERS: readonly AgentProviderId[] = [
   'anthropic',
   'openai-codex',
   'kimi-coding',
   'openai',
-  'google'
+  'google',
+  'deepseek',
+  'openrouter'
 ]
 
 export interface CredentialEncryption {
@@ -27,12 +29,14 @@ export interface CredentialEncryption {
 }
 
 export interface AgentProviderCapabilities {
+  name: string
   oauthAvailable: boolean
   apiKeyAvailable: boolean
+  dynamicCatalog: boolean
   models: AgentModel[]
 }
 
-export type AgentCapabilities = Record<AgentProvider, AgentProviderCapabilities>
+export type AgentCapabilities = Record<AgentProviderId, AgentProviderCapabilities>
 
 interface CredentialEnvelope {
   version: typeof CREDENTIAL_ENVELOPE_VERSION
@@ -41,8 +45,10 @@ interface CredentialEnvelope {
 
 export const DEFAULT_AGENT_CAPABILITIES: AgentCapabilities = {
   anthropic: {
+    name: 'Anthropic',
     oauthAvailable: true,
     apiKeyAvailable: true,
+    dynamicCatalog: false,
     models: [{
       provider: 'anthropic',
       id: 'claude-sonnet-4-5',
@@ -51,8 +57,10 @@ export const DEFAULT_AGENT_CAPABILITIES: AgentCapabilities = {
     }]
   },
   'openai-codex': {
+    name: 'OpenAI Codex',
     oauthAvailable: true,
     apiKeyAvailable: false,
+    dynamicCatalog: false,
     models: [{
       provider: 'openai-codex',
       id: 'gpt-5.5',
@@ -61,8 +69,10 @@ export const DEFAULT_AGENT_CAPABILITIES: AgentCapabilities = {
     }]
   },
   'kimi-coding': {
+    name: 'Kimi For Coding',
     oauthAvailable: true,
     apiKeyAvailable: true,
+    dynamicCatalog: false,
     models: [{
       provider: 'kimi-coding',
       id: 'kimi-for-coding',
@@ -71,13 +81,31 @@ export const DEFAULT_AGENT_CAPABILITIES: AgentCapabilities = {
     }]
   },
   openai: {
+    name: 'OpenAI',
     oauthAvailable: false,
     apiKeyAvailable: true,
+    dynamicCatalog: false,
     models: []
   },
   google: {
+    name: 'Google',
     oauthAvailable: false,
     apiKeyAvailable: true,
+    dynamicCatalog: false,
+    models: []
+  },
+  deepseek: {
+    name: 'DeepSeek',
+    oauthAvailable: false,
+    apiKeyAvailable: true,
+    dynamicCatalog: false,
+    models: []
+  },
+  openrouter: {
+    name: 'OpenRouter',
+    oauthAvailable: true,
+    apiKeyAvailable: true,
+    dynamicCatalog: true,
     models: []
   }
 }
@@ -142,7 +170,7 @@ function parseEnvelope(value: string): Credential | undefined {
 }
 
 export class AgentCredentialVault {
-  private readonly reauthRequired = new Set<AgentProvider>()
+  private readonly reauthRequired = new Set<AgentProviderId>()
   private capabilities: AgentCapabilities = DEFAULT_AGENT_CAPABILITIES
 
   constructor(
@@ -162,7 +190,7 @@ export class AgentCredentialVault {
     return this.capabilities
   }
 
-  async read(provider: AgentProvider): Promise<Credential | undefined> {
+  async read(provider: AgentProviderId): Promise<Credential | undefined> {
     const ciphertext = this.database.getAgentSecret(provider)
     if (!ciphertext) return undefined
     this.requireEncryption()
@@ -189,14 +217,14 @@ export class AgentCredentialVault {
 
   async list(): Promise<readonly CredentialInfo[]> {
     const credentials: CredentialInfo[] = []
-    for (const provider of AGENT_PROVIDERS) {
+    for (const provider of this.database.listAgentSecretProviderIds()) {
       const credential = await this.read(provider)
       if (credential) credentials.push({ providerId: provider, type: credential.type })
     }
     return credentials
   }
 
-  async write(provider: AgentProvider, credential: unknown): Promise<void> {
+  async write(provider: AgentProviderId, credential: unknown): Promise<void> {
     this.requireEncryption()
     const validated = validateCredential(credential)
     const envelope: CredentialEnvelope = {
@@ -207,18 +235,23 @@ export class AgentCredentialVault {
     this.reauthRequired.delete(provider)
   }
 
-  delete(provider: AgentProvider): void {
+  delete(provider: AgentProviderId): void {
     this.database.clearAgentSecret(provider)
     this.reauthRequired.delete(provider)
   }
 
-  markReauthRequired(provider: AgentProvider): void {
+  markReauthRequired(provider: AgentProviderId): void {
     this.reauthRequired.add(provider)
   }
 
   async status(): Promise<AgentCredentialStatus> {
-    const providers = {} as Record<AgentProvider, AgentProviderCredentialStatus>
-    for (const provider of AGENT_PROVIDERS) {
+    const providerIds = new Set([
+      ...Object.keys(this.capabilities),
+      ...this.database.listAgentSecretProviderIds(),
+      ...this.database.listAgentProviderProfiles().map((profile) => profile.id)
+    ])
+    const providers: AgentProviderConnectionStatus[] = []
+    for (const provider of [...providerIds].sort((left, right) => left.localeCompare(right))) {
       let credential: Credential | undefined
       const hasStoredCredential = this.database.getAgentSecret(provider) !== null
       try {
@@ -227,13 +260,15 @@ export class AgentCredentialVault {
         this.markReauthRequired(provider)
       }
       const capability = this.capabilities[provider]
-      providers[provider] = {
-        configured: credential !== undefined || hasStoredCredential,
+      const profile = this.database.getAgentProviderProfile(provider)
+      providers.push({
+        providerId: provider,
+        configured: credential !== undefined || hasStoredCredential || profile?.authScheme === 'none',
         ...(credential ? { authType: credential.type as AgentAuthType } : {}),
         reauthRequired: this.reauthRequired.has(provider),
-        oauthAvailable: capability.oauthAvailable,
-        apiKeyAvailable: capability.apiKeyAvailable
-      }
+        oauthAvailable: capability?.oauthAvailable ?? false,
+        apiKeyAvailable: capability?.apiKeyAvailable ?? (profile ? profile.authScheme !== 'none' : false)
+      })
     }
     return {
       encryptionAvailable: this.encryptionAvailable(),

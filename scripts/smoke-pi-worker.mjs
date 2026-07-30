@@ -48,6 +48,14 @@ child.stderr?.on('data', (chunk) => {
   stderr += String(chunk)
 })
 child.on('message', (message) => {
+  if (message?.channel === 'models-store') {
+    child.send({
+      channel: 'models-store-response',
+      requestId: message.requestId,
+      ok: true
+    })
+    return
+  }
   if (message?.channel === 'credential') {
     child.send({
       channel: 'credential-response',
@@ -94,6 +102,21 @@ if (!capabilities.providers.some((provider) => (
 ))) {
   throw new Error('The pinned pi worker did not expose the Kimi default model.')
 }
+if (!capabilities.providers.some((provider) => (
+  provider.provider === 'deepseek' &&
+  provider.apiKeyAvailable &&
+  provider.models.every((model) => model.provider === 'deepseek')
+))) {
+  throw new Error('The pinned pi worker did not expose the native DeepSeek provider.')
+}
+if (!capabilities.providers.some((provider) => (
+  provider.provider === 'openrouter' &&
+  provider.oauthAvailable &&
+  provider.apiKeyAvailable &&
+  provider.dynamicCatalog
+))) {
+  throw new Error('The pinned pi worker did not expose native OpenRouter capabilities.')
+}
 
 const smokeDirectory = await mkdtemp(join(tmpdir(), 'aladdeen-pi-worker-'))
 const agentDirectory = join(smokeDirectory, 'agent')
@@ -122,6 +145,14 @@ sessionChild.stderr?.on('data', (chunk) => {
   sessionStderr += String(chunk)
 })
 sessionChild.on('message', (message) => {
+  if (message?.channel === 'models-store') {
+    sessionChild.send({
+      channel: 'models-store-response',
+      requestId: message.requestId,
+      ok: true
+    })
+    return
+  }
   if (message?.channel !== 'credential') return
   const configured = message.providerId === 'anthropic'
   sessionChild.send({
@@ -177,7 +208,12 @@ if (sessionLineBuffer.trim()) {
 }
 
 const agentFiles = await readdir(agentDirectory, { recursive: true }).catch(() => [])
-if (agentFiles.some((file) => file === 'auth.json' || file.endsWith('/auth.json'))) {
-  throw new Error('The embedded pi worker created a plaintext auth.json.')
+if (agentFiles.some((file) => (
+  file === 'auth.json' ||
+  file.endsWith('/auth.json') ||
+  file === 'models.json' ||
+  file.endsWith('/models.json')
+))) {
+  throw new Error('The embedded pi worker created a plaintext auth.json or models.json.')
 }
 await rm(smokeDirectory, { recursive: true, force: true })

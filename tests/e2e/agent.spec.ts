@@ -42,10 +42,12 @@ test('streams agent output, gates tools, aborts, and shuts down the child', asyn
 
     await window.getByRole('button', { name: 'Settings' }).click()
     await window.getByRole('tab', { name: 'Coding agent' }).click()
-    await window.getByLabel('anthropic API key').fill('test-api-key-not-real')
-    await window.getByRole('button', { name: 'Save key' }).click()
-    await expect(window.getByText('Key saved')).toBeVisible()
     await window.getByRole('switch', { name: /coding agent/i }).click()
+    await window.getByRole('button', { name: 'API key', exact: true }).first().click()
+    await window.getByLabel('Login response').fill('test-api-key-not-real')
+    await window.getByRole('button', { name: 'Continue', exact: true }).click()
+    await expect(window.getByRole('heading', { name: 'Provider connected' })).toBeVisible()
+    await window.getByRole('button', { name: 'Done' }).click()
     await window.getByRole('button', { name: 'Close settings' }).click()
 
     await expect(window.getByRole('complementary').filter({ hasText: 'Coding agent' })).toBeVisible()

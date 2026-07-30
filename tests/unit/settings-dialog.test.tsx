@@ -24,10 +24,11 @@ const defaultSettings: AppSettings = {
 describe('settings dialog', () => {
   const update = vi.fn()
   const openExternal = vi.fn()
-  const setApiKey = vi.fn()
-  const clearApiKey = vi.fn()
   const credentialStatus = vi.fn()
   const getModelCatalog = vi.fn()
+  const getProviderCatalog = vi.fn()
+  const getProviderProfiles = vi.fn()
+  const createProviderProfile = vi.fn()
   const beginLogin = vi.fn()
   const respondLoginPrompt = vi.fn()
   const reopenLoginUrl = vi.fn()
@@ -38,8 +39,6 @@ describe('settings dialog', () => {
   beforeEach(() => {
     update.mockImplementation(async (settings: AppSettings) => ({ ok: true, value: settings }))
     openExternal.mockResolvedValue({ ok: true, value: undefined })
-    setApiKey.mockResolvedValue({ ok: true, value: undefined })
-    clearApiKey.mockResolvedValue({ ok: true, value: undefined })
     beginLogin.mockResolvedValue({ ok: true, value: { attemptId: '15cc12cb-35a0-4ef0-8d76-06eba334c5bc' } })
     respondLoginPrompt.mockResolvedValue({ ok: true, value: undefined })
     reopenLoginUrl.mockResolvedValue({ ok: true, value: undefined })
@@ -50,38 +49,75 @@ describe('settings dialog', () => {
       ok: true,
       value: {
         encryptionAvailable: true,
-        providers: {
-          anthropic: {
+        providers: [
+          {
+            providerId: 'anthropic',
             configured: false,
             reauthRequired: false,
             oauthAvailable: true,
             apiKeyAvailable: true
           },
-          'openai-codex': {
+          {
+            providerId: 'openai-codex',
             configured: false,
             reauthRequired: false,
             oauthAvailable: true,
             apiKeyAvailable: false
           },
-          'kimi-coding': {
+          {
+            providerId: 'kimi-coding',
             configured: false,
             reauthRequired: false,
             oauthAvailable: true,
             apiKeyAvailable: true
           },
-          openai: {
+          {
+            providerId: 'openai',
             configured: false,
             reauthRequired: false,
             oauthAvailable: false,
             apiKeyAvailable: true
           },
-          google: {
+          {
+            providerId: 'google',
             configured: false,
             reauthRequired: false,
             oauthAvailable: false,
             apiKeyAvailable: true
           }
+        ]
+      }
+    })
+    getProviderProfiles.mockResolvedValue({ ok: true, value: [] })
+    getProviderCatalog.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          id: 'anthropic',
+          name: 'Claude',
+          source: 'native',
+          featured: true,
+          oauthAvailable: true,
+          apiKeyAvailable: true,
+          modelCount: 2,
+          catalogKind: 'bundled'
         }
+      ]
+    })
+    createProviderProfile.mockResolvedValue({
+      ok: true,
+      value: {
+        id: 'custom:123e4567-e89b-42d3-a456-426614174000',
+        name: 'Local Ollama',
+        protocol: 'openai-completions',
+        baseUrl: 'http://127.0.0.1:11434/v1',
+        endpointScope: 'loopback',
+        authScheme: 'none',
+        catalogMode: 'remote',
+        compatibility: {},
+        models: [],
+        createdAt: 100,
+        updatedAt: 100
       }
     })
     getModelCatalog.mockResolvedValue({
@@ -113,8 +149,6 @@ describe('settings dialog', () => {
           get: vi.fn().mockResolvedValue({ ok: true, value: defaultSettings })
         },
         agent: {
-          setApiKey,
-          clearApiKey,
           beginLogin,
           respondLoginPrompt,
           reopenLoginUrl,
@@ -122,6 +156,9 @@ describe('settings dialog', () => {
           disconnectProvider,
           credentialStatus,
           getModelCatalog,
+          getProviderCatalog,
+          getProviderProfiles,
+          createProviderProfile,
           onAuthEvent
         },
         system: { openExternal }
@@ -242,18 +279,14 @@ describe('settings dialog', () => {
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(defaultSettings))
   })
 
-  it('keeps the coding agent opt-in and stores API keys through the write-only API', async () => {
+  it('keeps the coding agent opt-in and collects API keys through the sanitized login dialog', async () => {
     render(<SettingsDialog open onOpenChange={vi.fn()} />)
     fireEvent.click(screen.getByRole('tab', { name: 'Coding agent' }))
 
     expect(screen.getByText(/Off by default/)).toBeVisible()
     expect(screen.getByLabelText('Default agent model')).toBeDisabled()
     expect(screen.queryByLabelText('Agent model ID')).not.toBeInTheDocument()
-    const keyInput = await screen.findByLabelText('anthropic API key')
-    expect(keyInput).toHaveAttribute('type', 'password')
-    fireEvent.change(keyInput, { target: { value: 'secret-test-api-key' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save key' }))
-    await waitFor(() => expect(setApiKey).toHaveBeenCalledWith('anthropic', 'secret-test-api-key'))
+    expect(screen.queryByLabelText('anthropic API key')).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enable coding agent' }))
     await waitFor(() => expect(update).toHaveBeenLastCalledWith({
@@ -261,6 +294,37 @@ describe('settings dialog', () => {
       agentEnabled: true,
       agentPanelCollapsed: false
     }))
+    const apiKeyButton = await screen.findByRole('button', { name: 'API key' })
+    fireEvent.click(apiKeyButton)
+    await waitFor(() => expect(beginLogin).toHaveBeenCalledWith({
+      providerId: 'anthropic',
+      authType: 'api_key'
+    }))
+  })
+
+  it('guides creation of a loopback custom endpoint without collecting secrets in profile state', async () => {
+    const enabledSettings = { ...defaultSettings, agentEnabled: true }
+    useAppStore.setState({ settings: enabledSettings, persistedSettings: enabledSettings })
+    render(<SettingsDialog open onOpenChange={vi.fn()} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Coding agent' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Add custom endpoint/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Local server/i }))
+
+    fireEvent.change(screen.getByLabelText('Provider name'), {
+      target: { value: 'Local Ollama' }
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save provider' }))
+
+    await waitFor(() => expect(createProviderProfile).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Local Ollama',
+      protocol: 'openai-completions',
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      endpointScope: 'loopback',
+      authScheme: 'none'
+    })))
+    expect(JSON.stringify(createProviderProfile.mock.calls)).not.toContain('apiKey')
   })
 
   it('closes with Escape and restores focus to the opener', async () => {

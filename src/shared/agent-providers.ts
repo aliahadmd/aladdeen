@@ -1,7 +1,7 @@
-import type { AgentProvider } from './contracts'
+import type { AgentProviderId } from './contracts'
 
 export interface AgentProviderDefinition {
-  id: AgentProvider
+  id: AgentProviderId
   name: string
   accountLabel?: string
   defaultModel: string
@@ -30,6 +30,24 @@ export const AGENT_PROVIDER_DEFINITIONS: readonly AgentProviderDefinition[] = [
   { id: 'google', name: 'Google', defaultModel: 'gemini-2.5-pro' }
 ] as const
 
-export function defaultModelForProvider(provider: AgentProvider): string {
+export const FEATURED_AGENT_PROVIDER_IDS = [
+  'anthropic',
+  'openai-codex',
+  'kimi-coding',
+  'openai',
+  'google',
+  'deepseek',
+  'openrouter'
+] as const
+
+export function isFeaturedAgentProvider(provider: AgentProviderId): boolean {
+  return (FEATURED_AGENT_PROVIDER_IDS as readonly string[]).includes(provider)
+}
+
+export function defaultModelForProvider(provider: AgentProviderId): string {
   return AGENT_PROVIDER_DEFINITIONS.find((definition) => definition.id === provider)?.defaultModel ?? ''
+}
+
+export function providerDisplayName(provider: AgentProviderId): string {
+  return AGENT_PROVIDER_DEFINITIONS.find((definition) => definition.id === provider)?.name ?? provider
 }

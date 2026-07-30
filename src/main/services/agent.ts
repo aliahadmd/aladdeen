@@ -7,9 +7,14 @@ import {
   type BrowserWindow
 } from 'electron'
 import { DesktopError } from '@main/errors'
+import {
+  toWorkerProfile,
+  verificationFingerprint
+} from '@main/services/agent-auth'
 import type { AgentCredentialVault } from '@main/services/agent-credentials'
 import {
   bindCredentialBridge,
+  bindModelsStoreBridge,
   spawnAgentWorker,
   type AgentWorkerChild
 } from '@main/services/agent-worker-host'
@@ -268,7 +273,11 @@ function toAgentModel(value: unknown): AgentModel {
     provider: stringValue(model.provider) ?? 'unknown',
     id: stringValue(model.id) ?? '',
     name: stringValue(model.name) ?? stringValue(model.id) ?? 'Unknown model',
-    supportsThinking: model.reasoning === true
+    supportsThinking: model.reasoning === true || model.supportsThinking === true,
+    ...(typeof model.api === 'string' ? { protocol: model.api as AgentModel['protocol'] } : {}),
+    ...(Array.isArray(model.input) ? { supportsVision: model.input.includes('image') } : {}),
+    ...(typeof model.contextWindow === 'number' ? { contextWindow: model.contextWindow } : {}),
+    ...(typeof model.maxTokens === 'number' ? { maxOutputTokens: model.maxTokens } : {})
   }
 }
 
@@ -293,14 +302,34 @@ export class AgentService {
     }
     const project = this.database.getProject(projectId)
     if (!project) throw new DesktopError('NOT_FOUND', 'The active project no longer exists.')
-    if (!this.vault.encryptionAvailable()) {
+    const profile = this.database.getAgentProviderProfile(settings.agentProvider)
+    if (!settings.agentModelId) {
+      throw new DesktopError('NOT_FOUND', 'Choose a default model in Agent Settings.')
+    }
+    if (profile) {
+      const model = profile.models.find((item) => item.id === settings.agentModelId)
+      if (!model) {
+        throw new DesktopError('NOT_FOUND', 'The selected custom model is no longer available.')
+      }
+      const verification = this.database.getAgentModelVerification(profile.id, model.id)
+      if (
+        model.metadataConfirmed !== true ||
+        verification?.configHash !== verificationFingerprint(profile, model)
+      ) {
+        throw new DesktopError(
+          'PERMISSION_DENIED',
+          'Run the compatibility test before using this custom model.'
+        )
+      }
+    }
+    if (profile?.authScheme !== 'none' && !this.vault.encryptionAvailable()) {
       throw new DesktopError(
         'PERMISSION_DENIED',
         'Secure credential storage is unavailable on this Mac, so the agent cannot start.'
       )
     }
     const credential = await this.vault.read(settings.agentProvider)
-    if (!credential) {
+    if (!credential && profile?.authScheme !== 'none') {
       throw new DesktopError('NOT_FOUND', `Connect ${settings.agentProvider} in Agent Settings.`)
     }
 
@@ -336,15 +365,27 @@ export class AgentService {
           cwd: project.path,
           sessionDirectory,
           agentDirectory: configDirectory,
-          approvalExtensionPath: this.resolveApprovalsExtensionPath()
+          approvalExtensionPath: this.resolveApprovalsExtensionPath(),
+          ...(profile ? { profile: toWorkerProfile(profile) } : {})
         }, project.path)
+    const detachCredentialBridge = legacyCliPath
+      ? undefined
+      : bindCredentialBridge(child as AgentWorkerChild, this.vault)
+    const detachModelsStoreBridge = legacyCliPath
+      ? undefined
+      : bindModelsStoreBridge(child as AgentWorkerChild, this.database)
     const client = new PiRpcClient(child.stdin, child.stdout)
     const session: ActiveAgentSession = {
       id: sessionId,
       provider: settings.agentProvider,
       child,
       client,
-      ...(legacyCliPath ? {} : { detachCredentialBridge: bindCredentialBridge(child as AgentWorkerChild, this.vault) }),
+      ...(legacyCliPath ? {} : {
+        detachCredentialBridge: () => {
+          detachCredentialBridge?.()
+          detachModelsStoreBridge?.()
+        }
+      }),
       stderr: '',
       pendingApprovals: new Map(),
       stopping: false,
@@ -366,6 +407,7 @@ export class AgentService {
       child.once('error', onError)
     }).catch((error: unknown) => {
       this.active = undefined
+      session.detachCredentialBridge?.()
       client.close()
       throw new DesktopError(
         'INTERNAL',
@@ -426,6 +468,12 @@ export class AgentService {
 
   async setModel(sessionId: string, provider: AgentProvider, modelId: string): Promise<AgentModel> {
     const session = this.requireSession(sessionId)
+    if (provider !== session.provider) {
+      throw new DesktopError(
+        'INVALID_PATH',
+        'Start a new session to switch providers.'
+      )
+    }
     const response = await session.client.send({ type: 'set_model', provider, modelId })
     return toAgentModel(response.data)
   }
@@ -453,6 +501,10 @@ export class AgentService {
 
   async close(): Promise<void> {
     if (this.active) await this.terminateSession(this.active, 'stopped')
+  }
+
+  async closeProvider(provider: AgentProvider): Promise<void> {
+    if (this.active?.provider === provider) await this.terminateSession(this.active, 'stopped')
   }
 
   private bindSession(session: ActiveAgentSession): void {
