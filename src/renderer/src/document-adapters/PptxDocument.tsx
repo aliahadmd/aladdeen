@@ -39,6 +39,22 @@ const DISALLOWED_CONTROL_SELECTOR = [
   '[data-pptx-share]'
 ].join(', ')
 
+/* The viewer defines its --pptx-* theme variables as inline styles on the
+   .pptxv root, but mounts some chrome (Set Up Show and other parity dialogs,
+   menus) directly on document.body, where every var(--pptx-…) resolves to
+   nothing and panels render transparent. Mirror the variables onto <body> so
+   body-mounted chrome inherits the active theme. */
+function syncViewerThemeVariables(hostElement: HTMLElement | null): void {
+  const root = hostElement?.querySelector<HTMLElement>('.pptxv')
+  if (!root) return
+  const rootStyle = root.style
+  const bodyStyle = root.ownerDocument.body.style
+  for (let index = 0; index < rootStyle.length; index += 1) {
+    const name = rootStyle.item(index)
+    if (name.startsWith('--pptx-')) bodyStyle.setProperty(name, rootStyle.getPropertyValue(name))
+  }
+}
+
 function ribbonTabKey(tab: Element | null): string {
   return (tab?.getAttribute('title') ?? tab?.textContent ?? '')
     .trim()
@@ -116,6 +132,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
 
   useEffect(() => {
     viewerRef.current?.setTheme(dark ? DARK_THEME : LIGHT_THEME)
+    syncViewerThemeVariables(host.current)
   }, [dark])
 
   useEffect(() => {
@@ -278,6 +295,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       enhanceRibbonLayout()
       enhanceInspectorSections()
       synchronizeInlineEditor()
+      syncViewerThemeVariables(host.current)
     }
     const queueViewerChromeSync = (): void => {
       if (viewerChromeFrame !== undefined) window.cancelAnimationFrame(viewerChromeFrame)

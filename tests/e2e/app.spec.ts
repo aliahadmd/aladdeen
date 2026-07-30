@@ -300,6 +300,21 @@ test('opens, edits, autosaves, presents, and reopens a local PPTX without outbou
     await presenterConsole.getByRole('button', { name: 'End', exact: true }).click()
     await expect(editor.locator('.pptxv-presenter-console')).toHaveCount(0)
     await expect.poll(() => application.windows().length, { timeout: 10_000 }).toBe(1)
+
+    // Parity dialogs mount on document.body, outside the viewer root that
+    // carries the --pptx-* theme variables; the themed background must still
+    // resolve there instead of rendering a transparent panel.
+    await editor.getByRole('tab', { name: 'Slide Show', exact: true }).click()
+    await editor.getByRole('button', { name: 'Set up slide show' }).click()
+    const setupDialog = window.locator('.pptxv-parity-dialog')
+    await expect(setupDialog).toBeVisible()
+    const setupDialogBackground = await setupDialog.evaluate((node) => getComputedStyle(node).backgroundColor)
+    expect(
+      setupDialogBackground,
+      'Set Up Show dialog must have an opaque themed background'
+    ).not.toBe('rgba(0, 0, 0, 0)')
+    await setupDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(setupDialog).toBeHidden()
     expect(outbound).toEqual([])
 
     await closeElectron(application)
