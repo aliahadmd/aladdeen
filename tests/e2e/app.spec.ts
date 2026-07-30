@@ -283,6 +283,23 @@ test('opens, edits, autosaves, presents, and reopens a local PPTX without outbou
     await expect(editor.locator('.pptxv.pptxv-presenting')).toBeVisible()
     await window.keyboard.press('Escape')
     await expect(editor.locator('.pptxv.pptxv-presenting')).toHaveCount(0)
+
+    // Presenter view opens a scripted about:blank audience window (allowed by
+    // the window-open policy) and overlays a compact control console.
+    await editor.getByRole('tab', { name: 'Slide Show', exact: true }).click()
+    await editor.getByRole('button', { name: 'Presenter view' }).click()
+    const presenterConsole = editor.locator('.pptxv-presenter-console')
+    await expect(presenterConsole).toBeVisible()
+    const consoleBounds = await presenterConsole.boundingBox()
+    const editorPaneBounds = await editor.boundingBox()
+    expect(
+      consoleBounds!.height,
+      'presenter console should be a compact control bar, not a full-pane overlay'
+    ).toBeLessThan(editorPaneBounds!.height / 4)
+    await expect.poll(() => application.windows().length, { timeout: 10_000 }).toBe(2)
+    await presenterConsole.getByRole('button', { name: 'End', exact: true }).click()
+    await expect(editor.locator('.pptxv-presenter-console')).toHaveCount(0)
+    await expect.poll(() => application.windows().length, { timeout: 10_000 }).toBe(1)
     expect(outbound).toEqual([])
 
     await closeElectron(application)
