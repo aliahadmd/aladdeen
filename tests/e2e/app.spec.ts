@@ -190,6 +190,58 @@ test('opens, edits, autosaves, presents, and reopens a local PPTX without outbou
     await expect(editor.getByRole('tab', { name: 'Design', exact: true })).toBeVisible()
     await expect(editor.getByRole('tab', { name: 'Animations', exact: true })).toBeVisible()
 
+    const ribbonTabs = [
+      ['Insert', 'insert'],
+      ['Draw', 'draw'],
+      ['Design', 'design'],
+      ['Transitions', 'transitions'],
+      ['Animations', 'animations'],
+      ['Slide Show', 'slide-show'],
+      ['Review', 'review'],
+      ['View', 'view']
+    ] as const
+    for (const [tabName, tabKey] of ribbonTabs) {
+      await editor.getByRole('tab', { name: tabName, exact: true }).click()
+      const ribbonContent = editor.locator('.pptxv-ribbon-tab-content:not([hidden])')
+      await expect(ribbonContent).toHaveAttribute('data-aladdeen-ribbon-tab', tabKey)
+      const layout = await ribbonContent.evaluate((root) => {
+        const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')]
+          .filter((button) => {
+            const bounds = button.getBoundingClientRect()
+            return bounds.width > 0 && bounds.height > 0
+          })
+          .map((button) => {
+            const bounds = button.getBoundingClientRect()
+            return {
+              label: button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '',
+              text: button.textContent?.trim() ?? '',
+              clipped: button.scrollWidth > button.clientWidth + 1,
+              left: bounds.left,
+              right: bounds.right,
+              top: bounds.top,
+              bottom: bounds.bottom
+            }
+          })
+        const overlaps: string[] = []
+        for (let first = 0; first < buttons.length; first += 1) {
+          for (let second = first + 1; second < buttons.length; second += 1) {
+            const a = buttons[first]!
+            const b = buttons[second]!
+            const horizontal = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+            const vertical = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+            if (horizontal > 0.5 && vertical > 0.5) overlaps.push(`${a.label} / ${b.label}`)
+          }
+        }
+        return {
+          clipped: buttons.filter((button) => button.text && button.clipped).map((button) => button.label),
+          overlaps
+        }
+      })
+      expect(layout.clipped, `${tabName} ribbon labels should fit their controls`).toEqual([])
+      expect(layout.overlaps, `${tabName} ribbon controls should not overlap`).toEqual([])
+    }
+    await editor.getByRole('tab', { name: 'Home', exact: true }).click()
+
     const inspector = editor.locator('.pptxv-inspector')
     await expect(inspector).toBeHidden()
     await textElement.click()

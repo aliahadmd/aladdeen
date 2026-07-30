@@ -1777,6 +1777,129 @@ body.is-resizing-sidebar * {
   min-height: 68px;
 }
 
+/* pptx-viewer 1.7.0 emits several secondary ribbon tabs without the group
+   layout classes used by Home/Insert. Restore readable intrinsic button
+   widths and explicit gallery layouts without changing the viewer DOM. */
+.aladdeen-pptx-host .pptxv-ribbon-tab-content:is(
+  [data-aladdeen-ribbon-tab='transitions'],
+  [data-aladdeen-ribbon-tab='slide-show'],
+  [data-aladdeen-ribbon-tab='review'],
+  [data-aladdeen-ribbon-tab='view']
+) {
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tab-content:is(
+  [data-aladdeen-ribbon-tab='design'],
+  [data-aladdeen-ribbon-tab='slide-show'],
+  [data-aladdeen-ribbon-tab='review'],
+  [data-aladdeen-ribbon-tab='view']
+) > .pptxv-btn:not(:has(> svg)) {
+  width: auto;
+  min-width: 48px;
+  height: 36px;
+  flex: none;
+  padding: 0 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.aladdeen-pptx-host .pptxv-ribbon-tab-content:is(
+  [data-aladdeen-ribbon-tab='slide-show'],
+  [data-aladdeen-ribbon-tab='review'],
+  [data-aladdeen-ribbon-tab='view']
+) > .pptxv-btn:has(> svg) {
+  flex: none;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-gallery {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  border-right: 1px solid var(--pptx-border);
+  padding-right: 8px;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-gallery .pptxv-btn {
+  width: auto;
+  min-width: 44px;
+  height: 36px;
+  padding: 0 8px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-field {
+  height: 36px;
+  flex: none;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-apply-all {
+  display: flex;
+  height: 36px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  color: var(--pptx-muted-foreground);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] {
+  align-items: stretch;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] > .pptxv-rgroup {
+  min-width: max-content;
+  flex-direction: column-reverse;
+  justify-content: space-between;
+  padding-block: 4px;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] .pptxv-animation-gallery {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] .pptxv-animation-gallery .pptxv-btn {
+  width: auto;
+  min-width: 48px;
+  height: 32px;
+  padding: 0 7px;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] > .pptxv-btn {
+  width: auto;
+  height: 36px;
+  flex: none;
+  align-self: center;
+  margin-inline: 8px;
+  padding: 0 9px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(4),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(6),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(7),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='review'] > .pptxv-btn:nth-child(2),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='review'] > .pptxv-btn:nth-child(4),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(4),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(7),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(11),
+.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(17) {
+  margin-left: 7px;
+  box-shadow: -6px 0 0 -5px var(--pptx-border);
+}
+
 .aladdeen-pptx-host .pptxv-body {
   position: relative;
 }

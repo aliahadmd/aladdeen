@@ -39,6 +39,14 @@ const DISALLOWED_CONTROL_SELECTOR = [
   '[data-pptx-share]'
 ].join(', ')
 
+function ribbonTabKey(tab: Element | null): string {
+  return (tab?.getAttribute('title') ?? tab?.textContent ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
 const LIGHT_THEME: ViewerTheme = {
   colors: {
     background: '#f6f7f9',
@@ -117,6 +125,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
     let cleanupRuntime: (() => void) | undefined
     let policyObserver: MutationObserver | undefined
     let inlineEditorFrame: number | undefined
+    let viewerChromeFrame: number | undefined
     let inlineEditorRetries = 0
     let inlineSourceStyle: HTMLStyleElement | undefined
     let viewer: PptxViewerInstance | null = null
@@ -254,10 +263,33 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         applyExpandedState(expandedInspectorSections.has(key))
       }
     }
+    const enhanceRibbonLayout = (): void => {
+      const editorHost = host.current
+      if (!editorHost) return
+      const activeTab = editorHost.querySelector('.pptxv-ribbon-tab[aria-selected="true"]')
+      const activeContent = editorHost.querySelector<HTMLElement>(
+        '.pptxv-ribbon-tab-content:not([hidden])'
+      )
+      const tabKey = ribbonTabKey(activeTab)
+      if (activeContent && tabKey) activeContent.dataset.aladdeenRibbonTab = tabKey
+    }
     const synchronizeViewerChrome = (): void => {
       removeDisallowedControls()
+      enhanceRibbonLayout()
       enhanceInspectorSections()
       synchronizeInlineEditor()
+    }
+    const queueViewerChromeSync = (): void => {
+      if (viewerChromeFrame !== undefined) window.cancelAnimationFrame(viewerChromeFrame)
+      viewerChromeFrame = window.requestAnimationFrame(() => {
+        viewerChromeFrame = undefined
+        synchronizeViewerChrome()
+      })
+    }
+    const handleRibbonActivation = (event: MouseEvent): void => {
+      if (event.target instanceof Element && event.target.closest('.pptxv-ribbon-tab')) {
+        queueViewerChromeSync()
+      }
     }
     const closeInspectorInitially = (): void => {
       const editorHost = host.current
@@ -279,8 +311,10 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       disposed = true
       policyObserver?.disconnect()
       if (inlineEditorFrame !== undefined) window.cancelAnimationFrame(inlineEditorFrame)
+      if (viewerChromeFrame !== undefined) window.cancelAnimationFrame(viewerChromeFrame)
       inlineSourceStyle?.remove()
       host.current?.removeEventListener('click', blockExternalNavigation, true)
+      host.current?.removeEventListener('click', handleRibbonActivation, true)
       host.current?.removeEventListener('focusin', handleEditorFocus, true)
       cleanupRuntime?.()
       viewer?.stopCollaboration()
@@ -300,6 +334,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         setCompatibility(localCompatibility)
         setRequiresSaveAs(localRequiresSaveAs)
         host.current.addEventListener('click', blockExternalNavigation, true)
+        host.current.addEventListener('click', handleRibbonActivation, true)
         host.current.addEventListener('focusin', handleEditorFocus, true)
         policyObserver = new MutationObserver(synchronizeViewerChrome)
         policyObserver.observe(host.current, { subtree: true, childList: true })
