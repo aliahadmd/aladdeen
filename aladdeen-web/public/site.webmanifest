@@ -1,7 +1,7 @@
 {
 	"name": "Aladdeen Research",
 	"short_name": "Aladdeen",
-	"description": "A private, offline-first research workspace for Markdown, HTML, Word, and PDF on M-series Apple silicon.",
+	"description": "A local-first research workspace for six document formats with an optional project-aware coding agent.",
 	"start_url": "/",
 	"display": "standalone",
 	"background_color": "#ffffff",

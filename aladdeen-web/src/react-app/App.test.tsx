@@ -24,7 +24,7 @@ describe("Aladdeen landing page", () => {
 			}),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText(/still in beta and under active development/i),
+			screen.getByText(/agent is off by default, scoped to your active project/i),
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("img", {
@@ -38,12 +38,28 @@ describe("Aladdeen landing page", () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
-				name: "Local-first is the architecture, not a setting.",
+				name: "Local-first by default. Provider-connected by choice.",
 			}),
 		).toBeInTheDocument();
-		expect(document.querySelector("#features")).toBeInTheDocument();
+		expect(document.querySelector("#product")).toBeInTheDocument();
+		expect(document.querySelector("#agent")).toBeInTheDocument();
 		expect(document.querySelector("#privacy")).toBeInTheDocument();
 		expect(document.querySelector("#faq")).toBeInTheDocument();
+		expect(
+			screen.getByRole("heading", {
+				name: "Work with your project—not a detached chatbot.",
+			}),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("img", {
+				name: /coding agent beside a project/i,
+			}),
+		).toHaveAttribute("src", "/screenshots/agent-project-dark.png");
+		expect(
+			screen.getByRole("heading", {
+				name: "Your account, key, or compatible endpoint.",
+			}),
+		).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
 				name: "Six formats, each with the right workspace.",
@@ -54,7 +70,8 @@ describe("Aladdeen landing page", () => {
 				name: "Find the document, heading, or exact source line.",
 			}),
 		).toBeInTheDocument();
-		expect(document.querySelectorAll("#features img")).toHaveLength(0);
+		expect(document.querySelectorAll("#product img")).toHaveLength(0);
+		expect(screen.getByText(/agent sends your prompts and the project content needed/i)).toBeInTheDocument();
 		expect(
 			screen.queryByText(/Aladdeen must not be used in ways that harm people/),
 		).not.toBeInTheDocument();

@@ -1,6 +1,6 @@
 {
   "name": "aladdeen",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "description": "A private, offline-first research workspace for Markdown, HTML, DOCX, PDF, XLSX, and PPTX on macOS arm64.",
   "main": "./out/main/index.js",
