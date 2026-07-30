@@ -46,7 +46,7 @@ describe("Aladdeen landing page", () => {
 		expect(document.querySelector("#faq")).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
-				name: "Four formats, each with the right workspace.",
+				name: "Six formats, each with the right workspace.",
 			}),
 		).toBeInTheDocument();
 		expect(

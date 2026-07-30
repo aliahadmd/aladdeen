@@ -39,6 +39,22 @@ const DISALLOWED_CONTROL_SELECTOR = [
   '[data-pptx-share]'
 ].join(', ')
 
+/* The viewer defines its --pptx-* theme variables as inline styles on the
+   .pptxv root, but mounts some chrome (Set Up Show and other parity dialogs,
+   menus) directly on document.body, where every var(--pptx-…) resolves to
+   nothing and panels render transparent. Mirror the variables onto <body> so
+   body-mounted chrome inherits the active theme. */
+function syncViewerThemeVariables(hostElement: HTMLElement | null): void {
+  const root = hostElement?.querySelector<HTMLElement>('.pptxv')
+  if (!root) return
+  const rootStyle = root.style
+  const bodyStyle = root.ownerDocument.body.style
+  for (let index = 0; index < rootStyle.length; index += 1) {
+    const name = rootStyle.item(index)
+    if (name.startsWith('--pptx-')) bodyStyle.setProperty(name, rootStyle.getPropertyValue(name))
+  }
+}
+
 function ribbonTabKey(tab: Element | null): string {
   return (tab?.getAttribute('title') ?? tab?.textContent ?? '')
     .trim()
@@ -116,6 +132,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
 
   useEffect(() => {
     viewerRef.current?.setTheme(dark ? DARK_THEME : LIGHT_THEME)
+    syncViewerThemeVariables(host.current)
   }, [dark])
 
   useEffect(() => {
@@ -278,6 +295,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       enhanceRibbonLayout()
       enhanceInspectorSections()
       synchronizeInlineEditor()
+      syncViewerThemeVariables(host.current)
     }
     const queueViewerChromeSync = (): void => {
       if (viewerChromeFrame !== undefined) window.cancelAnimationFrame(viewerChromeFrame)
@@ -336,8 +354,18 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         host.current.addEventListener('click', blockExternalNavigation, true)
         host.current.addEventListener('click', handleRibbonActivation, true)
         host.current.addEventListener('focusin', handleEditorFocus, true)
-        policyObserver = new MutationObserver(synchronizeViewerChrome)
-        policyObserver.observe(host.current, { subtree: true, childList: true })
+        // Coalesce chrome sync into one animation frame: the synchronous
+        // observer callback ran full-subtree queries and getComputedStyle on
+        // every mutation, which made dragging and inline typing stutter and
+        // re-triggered itself through its own DOM writes. Also watch `hidden`
+        // flips so ribbon tab switches re-sync regardless of input modality.
+        policyObserver = new MutationObserver(queueViewerChromeSync)
+        policyObserver.observe(host.current, {
+          subtree: true,
+          childList: true,
+          attributes: true,
+          attributeFilter: ['hidden']
+        })
 
         viewer = createPptxViewer(host.current, {
           source,
@@ -476,11 +504,16 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         className={compatibility?.level === 'read-only' ? 'pptx-viewer-container is-read-only' : 'pptx-viewer-container'}
         tabIndex={-1}
       />
-      {(loading || saving) && (
+      {loading && (
         <div className="pptx-progress-overlay absolute inset-0 z-20 grid place-items-center bg-surface-elevated/90 text-[12px] text-foreground-muted">
           <span className="flex items-center gap-2">
-            <LoaderCircle className="spinner" size={16} /> {saving ? 'Saving presentation…' : 'Loading presentation…'}
+            <LoaderCircle className="spinner" size={16} /> Loading presentation…
           </span>
+        </div>
+      )}
+      {saving && !loading && (
+        <div className="pptx-saving-indicator" role="status">
+          <LoaderCircle className="spinner" size={12} /> Saving presentation…
         </div>
       )}
       {error && (

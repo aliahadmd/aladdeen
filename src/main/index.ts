@@ -159,7 +159,30 @@ function createWindow(): void {
 
   if (state?.maximized) mainWindow.maximize()
   mainWindow.once('ready-to-show', () => mainWindow?.show())
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  // The PPTX presenter view opens a scripted about:blank child window and
+  // draws into it from the opener. Allow exactly that shape and nothing
+  // else; the child inherits the default session, so network egress stays
+  // blocked, and the hardening below pins it to about:blank forever.
+  mainWindow.webContents.setWindowOpenHandler((details) => {
+    if (details.url !== 'about:blank') return { action: 'deny' }
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        autoHideMenuBar: true,
+        webPreferences: {
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+          webSecurity: true
+        }
+      }
+    }
+  })
+  mainWindow.webContents.on('did-create-window', (child) => {
+    child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    child.webContents.on('will-navigate', (event) => event.preventDefault())
+    child.webContents.on('will-attach-webview', (event) => event.preventDefault())
+  })
   mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())
   mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
 
@@ -197,8 +220,15 @@ function createWindow(): void {
 }
 
 function configureSessionSecurity(): void {
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
-  session.defaultSession.setPermissionCheckHandler(() => false)
+  // Fullscreen is the one capability the renderer legitimately needs: the
+  // PPTX slide show presents through element.requestFullscreen(), and a
+  // denied request leaves that promise permanently pending (no rejection,
+  // no fullscreenerror), so the viewer can neither present nor fall back.
+  // Everything else (camera, geolocation, notifications, …) stays denied.
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) =>
+    callback(permission === 'fullscreen')
+  )
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => permission === 'fullscreen')
   const developmentOrigin = !app.isPackaged && process.env.ELECTRON_RENDERER_URL
     ? new URL(process.env.ELECTRON_RENDERER_URL).origin
     : null
