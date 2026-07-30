@@ -24,6 +24,9 @@ describe("Aladdeen landing page", () => {
 			}),
 		).toBeInTheDocument();
 		expect(
+			screen.getByText(/still in beta and under active development/i),
+		).toBeInTheDocument();
+		expect(
 			screen.getByRole("heading", {
 				name: "A research workspace that adapts to the source.",
 			}),

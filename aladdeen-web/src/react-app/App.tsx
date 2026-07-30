@@ -377,7 +377,7 @@ function App() {
 				<section className="mx-auto w-full max-w-5xl px-6 pb-12 pt-20 md:pb-20 md:pt-28">
 					<div className="max-w-3xl">
 						<p className="text-sm text-neutral-400 dark:text-neutral-400">
-							Aladdeen Research · macOS arm64 · M-series Apple silicon · Preview {CURRENT_RELEASE}
+							Aladdeen Research · Beta {CURRENT_RELEASE} · macOS arm64 · M-series Apple silicon
 						</p>
 						<h1 className="mt-5 max-w-2xl text-4xl font-bold tracking-[-0.035em] text-balance text-neutral-950 dark:text-neutral-50 md:text-6xl md:leading-[1.03]">
 							Your research, one calm workspace.
@@ -385,13 +385,16 @@ function App() {
 						<p className="mt-6 max-w-xl text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-400">
 							Read, write, organize, and search Markdown, HTML, Word, and PDF sources in place. No account, no conversion, and no cloud between you and your work.
 						</p>
+						<p className="mt-4 max-w-xl text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+							Aladdeen is still in beta and under active development. New capabilities and refinements are being added day by day as the roadmap moves forward.
+						</p>
 						<div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
 								Download for macOS arm64
 							</DownloadLink>
 						</div>
 						<p className="mt-4 text-xs text-neutral-400 dark:text-neutral-400">
-							Free to use · Ad-hoc signed preview build
+							Free to use · Beta preview · Ad-hoc signed
 						</p>
 					</div>
 
@@ -497,7 +500,7 @@ function App() {
 							Built for the Mac you have.
 						</h2>
 						<p className="mt-4 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Version {CURRENT_RELEASE} is a free macOS arm64 preview for M-series Macs (M1 or newer). The installer is delivered from a private Cloudflare R2 bucket through this site. It is ad-hoc signed for bundle integrity but is not Apple notarized.
+							Version {CURRENT_RELEASE} is a free macOS arm64 beta for M-series Macs (M1 or newer). Aladdeen remains under active development, with new capabilities and refinements added day by day along its roadmap. The installer is delivered from a private Cloudflare R2 bucket through this site. It is ad-hoc signed for bundle integrity but is not Apple notarized.
 						</p>
 					</div>
 
