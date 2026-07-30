@@ -401,14 +401,16 @@ function App() {
 					<figure className="mt-14 md:mt-20">
 						<div className="overflow-hidden rounded-md border border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900">
 							<img
-								src="/screenshots/markdown-light.png"
-								alt="Aladdeen Research displaying a document with a project sidebar and reading view"
+								src="/screenshots/xlsx-dark.png"
+								alt="Aladdeen Research in dark mode editing a large XLSX spreadsheet beside the project sidebar"
+								width="2560"
+								height="1440"
 								fetchPriority="high"
 								className="block h-auto w-full"
 							/>
 						</div>
 						<figcaption className="mt-3 text-xs text-neutral-400 dark:text-neutral-400">
-							Research sources, projects, outline, editing, and export close at hand.
+							Local spreadsheet editing, sheet tools, and project navigation in one workspace.
 						</figcaption>
 					</figure>
 

@@ -27,6 +27,11 @@ describe("Aladdeen landing page", () => {
 			screen.getByText(/still in beta and under active development/i),
 		).toBeInTheDocument();
 		expect(
+			screen.getByRole("img", {
+				name: /editing a large XLSX spreadsheet beside the project sidebar/i,
+			}),
+		).toHaveAttribute("src", "/screenshots/xlsx-dark.png");
+		expect(
 			screen.getByRole("heading", {
 				name: "A research workspace that adapts to the source.",
 			}),
