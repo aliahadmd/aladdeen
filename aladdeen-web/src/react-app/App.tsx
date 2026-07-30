@@ -13,7 +13,7 @@ const themeOrder: Theme[] = ["light", "dark", "system"];
 const featureGroups = [
 	{
 		label: "Documents",
-		title: "Four formats, each with the right workspace.",
+		title: "Six formats, each with the right workspace.",
 		description:
 			"Aladdeen recognizes the source format and opens tools designed for it—without a conversion step.",
 		items: [
@@ -36,6 +36,16 @@ const featureGroups = [
 				title: "PDF",
 				detail:
 					"Read, search, annotate, fill forms, and organize pages while preserving the original document.",
+			},
+			{
+				title: "Excel",
+				detail:
+					"Edit XLSX workbooks with formulas, styles, sorting, filtering, and preservation-aware saves.",
+			},
+			{
+				title: "PowerPoint",
+				detail:
+					"Edit PPTX decks with the full ribbon, speaker notes, transitions and animations, then present fullscreen or with presenter view.",
 			},
 		],
 	},
@@ -114,7 +124,7 @@ const faqItems = [
 	{
 		question: "Where are my research files stored?",
 		answer:
-			"Exactly where you already keep them. Aladdeen opens ordinary Markdown, HTML, Word, and PDF files in place; it does not copy document content into its settings database.",
+			"Exactly where you already keep them. Aladdeen opens ordinary Markdown, HTML, Word, PDF, Excel, and PowerPoint files in place; it does not copy document content into its settings database.",
 	},
 	{
 		question: "Does Aladdeen need an internet connection?",
@@ -134,7 +144,7 @@ const faqItems = [
 	{
 		question: "Can I leave Aladdeen later?",
 		answer:
-			"Yes. Your work remains in its original Markdown, HTML, DOCX, or PDF format at its original location. Aladdeen does not place your research inside a proprietary library.",
+			"Yes. Your work remains in its original Markdown, HTML, DOCX, PDF, XLSX, or PPTX format at its original location. Aladdeen does not place your research inside a proprietary library.",
 	},
 	{
 		question: "Is Aladdeen free?",
@@ -417,7 +427,7 @@ function App() {
 					<ul className="mt-12 grid border-y border-neutral-100 py-5 text-sm text-neutral-500 dark:border-neutral-800 dark:text-neutral-400 sm:grid-cols-2 lg:grid-cols-4">
 						<li className="py-2 lg:py-0">Files stay on disk</li>
 						<li className="py-2 lg:py-0">Works offline</li>
-						<li className="py-2 lg:py-0">Four document formats</li>
+						<li className="py-2 lg:py-0">Six document formats</li>
 						<li className="py-2 lg:py-0">Free to use</li>
 					</ul>
 				</section>
