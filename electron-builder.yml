@@ -10,6 +10,10 @@ files:
 extraResources:
   - from: THIRD_PARTY_NOTICES.md
     to: THIRD_PARTY_NOTICES.md
+  - from: release-staging/pi-runtime/node_modules
+    to: pi-runtime/node_modules
+  - from: resources/pi/aladdeen-approvals.ts
+    to: pi/aladdeen-approvals.ts
 fileAssociations:
   - ext:
       - md

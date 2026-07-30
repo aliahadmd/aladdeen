@@ -1,13 +1,16 @@
 import { useRef } from 'react'
-import { X } from 'lucide-react'
+import { PanelRightClose, PanelRightOpen, X } from 'lucide-react'
 import {
   documentTabClasses,
   tabBarClasses,
   tabCloseClasses,
   tabNameClasses,
+  sidebarIconButtonClasses,
   tabStateClasses
 } from '@renderer/lib/ui-styles'
 import { isDocumentDirty, useAppStore } from '@renderer/store/app-store'
+import { useMediaQuery } from '@renderer/hooks/use-media-query'
+import { COMPACT_WORKSPACE_QUERY } from '@renderer/lib/breakpoints'
 import { DocumentKindIcon } from './DocumentKindIcon'
 
 interface TabSummary {
@@ -49,9 +52,17 @@ export function TabBar(): React.JSX.Element | null {
   const setActiveFileId = useAppStore((state) => state.setActiveFileId)
   const closeDocument = useAppStore((state) => state.closeDocument)
   const reorderDocument = useAppStore((state) => state.reorderDocument)
+  const settings = useAppStore((state) => state.settings)
+  const updateSettings = useAppStore((state) => state.updateSettings)
+  const agentPanelOpen = useAppStore((state) => state.agentPanelOpen)
+  const setAgentPanelOpen = useAppStore((state) => state.setAgentPanelOpen)
   const tabs = useRef(new Map<string, HTMLButtonElement>())
+  const compact = useMediaQuery(COMPACT_WORKSPACE_QUERY)
 
-  if (documents.length === 0) return null
+  if (documents.length === 0 && !settings.agentEnabled) return null
+  const agentVisible = settings.agentEnabled && (
+    compact ? agentPanelOpen : !settings.agentPanelCollapsed
+  )
 
   return (
     <div className={tabBarClasses} role="tablist" aria-label="Open documents">
@@ -120,6 +131,26 @@ export function TabBar(): React.JSX.Element | null {
           </div>
         )
       })}
+      {settings.agentEnabled && (
+        <div className="sticky right-0 ml-auto flex h-full shrink-0 items-center border-l border-border bg-surface px-1.5">
+          <button
+            type="button"
+            className={sidebarIconButtonClasses}
+            aria-label={agentVisible ? 'Hide coding agent' : 'Show coding agent'}
+            aria-pressed={agentVisible}
+            title={agentVisible ? 'Hide coding agent' : 'Show coding agent'}
+            onClick={() => {
+              if (compact) {
+                setAgentPanelOpen(!agentPanelOpen)
+              } else {
+                void updateSettings({ agentPanelCollapsed: !settings.agentPanelCollapsed })
+              }
+            }}
+          >
+            {agentVisible ? <PanelRightClose size={15} /> : <PanelRightOpen size={15} />}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

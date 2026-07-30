@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AtSign, BookOpen, Check, Command, ExternalLink, Github, Info, Mail, Minus, Palette, Plus, RotateCcw, X } from 'lucide-react'
+import { AtSign, Bot, BookOpen, Check, Command, ExternalLink, Github, Info, KeyRound, Mail, Minus, Palette, Plus, RotateCcw, ShieldAlert, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
-import type { AppSettings } from '@shared/contracts'
+import type { AgentCredentialStatus, AgentProvider, AgentThinkingLevel, AppSettings } from '@shared/contracts'
 import {
   DEFAULT_READING_SETTINGS,
   READING_FONT_SIZE_MAX,
@@ -26,7 +26,7 @@ interface SettingsDialogProps {
   onShowTutorial?(): void
 }
 
-type SettingsCategory = 'appearance' | 'reading' | 'shortcuts' | 'about'
+type SettingsCategory = 'appearance' | 'reading' | 'shortcuts' | 'agent' | 'about'
 
 interface SettingsCategoryDefinition {
   id: SettingsCategory
@@ -59,6 +59,12 @@ const SETTINGS_CATEGORIES: SettingsCategoryDefinition[] = [
     label: 'Keyboard shortcuts',
     description: 'Move through your workspace without leaving the keyboard.',
     icon: Command
+  },
+  {
+    id: 'agent',
+    label: 'Coding agent',
+    description: 'Connect an optional AI provider for project-aware assistance.',
+    icon: Bot
   },
   {
     id: 'about',
@@ -277,6 +283,12 @@ export function SettingsDialog({ open, onOpenChange, onShowTutorial }: SettingsD
               )}
               {activeCategory === 'shortcuts' && (
                 <ShortcutSettings />
+              )}
+              {activeCategory === 'agent' && (
+                <AgentSettings
+                  settings={settings}
+                  onUpdate={(next) => void updateSettings(next)}
+                />
               )}
               {activeCategory === 'about' && (
                 <AboutSettings onShowTutorial={onShowTutorial
@@ -573,6 +585,212 @@ function AppearanceSettings({
             </button>
           ))}
         </div>
+      </section>
+    </div>
+  )
+}
+
+const AGENT_PROVIDERS: Array<{ value: AgentProvider; label: string }> = [
+  { value: 'anthropic', label: 'Anthropic' },
+  { value: 'openai', label: 'OpenAI' },
+  { value: 'google', label: 'Google' }
+]
+const AGENT_THINKING_LEVELS: AgentThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+
+function AgentSettings({
+  settings,
+  onUpdate
+}: {
+  settings: AppSettings
+  onUpdate(next: Partial<AppSettings>): void
+}): React.JSX.Element {
+  const [credentials, setCredentials] = useState<AgentCredentialStatus>()
+  const [apiKey, setApiKey] = useState('')
+  const [modelId, setModelId] = useState(settings.agentModelId)
+  const [credentialError, setCredentialError] = useState<string>()
+  const [savingKey, setSavingKey] = useState(false)
+
+  const refreshCredentials = async (): Promise<void> => {
+    const result = await window.aladdeen.agent.credentialStatus()
+    if (result.ok) {
+      setCredentials(result.value)
+      setCredentialError(undefined)
+    } else {
+      setCredentialError(result.error.message)
+    }
+  }
+
+  useEffect(() => {
+    void refreshCredentials()
+  }, [])
+
+  useEffect(() => setModelId(settings.agentModelId), [settings.agentModelId])
+
+  const hasKey = credentials?.providers[settings.agentProvider] ?? false
+  const persistModel = (): void => {
+    const next = modelId.trim()
+    if (next && next !== settings.agentModelId) onUpdate({ agentModelId: next })
+    else if (!next) setModelId(settings.agentModelId)
+  }
+
+  return (
+    <div className="divide-y divide-border">
+      <section className="py-4" aria-labelledby="agent-enable-label">
+        <div className="flex items-start justify-between gap-5">
+          <div>
+            <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-enable-label">Enable coding agent</h3>
+            <p className="mt-1 mb-0 max-w-[470px] text-[12px] leading-[1.5] text-foreground-muted">
+              Off by default. When enabled, the agent sends prompts and referenced project files to your chosen AI provider; nothing else in Aladdeen goes online.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.agentEnabled}
+            className={cn(
+              'relative mt-0.5 h-6 w-11 shrink-0 rounded-full border border-border-strong bg-surface-muted transition-colors',
+              settings.agentEnabled && 'border-accent bg-accent'
+            )}
+            onClick={() => onUpdate({
+              agentEnabled: !settings.agentEnabled,
+              ...(!settings.agentEnabled ? { agentPanelCollapsed: false } : {})
+            })}
+          >
+            <span className={cn(
+              'absolute top-[3px] left-[3px] h-4 w-4 rounded-full bg-foreground-muted shadow-sm transition-transform',
+              settings.agentEnabled && 'translate-x-5 bg-accent-contrast'
+            )} />
+            <span className="sr-only">{settings.agentEnabled ? 'Disable' : 'Enable'} coding agent</span>
+          </button>
+        </div>
+      </section>
+
+      {credentials && !credentials.encryptionAvailable && (
+        <section className="py-4">
+          <div className="flex gap-2.5 rounded-lg border border-warning/35 bg-[color-mix(in_oklab,var(--warning)_8%,var(--surface))] p-3 text-warning">
+            <ShieldAlert size={16} className="mt-px shrink-0" />
+            <div>
+              <p className="m-0 text-[11px] font-bold">Secure credential storage is unavailable</p>
+              <p className="mt-1 mb-0 text-[10px] leading-[1.5]">
+                Aladdeen will not save an API key in plaintext. Enable macOS secure storage before using the agent.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-start gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-provider-label">
+        <div>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-provider-label">Provider and model</h3>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">Use your own provider account and preferred model ID.</p>
+        </div>
+        <div className="grid gap-2">
+          <select
+            value={settings.agentProvider}
+            aria-label="Agent provider"
+            className="h-9 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] text-foreground outline-none focus:border-accent"
+            onChange={(event) => onUpdate({ agentProvider: event.currentTarget.value as AgentProvider })}
+          >
+            {AGENT_PROVIDERS.map((provider) => (
+              <option value={provider.value} key={provider.value}>{provider.label}</option>
+            ))}
+          </select>
+          <input
+            value={modelId}
+            aria-label="Agent model ID"
+            className="h-9 rounded-lg border border-border-strong bg-surface px-2.5 font-mono text-[11px] text-foreground outline-none focus:border-accent"
+            placeholder="Model ID"
+            onChange={(event) => setModelId(event.currentTarget.value)}
+            onBlur={persistModel}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                persistModel()
+                event.currentTarget.blur()
+              }
+            }}
+          />
+        </div>
+      </section>
+
+      <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-start gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-key-label">
+        <div>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-key-label">API key</h3>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">
+            Encrypted with macOS secure storage. The saved value is never readable back.
+          </p>
+        </div>
+        <div>
+          <div className="relative">
+            <KeyRound size={14} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-foreground-muted" />
+            <input
+              type="password"
+              value={apiKey}
+              aria-label={`${settings.agentProvider} API key`}
+              autoComplete="off"
+              disabled={credentials?.encryptionAvailable === false}
+              className="h-9 w-full rounded-lg border border-border-strong bg-surface pr-2.5 pl-8 text-[12px] text-foreground outline-none focus:border-accent disabled:opacity-50"
+              placeholder={hasKey ? '••••••••  Replace saved key' : 'Paste API key'}
+              onChange={(event) => setApiKey(event.currentTarget.value)}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[9px] text-foreground-muted">
+              {hasKey ? 'Key saved' : 'No key saved'}
+            </span>
+            <div className="flex gap-1.5">
+              {hasKey && (
+                <button
+                  type="button"
+                  className="h-7 rounded-md border border-border bg-transparent px-2.5 text-[10px] font-semibold text-danger hover:bg-danger-soft"
+                  onClick={() => void (async () => {
+                    const result = await window.aladdeen.agent.clearApiKey(settings.agentProvider)
+                    if (!result.ok) setCredentialError(result.error.message)
+                    else {
+                      setApiKey('')
+                      await refreshCredentials()
+                    }
+                  })()}
+                >
+                  Clear
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={apiKey.trim().length < 8 || savingKey || credentials?.encryptionAvailable === false}
+                className="h-7 rounded-md border border-transparent bg-accent px-2.5 text-[10px] font-semibold text-accent-contrast disabled:opacity-40"
+                onClick={() => void (async () => {
+                  setSavingKey(true)
+                  const result = await window.aladdeen.agent.setApiKey(settings.agentProvider, apiKey.trim())
+                  setSavingKey(false)
+                  if (!result.ok) {
+                    setCredentialError(result.error.message)
+                    return
+                  }
+                  setApiKey('')
+                  await refreshCredentials()
+                })()}
+              >
+                {savingKey ? 'Saving…' : hasKey ? 'Replace' : 'Save key'}
+              </button>
+            </div>
+          </div>
+          {credentialError && <p className="mt-2 mb-0 text-[10px] text-danger">{credentialError}</p>}
+        </div>
+      </section>
+
+      <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-center gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-thinking-label">
+        <div>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-thinking-label">Thinking level</h3>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">Higher levels can take longer and use more provider tokens.</p>
+        </div>
+        <select
+          value={settings.agentThinkingLevel}
+          aria-label="Default agent thinking level"
+          className="h-9 rounded-lg border border-border-strong bg-surface px-2.5 text-[12px] capitalize text-foreground outline-none focus:border-accent"
+          onChange={(event) => onUpdate({ agentThinkingLevel: event.currentTarget.value as AgentThinkingLevel })}
+        >
+          {AGENT_THINKING_LEVELS.map((level) => <option value={level} key={level}>{level}</option>)}
+        </select>
       </section>
     </div>
   )

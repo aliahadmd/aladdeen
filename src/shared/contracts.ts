@@ -403,7 +403,116 @@ export interface AppSettings extends ReadingSettings {
   sidebarWidth: number
   sidebarCollapsed: boolean
   completedOnboardingVersion: number
+  agentEnabled: boolean
+  agentProvider: AgentProvider
+  agentModelId: string
+  agentThinkingLevel: AgentThinkingLevel
+  agentPanelWidth: number
+  agentPanelCollapsed: boolean
 }
+
+export type AgentProvider = 'anthropic' | 'openai' | 'google'
+export type AgentThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export type AgentRunState = 'idle' | 'running' | 'aborting'
+export type AgentApprovalDecision = 'allow' | 'allow-always' | 'deny' | 'cancelled'
+export type AgentSessionErrorCode =
+  | 'AUTH_FAILED'
+  | 'CRASHED'
+  | 'SPAWN_FAILED'
+  | 'PROTOCOL_ERROR'
+  | 'AGENT_UNAVAILABLE'
+
+export interface AgentModel {
+  provider: string
+  id: string
+  name: string
+  supportsThinking: boolean
+}
+
+export interface AgentCredentialStatus {
+  encryptionAvailable: boolean
+  providers: Record<AgentProvider, boolean>
+}
+
+export type AgentEvent =
+  | { type: 'run-state'; sessionId: string; state: AgentRunState }
+  | { type: 'assistant-start'; sessionId: string; messageId: string }
+  | { type: 'text-delta'; sessionId: string; messageId: string; delta: string }
+  | { type: 'thinking-delta'; sessionId: string; messageId: string; delta: string }
+  | {
+      type: 'block-end'
+      sessionId: string
+      messageId: string
+      block: 'text' | 'thinking'
+      contentIndex: number
+    }
+  | {
+      type: 'assistant-end'
+      sessionId: string
+      messageId: string
+      stopReason?: string
+      error?: string
+    }
+  | {
+      type: 'tool-start'
+      sessionId: string
+      toolCallId: string
+      toolName: string
+      input: Record<string, unknown>
+    }
+  | {
+      type: 'tool-update'
+      sessionId: string
+      toolCallId: string
+      output: string
+      truncated: boolean
+    }
+  | {
+      type: 'tool-end'
+      sessionId: string
+      toolCallId: string
+      output: string
+      truncated: boolean
+      isError: boolean
+    }
+  | {
+      type: 'approval-request'
+      sessionId: string
+      requestId: string
+      toolCallId?: string
+      toolName: string
+      input: Record<string, unknown>
+    }
+  | {
+      type: 'approval-resolved'
+      sessionId: string
+      requestId: string
+      decision: AgentApprovalDecision
+    }
+  | {
+      type: 'retry'
+      sessionId: string
+      phase: 'start' | 'end'
+      attempt: number
+      maxAttempts?: number
+      delayMs?: number
+      success?: boolean
+      message?: string
+    }
+  | {
+      type: 'compaction'
+      sessionId: string
+      phase: 'start' | 'end'
+      reason?: string
+      message?: string
+    }
+  | {
+      type: 'session-error'
+      sessionId: string
+      code: AgentSessionErrorCode
+      message: string
+    }
+  | { type: 'session-ended'; sessionId: string; reason: 'stopped' | 'exited' | 'crashed' }
 
 export interface BootstrapData {
   settings: AppSettings
@@ -525,6 +634,24 @@ export interface AladdeenApi {
     onEvent(callback: (event: GlobalSearchEvent) => void): () => void
     onOpenRequest(callback: () => void): () => void
   }
+  agent: {
+    startSession(projectId: string): Promise<Result<{ sessionId: string }>>
+    stopSession(sessionId: string): Promise<Result<void>>
+    prompt(sessionId: string, message: string, steer?: boolean): Promise<Result<void>>
+    abort(sessionId: string): Promise<Result<void>>
+    respondApproval(
+      sessionId: string,
+      requestId: string,
+      decision: Exclude<AgentApprovalDecision, 'cancelled'>
+    ): Promise<Result<void>>
+    setModel(sessionId: string, provider: AgentProvider, modelId: string): Promise<Result<AgentModel>>
+    getModels(sessionId: string): Promise<Result<AgentModel[]>>
+    setThinkingLevel(sessionId: string, level: AgentThinkingLevel): Promise<Result<void>>
+    setApiKey(provider: AgentProvider, apiKey: string): Promise<Result<void>>
+    clearApiKey(provider: AgentProvider): Promise<Result<void>>
+    credentialStatus(): Promise<Result<AgentCredentialStatus>>
+    onEvent(callback: (event: AgentEvent) => void): () => void
+  }
   document: {
     open(target: DocumentTarget): Promise<Result<DocumentSnapshot>>
     openFile(): Promise<Result<DocumentSnapshot>>
@@ -591,6 +718,18 @@ export const IPC = {
   cancelGlobalSearch: 'search:cancel',
   globalSearchEvent: 'search:event',
   globalSearchOpenRequest: 'search:open-request',
+  agentStartSession: 'agent:start-session',
+  agentStopSession: 'agent:stop-session',
+  agentPrompt: 'agent:prompt',
+  agentAbort: 'agent:abort',
+  agentRespondApproval: 'agent:respond-approval',
+  agentSetModel: 'agent:set-model',
+  agentGetModels: 'agent:get-models',
+  agentSetThinkingLevel: 'agent:set-thinking-level',
+  agentSetApiKey: 'agent:set-api-key',
+  agentClearApiKey: 'agent:clear-api-key',
+  agentCredentialStatus: 'agent:credential-status',
+  agentEvent: 'agent:event',
   environmentEvent: 'environment:event',
   systemOpenFileRequest: 'system:open-file-request',
   openDocumentRequest: 'document:open-request',

@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { LoaderCircle, PanelLeftOpen } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 import type { CloseRequest } from '@shared/contracts'
 import { DOCUMENT_EXTENSION_PATTERN, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import { CURRENT_ONBOARDING_VERSION } from '@shared/onboarding'
 import { AddProjectsDialog } from './components/AddProjectsDialog'
+import { AgentPanel } from './components/agent/AgentPanel'
 import { BrandMark } from './components/BrandMark'
 import { CloseRecoveryDialog } from './components/CloseRecoveryDialog'
 import { ConflictDialog } from './components/ConflictDialog'
@@ -16,6 +16,8 @@ import { QuickOpenDialog } from './components/QuickOpenDialog'
 import { Sidebar } from './components/Sidebar'
 import { TabBar } from './components/TabBar'
 import { useEffectiveDarkMode } from './hooks/use-effective-dark-mode'
+import { useEdgeResizer } from './hooks/use-edge-resizer'
+import { useMediaQuery } from './hooks/use-media-query'
 import { cn } from './lib/cn'
 import { COMPACT_WORKSPACE_QUERY } from './lib/breakpoints'
 import { useAppStore } from './store/app-store'
@@ -23,10 +25,9 @@ import { useAppStore } from './store/app-store'
 const SIDEBAR_MIN_WIDTH = 248
 const SIDEBAR_DEFAULT_WIDTH = 320
 const SIDEBAR_MAX_WIDTH = 420
-
-function clampSidebarWidth(width: number): number {
-  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)))
-}
+const AGENT_PANEL_MIN_WIDTH = 300
+const AGENT_PANEL_DEFAULT_WIDTH = 380
+const AGENT_PANEL_MAX_WIDTH = 560
 
 export default function App(): React.JSX.Element {
   const bootStatus = useAppStore((state) => state.bootStatus)
@@ -41,6 +42,9 @@ export default function App(): React.JSX.Element {
   const updateSettings = useAppStore((state) => state.updateSettings)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen)
+  const agentPanelOpen = useAppStore((state) => state.agentPanelOpen)
+  const setAgentPanelOpen = useAppStore((state) => state.setAgentPanelOpen)
+  const applyAgentEvent = useAppStore((state) => state.applyAgentEvent)
   const activeFileId = useAppStore((state) => state.activeFileId)
   const editing = useAppStore((state) => state.editing)
   const setEditing = useAppStore((state) => state.setEditing)
@@ -51,12 +55,33 @@ export default function App(): React.JSX.Element {
   const documentTransitioning = useAppStore((state) => state.documentTransitioning)
   const setDocumentTransitioning = useAppStore((state) => state.setDocumentTransitioning)
   const dark = useEffectiveDarkMode()
-  const sidebarWidthRef = useRef(settings.sidebarWidth)
-  const resizeState = useRef<{ pointerId: number; startX: number; startWidth: number } | null>(null)
+  const compactWorkspace = useMediaQuery(COMPACT_WORKSPACE_QUERY)
   const dragDepth = useRef(0)
   const [closeRequest, setCloseRequest] = useState<CloseRequest | null>(null)
   const [dragOpen, setDragOpen] = useState(false)
   const [tutorialReplayOpen, setTutorialReplayOpen] = useState(false)
+  const agentPanelVisible = settings.agentEnabled && !settings.agentPanelCollapsed && !compactWorkspace
+  const sidebarResize = useEdgeResizer({
+    side: 'left',
+    width: settings.sidebarWidth,
+    min: SIDEBAR_MIN_WIDTH,
+    max: SIDEBAR_MAX_WIDTH,
+    defaultWidth: SIDEBAR_DEFAULT_WIDTH,
+    cssVariable: '--sidebar-width',
+    bodyClass: 'is-resizing-sidebar',
+    onCommit: (sidebarWidth) => void updateSettings({ sidebarWidth })
+  })
+  const agentPanelResize = useEdgeResizer({
+    side: 'right',
+    width: settings.agentPanelWidth,
+    min: AGENT_PANEL_MIN_WIDTH,
+    max: AGENT_PANEL_MAX_WIDTH,
+    defaultWidth: AGENT_PANEL_DEFAULT_WIDTH,
+    cssVariable: '--agent-panel-width',
+    bodyClass: 'is-resizing-agent-panel',
+    active: agentPanelVisible,
+    onCommit: (agentPanelWidth) => void updateSettings({ agentPanelWidth })
+  })
 
   useEffect(() => {
     void initialize()
@@ -67,6 +92,8 @@ export default function App(): React.JSX.Element {
       offOpenFileRequest()
     }
   }, [acceptSystemOpenFile, handleEnvironmentEvent, initialize])
+
+  useEffect(() => window.aladdeen.agent.onEvent(applyAgentEvent), [applyAgentEvent])
 
   useEffect(() => window.aladdeen.document.onOpenDocumentRequest(() => {
     void openFile()
@@ -142,16 +169,14 @@ export default function App(): React.JSX.Element {
   }, [environment, settings.completedOnboardingVersion, updateSettings])
 
   useEffect(() => {
-    sidebarWidthRef.current = settings.sidebarWidth
-    document.documentElement.style.setProperty('--sidebar-width', `${settings.sidebarWidth}px`)
-  }, [settings.sidebarWidth])
-
-  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (tutorialReplayOpen || !environment) return
       const modifier = event.metaKey || event.ctrlKey
       if (!modifier) {
-        if (event.key === 'Escape') setSidebarOpen(false)
+        if (event.key === 'Escape') {
+          setSidebarOpen(false)
+          setAgentPanelOpen(false)
+        }
         return
       }
       if (event.key.toLowerCase() === 's' && activeFileId) {
@@ -181,6 +206,7 @@ export default function App(): React.JSX.Element {
     openFile,
     saveDocument,
     setEditing,
+    setAgentPanelOpen,
     setSidebarOpen,
     tutorialReplayOpen,
     environment
@@ -265,57 +291,6 @@ export default function App(): React.JSX.Element {
     )
   }
 
-  const previewSidebarWidth = (width: number): void => {
-    const next = clampSidebarWidth(width)
-    sidebarWidthRef.current = next
-    document.documentElement.style.setProperty('--sidebar-width', `${next}px`)
-  }
-
-  const persistSidebarWidth = (): void => {
-    document.body.classList.remove('is-resizing-sidebar')
-    resizeState.current = null
-    if (sidebarWidthRef.current !== settings.sidebarWidth) {
-      void updateSettings({ sidebarWidth: sidebarWidthRef.current })
-    }
-  }
-
-  const handleResizePointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0 || resizeState.current) return
-    resizeState.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startWidth: sidebarWidthRef.current
-    }
-    event.currentTarget.setPointerCapture(event.pointerId)
-    document.body.classList.add('is-resizing-sidebar')
-  }
-
-  const handleResizePointerMove = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    const resize = resizeState.current
-    if (!resize || resize.pointerId !== event.pointerId) return
-    previewSidebarWidth(resize.startWidth + event.clientX - resize.startX)
-    event.currentTarget.setAttribute('aria-valuenow', String(sidebarWidthRef.current))
-  }
-
-  const handleResizePointerEnd = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (resizeState.current?.pointerId !== event.pointerId) return
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-    persistSidebarWidth()
-  }
-
-  const handleResizeKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
-    let next: number | undefined
-    if (event.key === 'ArrowLeft') next = sidebarWidthRef.current - 16
-    if (event.key === 'ArrowRight') next = sidebarWidthRef.current + 16
-    if (event.key === 'Home') next = SIDEBAR_MIN_WIDTH
-    if (event.key === 'End') next = SIDEBAR_MAX_WIDTH
-    if (next === undefined) return
-    event.preventDefault()
-    previewSidebarWidth(next)
-    event.currentTarget.setAttribute('aria-valuenow', String(sidebarWidthRef.current))
-    void updateSettings({ sidebarWidth: sidebarWidthRef.current })
-  }
-
   const openSidebar = (): void => {
     if (window.matchMedia(COMPACT_WORKSPACE_QUERY).matches) setSidebarOpen(true)
     else void updateSettings({ sidebarCollapsed: false })
@@ -335,8 +310,8 @@ export default function App(): React.JSX.Element {
         inert={documentTransitioning || tutorialReplayOpen}
         aria-busy={documentTransitioning}
         className={cn(
-          'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
-          settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]'
+          'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--agent-panel-width)] max-[959px]:grid-cols-[minmax(0,1fr)]',
+          settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)_var(--agent-panel-width)] max-[959px]:grid-cols-[minmax(0,1fr)]'
         )}
       >
         <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><Sidebar onShowTutorial={() => setTutorialReplayOpen(true)} /></div>
@@ -352,15 +327,12 @@ export default function App(): React.JSX.Element {
           aria-valuemax={SIDEBAR_MAX_WIDTH}
           aria-valuenow={settings.sidebarWidth}
           tabIndex={0}
-          onDoubleClick={() => {
-            previewSidebarWidth(SIDEBAR_DEFAULT_WIDTH)
-            void updateSettings({ sidebarWidth: SIDEBAR_DEFAULT_WIDTH })
-          }}
-          onKeyDown={handleResizeKeyDown}
-          onPointerDown={handleResizePointerDown}
-          onPointerMove={handleResizePointerMove}
-          onPointerUp={handleResizePointerEnd}
-          onPointerCancel={handleResizePointerEnd}
+          onDoubleClick={sidebarResize.reset}
+          onKeyDown={sidebarResize.onKeyDown}
+          onPointerDown={sidebarResize.onPointerDown}
+          onPointerMove={sidebarResize.onPointerMove}
+          onPointerUp={sidebarResize.onPointerEnd}
+          onPointerCancel={sidebarResize.onPointerEnd}
         />
         <main className="relative grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] bg-surface-elevated">
           <TabBar />
@@ -372,12 +344,49 @@ export default function App(): React.JSX.Element {
             <PanelLeftOpen size={17} />
           </button>
         </main>
+        <div
+          className={cn(
+            "agent-panel-resizer absolute inset-y-0 right-[calc(var(--agent-panel-width)-3px)] z-40 w-[6px] touch-none cursor-col-resize outline-0 after:absolute after:inset-y-0 after:left-0.5 after:w-px after:bg-transparent after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent max-[959px]:hidden",
+            !agentPanelVisible && 'hidden'
+          )}
+          role="separator"
+          aria-label="Resize agent panel"
+          aria-orientation="vertical"
+          aria-valuemin={AGENT_PANEL_MIN_WIDTH}
+          aria-valuemax={AGENT_PANEL_MAX_WIDTH}
+          aria-valuenow={settings.agentPanelWidth}
+          tabIndex={0}
+          onDoubleClick={agentPanelResize.reset}
+          onKeyDown={agentPanelResize.onKeyDown}
+          onPointerDown={agentPanelResize.onPointerDown}
+          onPointerMove={agentPanelResize.onPointerMove}
+          onPointerUp={agentPanelResize.onPointerEnd}
+          onPointerCancel={agentPanelResize.onPointerEnd}
+        />
+        {agentPanelVisible && (
+          <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden">
+            <AgentPanel />
+          </div>
+        )}
       </div>
 
       {sidebarOpen && (
         <div className="compact-sidebar-layer hidden max-[959px]:block" inert={tutorialReplayOpen} role="dialog" aria-modal="true" aria-label="Environment files">
           <button className="sheet-backdrop fixed inset-0 z-[150] h-full w-full border-0 bg-[rgb(10_10_15/.38)] p-0 opacity-100 transition-opacity duration-[170ms] ease-[ease]" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" />
           <div className="sheet-panel fixed inset-y-0 left-0 z-[151] w-[min(88vw,320px)] translate-x-0 transition-transform duration-[210ms] ease-fluid-out"><Sidebar compact onShowTutorial={() => setTutorialReplayOpen(true)} /></div>
+        </div>
+      )}
+
+      {settings.agentEnabled && agentPanelOpen && (
+        <div className="compact-agent-layer hidden max-[959px]:block" inert={tutorialReplayOpen} role="dialog" aria-modal="true" aria-label="Coding agent">
+          <button
+            className="sheet-backdrop fixed inset-0 z-[150] h-full w-full border-0 bg-[rgb(10_10_15/.38)] p-0 opacity-100 transition-opacity duration-[170ms] ease-[ease]"
+            onClick={() => setAgentPanelOpen(false)}
+            aria-label="Close agent panel"
+          />
+          <div className="sheet-panel fixed inset-y-0 right-0 z-[151] w-[min(92vw,420px)] translate-x-0 transition-transform duration-[210ms] ease-fluid-out">
+            <AgentPanel compact />
+          </div>
         </div>
       )}
 

@@ -24,9 +24,10 @@
     "check:release": "node scripts/check-release-metadata.mjs",
     "check:spreadsheets": "node scripts/assert-spreadsheet-dependencies.mjs",
     "check:presentations": "node scripts/assert-presentation-dependencies.mjs",
+    "prepare:pi-runtime": "node scripts/prepare-pi-runtime.mjs",
     "icons": "node scripts/generate-icon.mjs",
     "dist": "pnpm dist:mac",
-    "dist:mac": "node scripts/assert-macos-arm.mjs && node scripts/assert-docx-editor-dependency.mjs && node scripts/assert-spreadsheet-dependencies.mjs && node scripts/assert-presentation-dependencies.mjs && pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never"
+    "dist:mac": "node scripts/assert-macos-arm.mjs && node scripts/assert-docx-editor-dependency.mjs && node scripts/assert-spreadsheet-dependencies.mjs && node scripts/assert-presentation-dependencies.mjs && pnpm prepare:pi-runtime && pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never"
   },
   "dependencies": {
     "@office-kit/xlsx": "0.9.0",
@@ -73,6 +74,7 @@
     "@codemirror/language-data": "^6.5.1",
     "@codemirror/theme-one-dark": "^6.1.3",
     "@codemirror/view": "^6.38.2",
+    "@earendil-works/pi-coding-agent": "0.83.0",
     "@eigenpal/docx-editor-react": "1.9.0",
     "@eslint/js": "^9.32.0",
     "@playwright/test": "^1.54.1",

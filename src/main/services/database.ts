@@ -31,6 +31,12 @@ const DEFAULT_SETTINGS: AppSettings = {
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 0,
+  agentEnabled: false,
+  agentProvider: 'anthropic',
+  agentModelId: 'claude-sonnet-4-5',
+  agentThinkingLevel: 'medium',
+  agentPanelWidth: 380,
+  agentPanelCollapsed: false,
   ...DEFAULT_READING_SETTINGS
 }
 
@@ -39,7 +45,7 @@ const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
 // Version 7 was briefly used by the removed Research Notes feature. Keep that
 // migration number reserved and migrate its metadata away instead of treating a
 // user's existing profile as a database from an unknown future release.
-const CURRENT_DATABASE_VERSION = 10
+const CURRENT_DATABASE_VERSION = 11
 
 function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
   if (existsSync(destination)) return
@@ -436,6 +442,18 @@ export class AppDatabase {
       }
     }
 
+    if (row.user_version < 11) {
+      this.db.exec(`
+        BEGIN;
+        CREATE TABLE IF NOT EXISTS agent_secrets (
+          provider TEXT PRIMARY KEY,
+          ciphertext BLOB NOT NULL
+        ) STRICT;
+        PRAGMA user_version = 11;
+        COMMIT;
+      `)
+    }
+
     this.repairLegacyWorkspaceHistory()
   }
 
@@ -536,6 +554,28 @@ export class AppDatabase {
       if (row.key === 'sidebar_collapsed' && ['true', 'false'].includes(row.value)) {
         settings.sidebarCollapsed = row.value === 'true'
       }
+      if (row.key === 'agent_enabled' && ['true', 'false'].includes(row.value)) {
+        settings.agentEnabled = row.value === 'true'
+      }
+      if (row.key === 'agent_provider' && ['anthropic', 'openai', 'google'].includes(row.value)) {
+        settings.agentProvider = row.value as AppSettings['agentProvider']
+      }
+      if (row.key === 'agent_model_id' && row.value.length > 0 && row.value.length <= 200) {
+        settings.agentModelId = row.value
+      }
+      if (
+        row.key === 'agent_thinking_level' &&
+        ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(row.value)
+      ) {
+        settings.agentThinkingLevel = row.value as AppSettings['agentThinkingLevel']
+      }
+      if (row.key === 'agent_panel_width') {
+        const width = Number(row.value)
+        if (Number.isInteger(width) && width >= 300 && width <= 560) settings.agentPanelWidth = width
+      }
+      if (row.key === 'agent_panel_collapsed' && ['true', 'false'].includes(row.value)) {
+        settings.agentPanelCollapsed = row.value === 'true'
+      }
       if (row.key === 'completed_onboarding_version') {
         const version = Number(row.value)
         if (Number.isInteger(version) && version >= 0 && version <= 1_000) {
@@ -572,6 +612,12 @@ export class AppDatabase {
       this.setSetting('sidebar_width', String(settings.sidebarWidth))
       this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
       this.setSetting('completed_onboarding_version', String(settings.completedOnboardingVersion))
+      this.setSetting('agent_enabled', String(settings.agentEnabled))
+      this.setSetting('agent_provider', settings.agentProvider)
+      this.setSetting('agent_model_id', settings.agentModelId)
+      this.setSetting('agent_thinking_level', settings.agentThinkingLevel)
+      this.setSetting('agent_panel_width', String(settings.agentPanelWidth))
+      this.setSetting('agent_panel_collapsed', String(settings.agentPanelCollapsed))
       this.setSetting('reading_font', settings.readingFont)
       this.setSetting('reading_font_size', String(settings.readingFontSize))
       this.setSetting('reading_line_height', settings.readingLineHeight)
@@ -590,6 +636,23 @@ export class AppDatabase {
       .prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(key, value, Date.now())
+  }
+
+  getAgentSecret(provider: AppSettings['agentProvider']): Buffer | null {
+    const row = this.db.prepare('SELECT ciphertext FROM agent_secrets WHERE provider = ?').get(provider) as
+      | { ciphertext: Uint8Array }
+      | undefined
+    return row ? Buffer.from(row.ciphertext) : null
+  }
+
+  setAgentSecret(provider: AppSettings['agentProvider'], ciphertext: Buffer): void {
+    this.db.prepare(`INSERT INTO agent_secrets (provider, ciphertext) VALUES (?, ?)
+      ON CONFLICT(provider) DO UPDATE SET ciphertext = excluded.ciphertext`)
+      .run(provider, ciphertext)
+  }
+
+  clearAgentSecret(provider: AppSettings['agentProvider']): void {
+    this.db.prepare('DELETE FROM agent_secrets WHERE provider = ?').run(provider)
   }
 
   listEnvironments(): EnvironmentSummary[] {

@@ -12,16 +12,34 @@ const defaultSettings: AppSettings = {
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 1,
+  agentEnabled: false,
+  agentProvider: 'anthropic',
+  agentModelId: 'claude-sonnet-4-5',
+  agentThinkingLevel: 'medium',
+  agentPanelWidth: 380,
+  agentPanelCollapsed: false,
   ...DEFAULT_READING_SETTINGS
 }
 
 describe('settings dialog', () => {
   const update = vi.fn()
   const openExternal = vi.fn()
+  const setApiKey = vi.fn()
+  const clearApiKey = vi.fn()
+  const credentialStatus = vi.fn()
 
   beforeEach(() => {
     update.mockImplementation(async (settings: AppSettings) => ({ ok: true, value: settings }))
     openExternal.mockResolvedValue({ ok: true, value: undefined })
+    setApiKey.mockResolvedValue({ ok: true, value: undefined })
+    clearApiKey.mockResolvedValue({ ok: true, value: undefined })
+    credentialStatus.mockResolvedValue({
+      ok: true,
+      value: {
+        encryptionAvailable: true,
+        providers: { anthropic: false, openai: false, google: false }
+      }
+    })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(performance.now())
       return 1
@@ -30,6 +48,7 @@ describe('settings dialog', () => {
       configurable: true,
       value: {
         settings: { update },
+        agent: { setApiKey, clearApiKey, credentialStatus },
         system: { openExternal }
       } as unknown as AladdeenApi
     })
@@ -146,6 +165,25 @@ describe('settings dialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(defaultSettings))
+  })
+
+  it('keeps the coding agent opt-in and stores API keys through the write-only API', async () => {
+    render(<SettingsDialog open onOpenChange={vi.fn()} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'Coding agent' }))
+
+    expect(screen.getByText(/Off by default/)).toBeVisible()
+    const keyInput = screen.getByLabelText('anthropic API key')
+    expect(keyInput).toHaveAttribute('type', 'password')
+    fireEvent.change(keyInput, { target: { value: 'secret-test-api-key' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save key' }))
+    await waitFor(() => expect(setApiKey).toHaveBeenCalledWith('anthropic', 'secret-test-api-key'))
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Enable coding agent' }))
+    await waitFor(() => expect(update).toHaveBeenLastCalledWith({
+      ...defaultSettings,
+      agentEnabled: true,
+      agentPanelCollapsed: false
+    }))
   })
 
   it('closes with Escape and restores focus to the opener', async () => {

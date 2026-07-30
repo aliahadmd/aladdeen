@@ -21,7 +21,7 @@ describe('application metadata database', () => {
     const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(10)
+    ).toBe(11)
     migrated.close()
 
     expect(database.getSettings()).toEqual({
@@ -30,6 +30,12 @@ describe('application metadata database', () => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
+      agentEnabled: false,
+      agentProvider: 'anthropic',
+      agentModelId: 'claude-sonnet-4-5',
+      agentThinkingLevel: 'medium',
+      agentPanelWidth: 380,
+      agentPanelCollapsed: false,
       ...DEFAULT_READING_SETTINGS
     })
     database.setSettings({
@@ -38,12 +44,23 @@ describe('application metadata database', () => {
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
+      agentEnabled: true,
+      agentProvider: 'openai',
+      agentModelId: 'gpt-5',
+      agentThinkingLevel: 'high',
+      agentPanelWidth: 440,
+      agentPanelCollapsed: true,
       readingFont: 'iowan',
       readingFontSize: 19,
       readingLineHeight: 'relaxed',
       readingColumnWidth: 'narrow',
       readingSurface: 'paper'
     })
+    const encryptedAgentKey = Buffer.from('ciphertext-only')
+    database.setAgentSecret('openai', encryptedAgentKey)
+    expect(database.getAgentSecret('openai')).toEqual(encryptedAgentKey)
+    database.clearAgentSecret('openai')
+    expect(database.getAgentSecret('openai')).toBeNull()
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
     expect(project.enabledDocumentKinds).toEqual(['markdown'])
@@ -83,6 +100,12 @@ describe('application metadata database', () => {
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
+      agentEnabled: true,
+      agentProvider: 'openai',
+      agentModelId: 'gpt-5',
+      agentThinkingLevel: 'high',
+      agentPanelWidth: 440,
+      agentPanelCollapsed: true,
       readingFont: 'iowan',
       readingFontSize: 19,
       readingLineHeight: 'relaxed',
@@ -316,7 +339,7 @@ describe('application metadata database', () => {
     const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(10)
+    ).toBe(11)
     for (const table of ['environment_note_locations', 'research_notes', 'research_note_links']) {
       expect(verified.prepare(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"

@@ -11,6 +11,7 @@ import {
 } from 'electron'
 import { z, type ZodType } from 'zod'
 import { asResult, DesktopError } from '@main/errors'
+import type { AgentService } from '@main/services/agent'
 import type { AppDatabase } from '@main/services/database'
 import type { ExportService } from '@main/services/export'
 import type { GlobalSearchService } from '@main/services/global-search'
@@ -18,6 +19,14 @@ import type { WorkspaceService } from '@main/services/workspace'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { defaultNameForKind, DOCUMENT_EXTENSIONS, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import {
+  agentApiKeySchema,
+  agentApprovalResponseSchema,
+  agentModelRequestSchema,
+  agentPromptSchema,
+  agentProviderSchema,
+  agentSessionSchema,
+  agentStartSessionSchema,
+  agentThinkingRequestSchema,
   createEntrySchema,
   createStandaloneDocumentSchema,
   documentContentSchema,
@@ -42,6 +51,7 @@ interface IpcDependencies {
   workspace: WorkspaceService
   exports: ExportService
   search: GlobalSearchService
+  agent: AgentService
   getWindow: () => BrowserWindow | null
   getPendingOpenRequest: () => OpenFileRequest | undefined
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
@@ -71,6 +81,7 @@ export function registerIpc({
   workspace,
   exports,
   search,
+  agent,
   getWindow,
   getPendingOpenRequest,
   acceptSystemOpenFile,
@@ -186,6 +197,48 @@ export function registerIpc({
   })
   handle(IPC.startGlobalSearch, async (_event, input) => search.start(parse(globalSearchRequestSchema, input)))
   handle(IPC.cancelGlobalSearch, async (_event, input) => search.cancel(parse(idSchema, input)))
+  handle(IPC.agentStartSession, async (_event, input) => {
+    const request = parse(agentStartSessionSchema, input)
+    return agent.startSession(request.projectId)
+  })
+  handle(IPC.agentStopSession, async (_event, input) => {
+    const request = parse(agentSessionSchema, input)
+    return agent.stopSession(request.sessionId)
+  })
+  handle(IPC.agentPrompt, async (_event, input) => {
+    const request = parse(agentPromptSchema, input)
+    return agent.prompt(request.sessionId, request.message, request.steer)
+  })
+  handle(IPC.agentAbort, async (_event, input) => {
+    const request = parse(agentSessionSchema, input)
+    return agent.abort(request.sessionId)
+  })
+  handle(IPC.agentRespondApproval, async (_event, input) => {
+    const request = parse(agentApprovalResponseSchema, input)
+    return agent.respondApproval(request.sessionId, request.requestId, request.decision)
+  })
+  handle(IPC.agentSetModel, async (_event, input) => {
+    const request = parse(agentModelRequestSchema, input)
+    return agent.setModel(request.sessionId, request.provider, request.modelId)
+  })
+  handle(IPC.agentGetModels, async (_event, input) => {
+    const request = parse(agentSessionSchema, input)
+    return agent.getModels(request.sessionId)
+  })
+  handle(IPC.agentSetThinkingLevel, async (_event, input) => {
+    const request = parse(agentThinkingRequestSchema, input)
+    return agent.setThinkingLevel(request.sessionId, request.level)
+  })
+  handle(IPC.agentSetApiKey, async (_event, input) => {
+    const request = parse(agentApiKeySchema, input)
+    agent.setApiKey(request.provider, request.apiKey)
+  })
+  handle(IPC.agentClearApiKey, async (_event, input) => {
+    const provider = parse(agentProviderSchema, input)
+    agent.clearApiKey(provider)
+    if (database.getSettings().agentProvider === provider) await agent.close()
+  })
+  handle(IPC.agentCredentialStatus, async () => agent.credentialStatus())
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))
   handle(IPC.openRelativeDocument, async (_event, input) => {
@@ -306,8 +359,18 @@ export function registerIpc({
 
   handle(IPC.getSettings, async () => database.getSettings())
   handle(IPC.updateSettings, async (_event, input) => {
+    const previousSettings = database.getSettings()
     const settings = database.setSettings(parse(settingsSchema, input))
     nativeTheme.themeSource = settings.theme
+    if (
+      !settings.agentEnabled ||
+      previousSettings.agentProvider !== settings.agentProvider ||
+      previousSettings.agentModelId !== settings.agentModelId
+    ) {
+      await agent.close()
+    } else if (previousSettings.agentThinkingLevel !== settings.agentThinkingLevel) {
+      await agent.applyConfiguredThinkingLevel(settings.agentThinkingLevel).catch(() => undefined)
+    }
     return settings
   })
   handle(IPC.exportDocument, async (_event, input) => exports.exportDocument(parse(exportRequestSchema, input)))

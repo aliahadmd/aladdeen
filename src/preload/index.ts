@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   IPC,
+  type AgentEvent,
   type CloseRequest,
   type EnvironmentEvent,
   type GlobalSearchEvent,
@@ -52,6 +53,28 @@ const api: AladdeenApi = {
       const listener = (): void => callback()
       ipcRenderer.on(IPC.globalSearchOpenRequest, listener)
       return () => ipcRenderer.removeListener(IPC.globalSearchOpenRequest, listener)
+    }
+  },
+  agent: {
+    startSession: (projectId) => ipcRenderer.invoke(IPC.agentStartSession, { projectId }),
+    stopSession: (sessionId) => ipcRenderer.invoke(IPC.agentStopSession, { sessionId }),
+    prompt: (sessionId, message, steer) =>
+      ipcRenderer.invoke(IPC.agentPrompt, { sessionId, message, steer }),
+    abort: (sessionId) => ipcRenderer.invoke(IPC.agentAbort, { sessionId }),
+    respondApproval: (sessionId, requestId, decision) =>
+      ipcRenderer.invoke(IPC.agentRespondApproval, { sessionId, requestId, decision }),
+    setModel: (sessionId, provider, modelId) =>
+      ipcRenderer.invoke(IPC.agentSetModel, { sessionId, provider, modelId }),
+    getModels: (sessionId) => ipcRenderer.invoke(IPC.agentGetModels, { sessionId }),
+    setThinkingLevel: (sessionId, level) =>
+      ipcRenderer.invoke(IPC.agentSetThinkingLevel, { sessionId, level }),
+    setApiKey: (provider, apiKey) => ipcRenderer.invoke(IPC.agentSetApiKey, { provider, apiKey }),
+    clearApiKey: (provider) => ipcRenderer.invoke(IPC.agentClearApiKey, provider),
+    credentialStatus: () => ipcRenderer.invoke(IPC.agentCredentialStatus),
+    onEvent: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => callback(agentEvent)
+      ipcRenderer.on(IPC.agentEvent, listener)
+      return () => ipcRenderer.removeListener(IPC.agentEvent, listener)
     }
   },
   document: {

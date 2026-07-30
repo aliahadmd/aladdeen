@@ -2,6 +2,12 @@ import { create } from 'zustand'
 import { toast } from 'sonner'
 import type {
   Accent,
+  AgentApprovalDecision,
+  AgentEvent,
+  AgentModel,
+  AgentRunState,
+  AgentSessionErrorCode,
+  AgentThinkingLevel,
   AppSettings,
   DocumentKind,
   DocumentSnapshot,
@@ -31,6 +37,259 @@ import {
 type MobilePane = 'editor' | 'preview'
 type BootStatus = 'booting' | 'ready' | 'error'
 
+export type AgentTranscriptItem =
+  | { kind: 'user'; id: string; text: string; steering: boolean }
+  | {
+      kind: 'assistant'
+      id: string
+      text: string
+      thinking: string
+      complete: boolean
+      error?: string
+    }
+  | {
+      kind: 'tool'
+      id: string
+      toolCallId: string
+      toolName: string
+      input: Record<string, unknown>
+      output: string
+      status: 'running' | 'complete' | 'error'
+      truncated: boolean
+    }
+  | {
+      kind: 'approval'
+      id: string
+      requestId: string
+      toolCallId?: string
+      toolName: string
+      input: Record<string, unknown>
+      decision?: AgentApprovalDecision
+    }
+  | {
+      kind: 'status'
+      id: string
+      statusType: 'retry' | 'compaction' | 'error' | 'ended'
+      message: string
+      tone: 'neutral' | 'warning' | 'danger'
+    }
+
+export interface AgentReducerState {
+  runState: AgentRunState
+  transcript: AgentTranscriptItem[]
+  pendingApprovals: Record<string, true>
+  error?: { code: AgentSessionErrorCode; message: string }
+}
+
+function updateTranscriptItem(
+  transcript: AgentTranscriptItem[],
+  predicate: (item: AgentTranscriptItem) => boolean,
+  update: (item: AgentTranscriptItem) => AgentTranscriptItem
+): AgentTranscriptItem[] {
+  const index = transcript.findIndex(predicate)
+  if (index < 0) return transcript
+  return transcript.map((item, itemIndex) => itemIndex === index ? update(item) : item)
+}
+
+export function applyAgentEvent(state: AgentReducerState, event: AgentEvent): AgentReducerState {
+  if (event.type === 'run-state') return { ...state, runState: event.state }
+
+  if (event.type === 'assistant-start') {
+    if (state.transcript.some((item) => item.kind === 'assistant' && item.id === event.messageId)) return state
+    return {
+      ...state,
+      transcript: [...state.transcript, {
+        kind: 'assistant',
+        id: event.messageId,
+        text: '',
+        thinking: '',
+        complete: false
+      }]
+    }
+  }
+
+  if (event.type === 'text-delta' || event.type === 'thinking-delta') {
+    let transcript = state.transcript
+    if (!transcript.some((item) => item.kind === 'assistant' && item.id === event.messageId)) {
+      transcript = [...transcript, {
+        kind: 'assistant',
+        id: event.messageId,
+        text: '',
+        thinking: '',
+        complete: false
+      }]
+    }
+    return {
+      ...state,
+      transcript: updateTranscriptItem(
+        transcript,
+        (item) => item.kind === 'assistant' && item.id === event.messageId,
+        (item) => item.kind === 'assistant'
+          ? {
+              ...item,
+              ...(event.type === 'text-delta'
+                ? { text: `${item.text}${event.delta}` }
+                : { thinking: `${item.thinking}${event.delta}` })
+            }
+          : item
+      )
+    }
+  }
+
+  if (event.type === 'assistant-end') {
+    return {
+      ...state,
+      transcript: updateTranscriptItem(
+        state.transcript,
+        (item) => item.kind === 'assistant' && item.id === event.messageId,
+        (item) => item.kind === 'assistant'
+          ? { ...item, complete: true, error: event.error ?? item.error }
+          : item
+      )
+    }
+  }
+
+  if (event.type === 'tool-start') {
+    const tool: AgentTranscriptItem = {
+      kind: 'tool',
+      id: `tool-${event.toolCallId}`,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      input: event.input,
+      output: '',
+      status: 'running',
+      truncated: false
+    }
+    const existing = state.transcript.findIndex(
+      (item) => item.kind === 'tool' && item.toolCallId === event.toolCallId
+    )
+    return {
+      ...state,
+      transcript: existing < 0
+        ? [...state.transcript, tool]
+        : state.transcript.map((item, index) => index === existing ? tool : item)
+    }
+  }
+
+  if (event.type === 'tool-update' || event.type === 'tool-end') {
+    return {
+      ...state,
+      transcript: updateTranscriptItem(
+        state.transcript,
+        (item) => item.kind === 'tool' && item.toolCallId === event.toolCallId,
+        (item) => item.kind === 'tool'
+          ? {
+              ...item,
+              output: event.output,
+              truncated: event.truncated,
+              status: event.type === 'tool-update' ? 'running' : event.isError ? 'error' : 'complete'
+            }
+          : item
+      )
+    }
+  }
+
+  if (event.type === 'approval-request') {
+    const approval: AgentTranscriptItem = {
+      kind: 'approval',
+      id: `approval-${event.requestId}`,
+      requestId: event.requestId,
+      toolCallId: event.toolCallId,
+      toolName: event.toolName,
+      input: event.input
+    }
+    return {
+      ...state,
+      pendingApprovals: { ...state.pendingApprovals, [event.requestId]: true },
+      transcript: state.transcript.some(
+        (item) => item.kind === 'approval' && item.requestId === event.requestId
+      ) ? state.transcript : [...state.transcript, approval]
+    }
+  }
+
+  if (event.type === 'approval-resolved') {
+    const pendingApprovals = { ...state.pendingApprovals }
+    delete pendingApprovals[event.requestId]
+    return {
+      ...state,
+      pendingApprovals,
+      transcript: updateTranscriptItem(
+        state.transcript,
+        (item) => item.kind === 'approval' && item.requestId === event.requestId,
+        (item) => item.kind === 'approval' ? { ...item, decision: event.decision } : item
+      )
+    }
+  }
+
+  if (event.type === 'retry') {
+    const message = event.phase === 'start'
+      ? `Retrying request${event.maxAttempts ? ` (${event.attempt}/${event.maxAttempts})` : ''}${event.delayMs ? ` in ${Math.ceil(event.delayMs / 1_000)}s` : ''}.`
+      : event.success ? 'Retry succeeded.' : event.message ?? 'Retry failed.'
+    return {
+      ...state,
+      transcript: [...state.transcript, {
+        kind: 'status',
+        id: `retry-${state.transcript.length}-${event.attempt}-${event.phase}`,
+        statusType: 'retry',
+        message,
+        tone: event.phase === 'end' && !event.success ? 'warning' : 'neutral'
+      }]
+    }
+  }
+
+  if (event.type === 'compaction') {
+    return {
+      ...state,
+      transcript: [...state.transcript, {
+        kind: 'status',
+        id: `compaction-${state.transcript.length}-${event.phase}`,
+        statusType: 'compaction',
+        message: event.phase === 'start'
+          ? 'Compacting conversation context…'
+          : event.message ?? 'Conversation context compacted.',
+        tone: event.message ? 'warning' : 'neutral'
+      }]
+    }
+  }
+
+  if (event.type === 'session-error') {
+    if (state.error?.code === event.code && state.error.message === event.message) {
+      return { ...state, runState: 'idle' }
+    }
+    return {
+      ...state,
+      runState: 'idle',
+      error: { code: event.code, message: event.message },
+      transcript: [...state.transcript, {
+        kind: 'status',
+        id: `error-${state.transcript.length}`,
+        statusType: 'error',
+        message: event.message,
+        tone: 'danger'
+      }]
+    }
+  }
+
+  if (event.type === 'session-ended') {
+    return {
+      ...state,
+      runState: 'idle',
+      pendingApprovals: {},
+      transcript: event.reason === 'stopped'
+        ? state.transcript
+        : [...state.transcript, {
+            kind: 'status',
+            id: `ended-${state.transcript.length}`,
+            statusType: 'ended',
+            message: event.reason === 'crashed' ? 'Agent process stopped unexpectedly.' : 'Agent session ended.',
+            tone: event.reason === 'crashed' ? 'danger' : 'neutral'
+          }]
+    }
+  }
+
+  return state
+}
+
 interface EditorViewport {
   scrollTop: number
   selection: number
@@ -53,6 +312,13 @@ interface AppState {
   documentTransitioning: boolean
   selectedProjectId: string | null
   selectedFolderPath: string
+  agentSession?: { sessionId: string; projectId: string }
+  agentRunState: AgentRunState
+  agentTranscript: AgentTranscriptItem[]
+  agentPendingApprovals: Record<string, true>
+  agentModels: AgentModel[]
+  agentError?: { code: AgentSessionErrorCode; message: string }
+  agentPanelOpen: boolean
   initialize(): Promise<void>
   flushDocuments(): Promise<boolean>
   saveDirtyCopies(): Promise<boolean>
@@ -108,6 +374,16 @@ interface AppState {
   setProjectImportOpen(value: boolean): void
   setGlobalSearchOpen(value: boolean): void
   setDocumentTransitioning(value: boolean): void
+  applyAgentEvent(event: AgentEvent): void
+  startAgentSession(projectId?: string): Promise<boolean>
+  stopAgentSession(): Promise<void>
+  newAgentSession(): Promise<boolean>
+  sendAgentPrompt(message: string): Promise<void>
+  abortAgent(): Promise<void>
+  respondAgentApproval(requestId: string, decision: Exclude<AgentApprovalDecision, 'cancelled'>): Promise<void>
+  setAgentModel(provider: AppSettings['agentProvider'], modelId: string): Promise<void>
+  setAgentThinkingLevel(level: AgentThinkingLevel): Promise<void>
+  setAgentPanelOpen(value: boolean): void
 }
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -133,6 +409,12 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
     sidebarWidth: 320,
     sidebarCollapsed: false,
     completedOnboardingVersion: 0,
+    agentEnabled: false,
+    agentProvider: 'anthropic',
+    agentModelId: 'claude-sonnet-4-5',
+    agentThinkingLevel: 'medium',
+    agentPanelWidth: 380,
+    agentPanelCollapsed: false,
     ...DEFAULT_READING_SETTINGS
   }
 })
@@ -470,6 +752,12 @@ export const useAppStore = create<AppState>((set, get) => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
+      agentEnabled: false,
+      agentProvider: 'anthropic',
+      agentModelId: 'claude-sonnet-4-5',
+      agentThinkingLevel: 'medium',
+      agentPanelWidth: 380,
+      agentPanelCollapsed: false,
       ...DEFAULT_READING_SETTINGS
     },
     persistedSettings: {
@@ -478,6 +766,12 @@ export const useAppStore = create<AppState>((set, get) => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
+      agentEnabled: false,
+      agentProvider: 'anthropic',
+      agentModelId: 'claude-sonnet-4-5',
+      agentThinkingLevel: 'medium',
+      agentPanelWidth: 380,
+      agentPanelCollapsed: false,
       ...DEFAULT_READING_SETTINGS
     },
     editing: false,
@@ -489,6 +783,11 @@ export const useAppStore = create<AppState>((set, get) => {
     documentTransitioning: false,
     selectedProjectId: null,
     selectedFolderPath: '',
+    agentRunState: 'idle',
+    agentTranscript: [],
+    agentPendingApprovals: {},
+    agentModels: [],
+    agentPanelOpen: false,
 
     async initialize() {
       if (initializePromise) return initializePromise
@@ -1248,6 +1547,156 @@ export const useAppStore = create<AppState>((set, get) => {
 
     setDocumentTransitioning(value) {
       set({ documentTransitioning: value })
+    },
+
+    applyAgentEvent(event) {
+      const state = get()
+      if (!state.agentSession || event.sessionId !== state.agentSession.sessionId) return
+      const next = applyAgentEvent({
+        runState: state.agentRunState,
+        transcript: state.agentTranscript,
+        pendingApprovals: state.agentPendingApprovals,
+        error: state.agentError
+      }, event)
+      set({
+        agentRunState: next.runState,
+        agentTranscript: next.transcript,
+        agentPendingApprovals: next.pendingApprovals,
+        agentError: next.error,
+        ...(event.type === 'session-ended' ? { agentSession: undefined } : {})
+      })
+    },
+
+    async startAgentSession(projectId) {
+      const state = get()
+      const targetProjectId = projectId ??
+        state.selectedProjectId ??
+        state.documents.find((document) => document.id === state.activeFileId)?.projectId ??
+        state.environment?.projects.find((project) => !project.archived)?.id
+      if (!targetProjectId) {
+        set({ agentError: { code: 'AGENT_UNAVAILABLE', message: 'Choose a project before starting the agent.' } })
+        return false
+      }
+      if (state.agentSession?.projectId === targetProjectId) return true
+      if (state.agentSession) await get().stopAgentSession()
+      set({
+        agentRunState: 'idle',
+        agentTranscript: [],
+        agentPendingApprovals: {},
+        agentModels: [],
+        agentError: undefined
+      })
+      const result = await window.aladdeen.agent.startSession(targetProjectId)
+      if (!result.ok) {
+        set({
+          agentError: { code: 'AGENT_UNAVAILABLE', message: result.error.message },
+          agentTranscript: [{
+            kind: 'status',
+            id: 'start-error',
+            statusType: 'error',
+            message: result.error.message,
+            tone: 'danger'
+          }]
+        })
+        return false
+      }
+      set({ agentSession: { sessionId: result.value.sessionId, projectId: targetProjectId } })
+      const models = await window.aladdeen.agent.getModels(result.value.sessionId)
+      if (models.ok && get().agentSession?.sessionId === result.value.sessionId) {
+        set({ agentModels: models.value })
+      }
+      return true
+    },
+
+    async stopAgentSession() {
+      const session = get().agentSession
+      if (!session) return
+      const result = await window.aladdeen.agent.stopSession(session.sessionId)
+      if (!result.ok && result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
+      if (get().agentSession?.sessionId === session.sessionId) {
+        set({
+          agentSession: undefined,
+          agentRunState: 'idle',
+          agentPendingApprovals: {}
+        })
+      }
+    },
+
+    async newAgentSession() {
+      const projectId = get().agentSession?.projectId ?? get().selectedProjectId ?? undefined
+      await get().stopAgentSession()
+      return get().startAgentSession(projectId)
+    },
+
+    async sendAgentPrompt(message) {
+      const text = message.trim()
+      if (!text) return
+      if (!get().agentSession && !(await get().startAgentSession())) return
+      const session = get().agentSession
+      if (!session) return
+      const steering = get().agentRunState !== 'idle'
+      set((state) => ({
+        agentTranscript: [...state.agentTranscript, {
+          kind: 'user',
+          id: crypto.randomUUID(),
+          text,
+          steering
+        }]
+      }))
+      const result = await window.aladdeen.agent.prompt(session.sessionId, text, steering)
+      if (!result.ok) {
+        set((state) => ({
+          agentError: { code: 'AGENT_UNAVAILABLE', message: result.error.message },
+          agentTranscript: [...state.agentTranscript, {
+            kind: 'status',
+            id: crypto.randomUUID(),
+            statusType: 'error',
+            message: result.error.message,
+            tone: 'danger'
+          }]
+        }))
+      }
+    },
+
+    async abortAgent() {
+      const session = get().agentSession
+      if (!session) return
+      const result = await window.aladdeen.agent.abort(session.sessionId)
+      if (!result.ok) toast.error(result.error.message)
+    },
+
+    async respondAgentApproval(requestId, decision) {
+      const session = get().agentSession
+      if (!session) return
+      const result = await window.aladdeen.agent.respondApproval(session.sessionId, requestId, decision)
+      if (!result.ok) toast.error(result.error.message)
+    },
+
+    async setAgentModel(provider, modelId) {
+      const session = get().agentSession
+      if (!session) return
+      const result = await window.aladdeen.agent.setModel(session.sessionId, provider, modelId)
+      if (!result.ok) {
+        toast.error(result.error.message)
+        return
+      }
+      await get().updateSettings({ agentProvider: provider, agentModelId: modelId })
+    },
+
+    async setAgentThinkingLevel(level) {
+      const session = get().agentSession
+      if (session) {
+        const result = await window.aladdeen.agent.setThinkingLevel(session.sessionId, level)
+        if (!result.ok) {
+          toast.error(result.error.message)
+          return
+        }
+      }
+      await get().updateSettings({ agentThinkingLevel: level })
+    },
+
+    setAgentPanelOpen(value) {
+      set({ agentPanelOpen: value })
     }
   }
 })

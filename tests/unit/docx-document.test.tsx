@@ -125,6 +125,12 @@ describe('Eigenpal DOCX adapter', () => {
         accent: 'indigo',
         sidebarWidth: 320,
         sidebarCollapsed: false,
+        agentEnabled: false,
+        agentProvider: 'anthropic',
+        agentModelId: 'claude-sonnet-4-5',
+        agentThinkingLevel: 'medium',
+        agentPanelWidth: 380,
+        agentPanelCollapsed: false,
         completedOnboardingVersion: 1,
         ...DEFAULT_READING_SETTINGS
       }
