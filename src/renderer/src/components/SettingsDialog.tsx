@@ -1,11 +1,18 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
 import { AtSign, Bot, BookOpen, Check, Command, ExternalLink, Github, Info, KeyRound, LoaderCircle, LogOut, Mail, Minus, Palette, Plus, RotateCcw, ShieldAlert, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
 import { AGENT_PROVIDER_DEFINITIONS, defaultModelForProvider } from '@shared/agent-providers'
-import type { AgentAuthEvent, AgentCredentialStatus, AgentProvider, AgentThinkingLevel, AppSettings } from '@shared/contracts'
+import type {
+  AgentAuthEvent,
+  AgentCredentialStatus,
+  AgentModel,
+  AgentProvider,
+  AgentThinkingLevel,
+  AppSettings
+} from '@shared/contracts'
 import {
   DEFAULT_READING_SETTINGS,
   READING_FONT_SIZE_MAX,
@@ -24,6 +31,10 @@ import {
 } from '@renderer/lib/ui-styles'
 import { accentOptions, themeOptions, useAppStore } from '@renderer/store/app-store'
 import { BrandMark } from './BrandMark'
+import {
+  AgentModelPicker,
+  type AgentModelPickerStatus
+} from './agent/AgentModelPicker'
 
 interface SettingsDialogProps {
   open: boolean
@@ -606,7 +617,11 @@ function AgentSettings({
 }): React.JSX.Element {
   const [credentials, setCredentials] = useState<AgentCredentialStatus>()
   const [apiKey, setApiKey] = useState('')
-  const [modelId, setModelId] = useState(settings.agentModelId)
+  const [modelCatalog, setModelCatalog] = useState<AgentModel[]>([])
+  const [modelCatalogStatus, setModelCatalogStatus] = useState<AgentModelPickerStatus>(
+    settings.agentEnabled ? 'loading' : 'disabled'
+  )
+  const [modelCatalogError, setModelCatalogError] = useState<string>()
   const [credentialError, setCredentialError] = useState<string>()
   const [savingKey, setSavingKey] = useState(false)
   const [authEvent, setAuthEvent] = useState<AgentAuthEvent>()
@@ -614,7 +629,7 @@ function AgentSettings({
   const activeAttempt = useRef<string | undefined>(undefined)
   const hasActiveSession = useAppStore((state) => state.agentSession !== undefined)
 
-  const refreshCredentials = async (): Promise<void> => {
+  const refreshCredentials = useCallback(async (): Promise<void> => {
     const result = await window.aladdeen.agent.credentialStatus()
     if (result.ok) {
       setCredentials(result.value)
@@ -622,13 +637,31 @@ function AgentSettings({
     } else {
       setCredentialError(result.error.message)
     }
-  }
+  }, [])
+
+  const refreshModelCatalog = useCallback(async (): Promise<void> => {
+    if (!settings.agentEnabled) {
+      setModelCatalog([])
+      setModelCatalogStatus('disabled')
+      setModelCatalogError(undefined)
+      return
+    }
+    setModelCatalogStatus('loading')
+    setModelCatalogError(undefined)
+    const result = await window.aladdeen.agent.getModelCatalog()
+    if (result.ok) {
+      setModelCatalog(result.value)
+      setModelCatalogStatus('ready')
+    } else {
+      setModelCatalogStatus('error')
+      setModelCatalogError(result.error.message)
+    }
+  }, [settings.agentEnabled])
 
   useEffect(() => {
     void refreshCredentials()
-  }, [settings.agentEnabled])
-
-  useEffect(() => setModelId(settings.agentModelId), [settings.agentModelId])
+    void refreshModelCatalog()
+  }, [refreshCredentials, refreshModelCatalog])
 
   useEffect(() => window.aladdeen.agent.onAuthEvent((event) => {
     if (event.type === 'started') activeAttempt.current = event.attemptId
@@ -649,7 +682,7 @@ function AgentSettings({
         })
       }
     }
-  }), [onUpdate])
+  }), [onUpdate, refreshCredentials])
 
   useEffect(() => () => {
     const attemptId = activeAttempt.current
@@ -657,11 +690,6 @@ function AgentSettings({
   }, [])
 
   const providerStatus = credentials?.providers[settings.agentProvider]
-  const persistModel = (): void => {
-    const next = modelId.trim()
-    if (next && next !== settings.agentModelId) onUpdate({ agentModelId: next })
-    else if (!next) setModelId(settings.agentModelId)
-  }
   const confirmSessionEnd = (action: string): boolean => {
     if (!hasActiveSession) return true
     return window.confirm(`${action} will end the active coding-agent session. Continue?`)
@@ -832,25 +860,23 @@ function AgentSettings({
 
       <section className="grid grid-cols-[minmax(110px,1fr)_minmax(190px,260px)] items-start gap-5 py-4 max-[560px]:grid-cols-1" aria-labelledby="agent-model-label">
         <div>
-          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-model-label">Model</h3>
-          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">The model ID for the selected provider.</p>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="agent-model-label">Default model</h3>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">
+            Used when a new coding-agent session starts.
+          </p>
         </div>
-        <div>
-          <input
-            value={modelId}
-            aria-label="Agent model ID"
-            className="h-9 rounded-lg border border-border-strong bg-surface px-2.5 font-mono text-[11px] text-foreground outline-none focus:border-accent"
-            placeholder="Model ID"
-            onChange={(event) => setModelId(event.currentTarget.value)}
-            onBlur={persistModel}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                persistModel()
-                event.currentTarget.blur()
-              }
-            }}
-          />
-        </div>
+        <AgentModelPicker
+          models={modelCatalog}
+          provider={settings.agentProvider}
+          value={settings.agentModelId}
+          status={settings.agentEnabled ? modelCatalogStatus : 'disabled'}
+          variant="settings"
+          disabled={!settings.agentEnabled}
+          error={modelCatalogError}
+          onRetry={() => void refreshModelCatalog()}
+          ariaLabel="Default agent model"
+          onChange={(model) => onUpdate({ agentModelId: model.id })}
+        />
       </section>
 
       {providerStatus?.apiKeyAvailable && (

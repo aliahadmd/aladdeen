@@ -8,6 +8,7 @@ export function AgentComposer(): React.JSX.Element {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const runState = useAppStore((state) => state.agentRunState)
   const session = useAppStore((state) => state.agentSession)
+  const sessionTransitioning = useAppStore((state) => state.agentSessionTransitioning)
   const send = useAppStore((state) => state.sendAgentPrompt)
   const abort = useAppStore((state) => state.abortAgent)
   const running = runState !== 'idle'
@@ -21,7 +22,7 @@ export function AgentComposer(): React.JSX.Element {
 
   const submit = (): void => {
     const text = message.trim()
-    if (!text) return
+    if (!text || sessionTransitioning) return
     setMessage('')
     void send(text)
   }
@@ -34,8 +35,9 @@ export function AgentComposer(): React.JSX.Element {
           value={message}
           rows={1}
           className="block min-h-9 max-h-[140px] w-full resize-none border-0 bg-transparent py-2 pr-11 pl-3 text-[11px] leading-5 text-foreground outline-none placeholder:text-foreground-muted"
-          placeholder={running ? 'Steer the agent…' : session ? 'Ask about this project…' : 'Start a conversation…'}
+          placeholder={sessionTransitioning ? 'Starting the agent…' : running ? 'Steer the agent…' : session ? 'Ask about this project…' : 'Start a conversation…'}
           aria-label="Message the coding agent"
+          disabled={sessionTransitioning}
           onChange={(event) => setMessage(event.currentTarget.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
@@ -53,7 +55,7 @@ export function AgentComposer(): React.JSX.Element {
           )}
           aria-label={running ? 'Stop agent' : 'Send message'}
           title={running ? 'Stop' : 'Send'}
-          disabled={!running && !message.trim()}
+          disabled={sessionTransitioning || (!running && !message.trim())}
           onClick={() => running ? void abort() : submit()}
         >
           {running ? <Square size={11} fill="currentColor" /> : <ArrowUp size={14} />}

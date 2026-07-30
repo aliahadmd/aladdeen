@@ -1,0 +1,80 @@
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { AgentModelPicker } from '@renderer/components/agent/AgentModelPicker'
+import type { AgentModel } from '@shared/contracts'
+
+const models: AgentModel[] = [
+  {
+    provider: 'openai-codex',
+    id: 'gpt-5.5',
+    name: 'GPT-5.5',
+    supportsThinking: true
+  },
+  {
+    provider: 'anthropic',
+    id: 'claude-sonnet-4-5',
+    name: 'Claude Sonnet 4.5',
+    supportsThinking: true
+  },
+  {
+    provider: 'openai-codex',
+    id: 'gpt-5.5',
+    name: 'Duplicate GPT',
+    supportsThinking: false
+  },
+  {
+    provider: 'openai-codex',
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    supportsThinking: true
+  }
+]
+
+afterEach(cleanup)
+
+describe('agent model picker', () => {
+  it('filters and deduplicates models while preserving friendly pi order', () => {
+    const onChange = vi.fn()
+    render(
+      <AgentModelPicker
+        models={models}
+        provider="openai-codex"
+        value="gpt-5.5"
+        variant="settings"
+        ariaLabel="Default agent model"
+        onChange={onChange}
+      />
+    )
+
+    const picker = screen.getByLabelText('Default agent model')
+    expect(screen.getByRole('option', { name: 'GPT-5.5' })).toBeInTheDocument()
+    expect(screen.getAllByRole('option', { name: 'GPT-5.5' })).toHaveLength(1)
+    expect(screen.queryByRole('option', { name: 'Claude Sonnet 4.5' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'GPT-5.5',
+      'GPT-5.4'
+    ])
+    expect(screen.getByText(/Model ID:/)).toHaveTextContent('gpt-5.5')
+
+    fireEvent.change(picker, { target: { value: 'gpt-5.4' } })
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ id: 'gpt-5.4' }))
+  })
+
+  it('preserves an unavailable saved value until the user chooses a valid model', () => {
+    const onChange = vi.fn()
+    render(
+      <AgentModelPicker
+        models={models}
+        provider="openai-codex"
+        value="retired-model"
+        variant="settings"
+        ariaLabel="Default agent model"
+        onChange={onChange}
+      />
+    )
+
+    expect(screen.getByRole('option', { name: 'Unavailable: retired-model' })).toBeDisabled()
+    expect(screen.getByText(/saved model is unavailable/i)).toBeVisible()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+})

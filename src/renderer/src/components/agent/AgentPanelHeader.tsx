@@ -2,6 +2,7 @@ import { Plus, X } from 'lucide-react'
 import type { AgentProvider, AgentThinkingLevel } from '@shared/contracts'
 import { useAppStore } from '@renderer/store/app-store'
 import { sidebarIconButtonClasses } from '@renderer/lib/ui-styles'
+import { AgentModelPicker } from './AgentModelPicker'
 
 const THINKING_LEVELS: AgentThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
 
@@ -16,12 +17,16 @@ export function AgentPanelHeader({
 }): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const models = useAppStore((state) => state.agentModels)
+  const modelsLoaded = useAppStore((state) => state.agentModelsLoaded)
+  const currentModel = useAppStore((state) => state.agentCurrentModel)
   const runState = useAppStore((state) => state.agentRunState)
   const session = useAppStore((state) => state.agentSession)
+  const sessionTransitioning = useAppStore((state) => state.agentSessionTransitioning)
   const newSession = useAppStore((state) => state.newAgentSession)
   const setModel = useAppStore((state) => state.setAgentModel)
   const setThinkingLevel = useAppStore((state) => state.setAgentThinkingLevel)
-  const providerModels = models.filter((model) => model.provider === settings.agentProvider)
+  const currentProvider = (currentModel?.provider ?? settings.agentProvider) as AgentProvider
+  const currentModelId = currentModel?.id ?? settings.agentModelId
 
   return (
     <header className="shrink-0 border-b border-border bg-surface">
@@ -49,6 +54,7 @@ export function AgentPanelHeader({
           className={sidebarIconButtonClasses}
           aria-label="New agent session"
           title="New session"
+          disabled={sessionTransitioning}
           onClick={() => void newSession()}
         >
           <Plus size={15} />
@@ -64,22 +70,15 @@ export function AgentPanelHeader({
         </button>
       </div>
       <div className="grid grid-cols-[minmax(0,1fr)_94px] gap-1.5 border-t border-border px-2.5 py-2">
-        <select
-          className="h-7 min-w-0 rounded-md border border-border bg-surface-elevated px-2 text-[9px] font-semibold text-foreground outline-none focus:border-accent"
-          aria-label="Agent model"
-          value={settings.agentModelId}
-          onChange={(event) => {
-            const model = providerModels.find((candidate) => candidate.id === event.currentTarget.value)
-            void setModel((model?.provider ?? settings.agentProvider) as AgentProvider, event.currentTarget.value)
-          }}
-        >
-          {!providerModels.some((model) => model.id === settings.agentModelId) && (
-            <option value={settings.agentModelId}>{settings.agentModelId}</option>
-          )}
-          {providerModels.map((model) => (
-            <option key={`${model.provider}/${model.id}`} value={model.id}>{model.name}</option>
-          ))}
-        </select>
+        <AgentModelPicker
+          models={models}
+          provider={currentProvider}
+          value={currentModelId}
+          status={!session ? 'disabled' : modelsLoaded ? 'ready' : 'loading'}
+          disabled={!session || runState !== 'idle' || sessionTransitioning}
+          ariaLabel="Current agent model"
+          onChange={(model) => void setModel(model.provider as AgentProvider, model.id)}
+        />
         <select
           className="h-7 rounded-md border border-border bg-surface-elevated px-2 text-[9px] font-semibold capitalize text-foreground outline-none focus:border-accent"
           aria-label="Agent thinking level"

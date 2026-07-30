@@ -317,6 +317,9 @@ interface AppState {
   agentTranscript: AgentTranscriptItem[]
   agentPendingApprovals: Record<string, true>
   agentModels: AgentModel[]
+  agentModelsLoaded: boolean
+  agentCurrentModel?: AgentModel
+  agentSessionTransitioning: boolean
   agentError?: { code: AgentSessionErrorCode; message: string }
   agentPanelOpen: boolean
   initialize(): Promise<void>
@@ -418,6 +421,7 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
     ...DEFAULT_READING_SETTINGS
   }
 })
+let agentSessionStartPromise: Promise<boolean> | null = null
 
 function withoutCancelled(error: { code: string; message: string; details?: string }): void {
   if (error.code !== 'CANCELLED') {
@@ -787,6 +791,9 @@ export const useAppStore = create<AppState>((set, get) => {
     agentTranscript: [],
     agentPendingApprovals: {},
     agentModels: [],
+    agentModelsLoaded: false,
+    agentCurrentModel: undefined,
+    agentSessionTransitioning: false,
     agentPanelOpen: false,
 
     async initialize() {
@@ -1563,62 +1570,118 @@ export const useAppStore = create<AppState>((set, get) => {
         agentTranscript: next.transcript,
         agentPendingApprovals: next.pendingApprovals,
         agentError: next.error,
-        ...(event.type === 'session-ended' ? { agentSession: undefined } : {})
+        ...(event.type === 'session-ended'
+          ? {
+              agentSession: undefined,
+              agentRunState: 'idle',
+              agentModels: [],
+              agentModelsLoaded: false,
+              agentCurrentModel: undefined
+            }
+          : {})
       })
     },
 
     async startAgentSession(projectId) {
-      const state = get()
-      const targetProjectId = projectId ??
-        state.selectedProjectId ??
-        state.documents.find((document) => document.id === state.activeFileId)?.projectId ??
-        state.environment?.projects.find((project) => !project.archived)?.id
-      if (!targetProjectId) {
-        set({ agentError: { code: 'AGENT_UNAVAILABLE', message: 'Choose a project before starting the agent.' } })
-        return false
+      if (agentSessionStartPromise) return agentSessionStartPromise
+      const startPromise = (async (): Promise<boolean> => {
+        set({ agentSessionTransitioning: true })
+        try {
+          // AgentPanel can mount immediately after the optimistic enable toggle.
+          // Wait until main has persisted that setting before asking it to spawn.
+          await settingsWriteQueue
+          const state = get()
+          const targetProjectId = projectId ??
+            state.selectedProjectId ??
+            state.documents.find((document) => document.id === state.activeFileId)?.projectId ??
+            state.environment?.projects.find((project) => !project.archived)?.id
+          if (!targetProjectId) {
+            set({ agentError: { code: 'AGENT_UNAVAILABLE', message: 'Choose a project before starting the agent.' } })
+            return false
+          }
+          if (state.agentSession?.projectId === targetProjectId) return true
+          if (state.agentSession) await get().stopAgentSession()
+          set({
+            agentSessionTransitioning: true,
+            agentRunState: 'idle',
+            agentTranscript: [],
+            agentPendingApprovals: {},
+            agentModels: [],
+            agentModelsLoaded: false,
+            agentCurrentModel: undefined,
+            agentError: undefined
+          })
+          const result = await window.aladdeen.agent.startSession(targetProjectId)
+          if (!result.ok) {
+            set({
+              agentError: { code: 'AGENT_UNAVAILABLE', message: result.error.message },
+              agentTranscript: [{
+                kind: 'status',
+                id: 'start-error',
+                statusType: 'error',
+                message: result.error.message,
+                tone: 'danger'
+              }]
+            })
+            return false
+          }
+          const configuredModel: AgentModel = {
+            provider: state.settings.agentProvider,
+            id: state.settings.agentModelId,
+            name: state.settings.agentModelId,
+            supportsThinking: false
+          }
+          set({
+            agentSession: { sessionId: result.value.sessionId, projectId: targetProjectId },
+            agentCurrentModel: configuredModel
+          })
+          const models = await window.aladdeen.agent.getModels(result.value.sessionId)
+          if (get().agentSession?.sessionId === result.value.sessionId) {
+            if (models.ok) {
+              const currentModel = models.value.find((model) => (
+                model.provider === configuredModel.provider && model.id === configuredModel.id
+              )) ?? configuredModel
+              set({
+                agentModels: models.value,
+                agentModelsLoaded: true,
+                agentCurrentModel: currentModel
+              })
+            } else {
+              set({ agentModelsLoaded: true })
+            }
+          }
+          return true
+        } finally {
+          set({ agentSessionTransitioning: false })
+        }
+      })()
+      agentSessionStartPromise = startPromise
+      try {
+        return await startPromise
+      } finally {
+        if (agentSessionStartPromise === startPromise) agentSessionStartPromise = null
       }
-      if (state.agentSession?.projectId === targetProjectId) return true
-      if (state.agentSession) await get().stopAgentSession()
-      set({
-        agentRunState: 'idle',
-        agentTranscript: [],
-        agentPendingApprovals: {},
-        agentModels: [],
-        agentError: undefined
-      })
-      const result = await window.aladdeen.agent.startSession(targetProjectId)
-      if (!result.ok) {
-        set({
-          agentError: { code: 'AGENT_UNAVAILABLE', message: result.error.message },
-          agentTranscript: [{
-            kind: 'status',
-            id: 'start-error',
-            statusType: 'error',
-            message: result.error.message,
-            tone: 'danger'
-          }]
-        })
-        return false
-      }
-      set({ agentSession: { sessionId: result.value.sessionId, projectId: targetProjectId } })
-      const models = await window.aladdeen.agent.getModels(result.value.sessionId)
-      if (models.ok && get().agentSession?.sessionId === result.value.sessionId) {
-        set({ agentModels: models.value })
-      }
-      return true
     },
 
     async stopAgentSession() {
       const session = get().agentSession
       if (!session) return
-      const result = await window.aladdeen.agent.stopSession(session.sessionId)
-      if (!result.ok && result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
-      if (get().agentSession?.sessionId === session.sessionId) {
-        set({
-          agentSession: undefined,
-          agentRunState: 'idle',
-          agentPendingApprovals: {}
-        })
+      set({ agentSessionTransitioning: true })
+      try {
+        const result = await window.aladdeen.agent.stopSession(session.sessionId)
+        if (!result.ok && result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
+        if (get().agentSession?.sessionId === session.sessionId) {
+          set({
+            agentSession: undefined,
+            agentRunState: 'idle',
+            agentPendingApprovals: {},
+            agentModels: [],
+            agentModelsLoaded: false,
+            agentCurrentModel: undefined
+          })
+        }
+      } finally {
+        set({ agentSessionTransitioning: false })
       }
     },
 
@@ -1673,14 +1736,17 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async setAgentModel(provider, modelId) {
-      const session = get().agentSession
-      if (!session) return
+      const state = get()
+      const session = state.agentSession
+      if (!session || state.agentRunState !== 'idle') return
       const result = await window.aladdeen.agent.setModel(session.sessionId, provider, modelId)
       if (!result.ok) {
         toast.error(result.error.message)
         return
       }
-      await get().updateSettings({ agentProvider: provider, agentModelId: modelId })
+      if (get().agentSession?.sessionId === session.sessionId) {
+        set({ agentCurrentModel: result.value })
+      }
     },
 
     async setAgentThinkingLevel(level) {

@@ -27,6 +27,7 @@ describe('settings dialog', () => {
   const setApiKey = vi.fn()
   const clearApiKey = vi.fn()
   const credentialStatus = vi.fn()
+  const getModelCatalog = vi.fn()
   const beginLogin = vi.fn()
   const respondLoginPrompt = vi.fn()
   const reopenLoginUrl = vi.fn()
@@ -83,6 +84,23 @@ describe('settings dialog', () => {
         }
       }
     })
+    getModelCatalog.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          provider: 'anthropic',
+          id: 'claude-sonnet-4-5',
+          name: 'Claude Sonnet 4.5',
+          supportsThinking: true
+        },
+        {
+          provider: 'anthropic',
+          id: 'claude-opus-4-5',
+          name: 'Claude Opus 4.5',
+          supportsThinking: true
+        }
+      ]
+    })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(performance.now())
       return 1
@@ -103,6 +121,7 @@ describe('settings dialog', () => {
           cancelLogin,
           disconnectProvider,
           credentialStatus,
+          getModelCatalog,
           onAuthEvent
         },
         system: { openExternal }
@@ -228,6 +247,8 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Coding agent' }))
 
     expect(screen.getByText(/Off by default/)).toBeVisible()
+    expect(screen.getByLabelText('Default agent model')).toBeDisabled()
+    expect(screen.queryByLabelText('Agent model ID')).not.toBeInTheDocument()
     const keyInput = await screen.findByLabelText('anthropic API key')
     expect(keyInput).toHaveAttribute('type', 'password')
     fireEvent.change(keyInput, { target: { value: 'secret-test-api-key' } })

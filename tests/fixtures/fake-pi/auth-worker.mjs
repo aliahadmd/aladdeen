@@ -91,31 +91,71 @@ setTimeout(() => {
           provider: 'anthropic',
           oauthAvailable: true,
           apiKeyAvailable: true,
-          modelIds: ['claude-sonnet-4-5']
+          models: [{
+            provider: 'anthropic',
+            id: 'claude-sonnet-4-5',
+            name: 'Claude Sonnet 4.5',
+            supportsThinking: true
+          }, {
+            provider: 'anthropic',
+            id: 'claude-opus-4-5',
+            name: 'Claude Opus 4.5',
+            supportsThinking: true
+          }, {
+            provider: 'anthropic',
+            id: 'claude-haiku-4-5',
+            name: 'Claude Haiku 4.5',
+            supportsThinking: false
+          }]
         },
         {
           provider: 'openai-codex',
           oauthAvailable: true,
           apiKeyAvailable: false,
-          modelIds: ['gpt-5.5']
+          models: [{
+            provider: 'openai-codex',
+            id: 'gpt-5.5',
+            name: 'GPT-5.5',
+            supportsThinking: true
+          }, {
+            provider: 'openai-codex',
+            id: 'gpt-5.4',
+            name: 'GPT-5.4',
+            supportsThinking: true
+          }]
         },
         {
           provider: 'kimi-coding',
           oauthAvailable: true,
           apiKeyAvailable: true,
-          modelIds: ['kimi-for-coding']
+          models: [{
+            provider: 'kimi-coding',
+            id: 'kimi-for-coding',
+            name: 'Kimi for Coding',
+            supportsThinking: true
+          }]
         },
         {
           provider: 'openai',
           oauthAvailable: false,
           apiKeyAvailable: true,
-          modelIds: ['gpt-5']
+          models: [{
+            provider: 'openai',
+            id: 'gpt-5',
+            name: 'GPT-5',
+            supportsThinking: true
+          }]
         },
         {
           provider: 'google',
           oauthAvailable: false,
           apiKeyAvailable: true,
-          modelIds: ['gemini-2.5-pro']
+          models: [{
+            provider: 'google',
+            id: 'gemini-2.5-pro',
+            name: 'Gemini 2.5 Pro',
+            supportsThinking: true
+          }]
         }
       ]
     })

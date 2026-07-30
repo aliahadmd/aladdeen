@@ -10,11 +10,13 @@ test('streams agent output, gates tools, aborts, and shuts down the child', asyn
   const sentinel = join(userData, 'fake-pi-shutdown.txt')
   await writeFile(join(projectPath, 'notes.md'), '# Agent fixture\n', 'utf8')
   const fakePi = resolve('tests/fixtures/fake-pi/cli.mjs')
+  const fakeAuthWorker = resolve('tests/fixtures/fake-pi/auth-worker.mjs')
   const application = await electron.launch({
     args: ['.', `--user-data-dir=${userData}`],
     env: {
       ...process.env,
       ALADDEEN_PI_CLI_PATH: fakePi,
+      ALADDEEN_AGENT_WORKER_PATH: fakeAuthWorker,
       ALADDEEN_FAKE_PI_SENTINEL: sentinel
     }
   })
@@ -47,6 +49,23 @@ test('streams agent output, gates tools, aborts, and shuts down the child', asyn
     await window.getByRole('button', { name: 'Close settings' }).click()
 
     await expect(window.getByRole('complementary').filter({ hasText: 'Coding agent' })).toBeVisible()
+    const currentModel = window.getByLabel('Current agent model')
+    await expect(currentModel).toHaveValue('claude-sonnet-4-5')
+    await currentModel.selectOption('claude-opus-4-5')
+    await expect(currentModel).toHaveValue('claude-opus-4-5')
+
+    await window.getByRole('button', { name: 'Settings' }).click()
+    await window.getByRole('tab', { name: 'Coding agent' }).click()
+    const defaultModel = window.getByLabel('Default agent model')
+    await expect(defaultModel).toHaveValue('claude-sonnet-4-5')
+    await defaultModel.selectOption('claude-haiku-4-5')
+    await window.getByRole('button', { name: 'Close settings' }).click()
+    await expect(currentModel).toHaveValue('claude-opus-4-5')
+
+    await window.getByRole('button', { name: 'New agent session' }).click()
+    await expect(currentModel).toHaveValue('claude-haiku-4-5')
+    await expect(currentModel).toBeEnabled()
+
     const composer = window.getByLabel('Message the coding agent')
     await composer.fill('Inspect and run the fixture')
     await composer.press('Enter')

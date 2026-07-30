@@ -697,6 +697,7 @@ export interface AladdeenApi {
     cancelLogin(attemptId: string): Promise<Result<void>>
     disconnectProvider(provider: AgentProvider): Promise<Result<void>>
     credentialStatus(): Promise<Result<AgentCredentialStatus>>
+    getModelCatalog(): Promise<Result<AgentModel[]>>
     onEvent(callback: (event: AgentEvent) => void): () => void
     onAuthEvent(callback: (event: AgentAuthEvent) => void): () => void
   }
@@ -782,6 +783,7 @@ export const IPC = {
   agentCancelLogin: 'agent:cancel-login',
   agentDisconnectProvider: 'agent:disconnect-provider',
   agentCredentialStatus: 'agent:credential-status',
+  agentGetModelCatalog: 'agent:get-model-catalog',
   agentEvent: 'agent:event',
   agentAuthEvent: 'agent:auth-event',
   environmentEvent: 'environment:event',

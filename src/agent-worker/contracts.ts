@@ -45,7 +45,12 @@ export type AgentWorkerAuthMessage =
         provider: string
         oauthAvailable: boolean
         apiKeyAvailable: boolean
-        modelIds: string[]
+        models: Array<{
+          provider: string
+          id: string
+          name: string
+          supportsThinking: boolean
+        }>
       }>
     }
   | { channel: 'auth'; type: 'url'; url: string; kind: 'browser' | 'device' }

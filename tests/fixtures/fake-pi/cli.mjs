@@ -139,12 +139,26 @@ input.on('line', (line) => {
       command: command.type,
       success: true,
       data: {
-        models: [{
-          provider: 'anthropic',
-          id: 'claude-sonnet-4-5',
-          name: 'Fake Claude',
-          reasoning: true
-        }]
+        models: [
+          {
+            provider: 'anthropic',
+            id: 'claude-sonnet-4-5',
+            name: 'Fake Claude Sonnet',
+            reasoning: true
+          },
+          {
+            provider: 'anthropic',
+            id: 'claude-opus-4-5',
+            name: 'Fake Claude Opus',
+            reasoning: true
+          },
+          {
+            provider: 'anthropic',
+            id: 'claude-haiku-4-5',
+            name: 'Fake Claude Haiku',
+            reasoning: false
+          }
+        ]
       }
     })
     return
@@ -158,8 +172,12 @@ input.on('line', (line) => {
       data: {
         provider: command.provider,
         id: command.modelId,
-        name: 'Fake model',
-        reasoning: true
+        name: command.modelId === 'claude-opus-4-5'
+          ? 'Fake Claude Opus'
+          : command.modelId === 'claude-haiku-4-5'
+            ? 'Fake Claude Haiku'
+            : 'Fake Claude Sonnet',
+        reasoning: command.modelId !== 'claude-haiku-4-5'
       }
     })
     return

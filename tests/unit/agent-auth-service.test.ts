@@ -31,31 +31,56 @@ const capabilitiesMessage = {
       provider: 'anthropic',
       oauthAvailable: true,
       apiKeyAvailable: true,
-      modelIds: ['claude-sonnet-4-5']
+      models: [{
+        provider: 'anthropic',
+        id: 'claude-sonnet-4-5',
+        name: 'Claude Sonnet 4.5',
+        supportsThinking: true
+      }]
     },
     {
       provider: 'openai-codex',
       oauthAvailable: true,
       apiKeyAvailable: false,
-      modelIds: ['gpt-5.5']
+      models: [{
+        provider: 'openai-codex',
+        id: 'gpt-5.5',
+        name: 'GPT-5.5',
+        supportsThinking: true
+      }]
     },
     {
       provider: 'kimi-coding',
       oauthAvailable: true,
       apiKeyAvailable: true,
-      modelIds: ['kimi-for-coding']
+      models: [{
+        provider: 'kimi-coding',
+        id: 'kimi-for-coding',
+        name: 'Kimi for Coding',
+        supportsThinking: true
+      }]
     },
     {
       provider: 'openai',
       oauthAvailable: false,
       apiKeyAvailable: true,
-      modelIds: ['gpt-5']
+      models: [{
+        provider: 'openai',
+        id: 'gpt-5',
+        name: 'GPT-5',
+        supportsThinking: true
+      }]
     },
     {
       provider: 'google',
       oauthAvailable: false,
       apiKeyAvailable: true,
-      modelIds: ['gemini-2.5-pro']
+      models: [{
+        provider: 'google',
+        id: 'gemini-2.5-pro',
+        name: 'Gemini 2.5 Pro',
+        supportsThinking: true
+      }]
     }
   ]
 } as const
@@ -260,6 +285,39 @@ describe('agent account authentication service', () => {
     await expect(login).rejects.toThrow('invalid provider')
     expect(harness.capabilityChild.kill).toHaveBeenCalledWith('SIGTERM')
     expect(harness.stopAgent).not.toHaveBeenCalled()
+    expect(harness.loginChild.listenerCount('message')).toBe(0)
+  })
+
+  it('returns a sanitized local model catalog only while the agent is enabled', async () => {
+    const harness = createHarness()
+    const catalogPromise = harness.service.getModelCatalog()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    harness.capabilityChild.emit('message', capabilitiesMessage)
+
+    await expect(catalogPromise).resolves.toContainEqual({
+      provider: 'openai-codex',
+      id: 'gpt-5.5',
+      name: 'GPT-5.5',
+      supportsThinking: true
+    })
+
+    const disabledHarness = createHarness()
+    disabledHarness.database.settings.agentEnabled = false
+    await expect(disabledHarness.service.getModelCatalog()).rejects.toThrow(
+      'Enable the coding agent to load available models.'
+    )
+    expect(disabledHarness.capabilityChild.listenerCount('message')).toBe(0)
+  })
+
+  it('coalesces concurrent model-catalog discovery into one worker', async () => {
+    const harness = createHarness()
+    const first = harness.service.getModelCatalog()
+    const second = harness.service.getModelCatalog()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    harness.capabilityChild.emit('message', capabilitiesMessage)
+
+    const [firstCatalog, secondCatalog] = await Promise.all([first, second])
+    expect(firstCatalog).toEqual(secondCatalog)
     expect(harness.loginChild.listenerCount('message')).toBe(0)
   })
 

@@ -17,6 +17,7 @@ import type { AppDatabase } from '@main/services/database'
 import type { ExportService } from '@main/services/export'
 import type { GlobalSearchService } from '@main/services/global-search'
 import type { WorkspaceService } from '@main/services/workspace'
+import { agentSessionMustStopForSettingsChange } from '@shared/agent-settings'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { defaultNameForKind, DOCUMENT_EXTENSIONS, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import {
@@ -258,6 +259,7 @@ export function registerIpc({
     await agentAuth.disconnectProvider(parse(agentProviderSchema, input))
   })
   handle(IPC.agentCredentialStatus, async () => agentAuth.credentialStatus())
+  handle(IPC.agentGetModelCatalog, async () => agentAuth.getModelCatalog())
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))
   handle(IPC.openRelativeDocument, async (_event, input) => {
@@ -381,11 +383,7 @@ export function registerIpc({
     const previousSettings = database.getSettings()
     const settings = database.setSettings(parse(settingsSchema, input))
     nativeTheme.themeSource = settings.theme
-    if (
-      !settings.agentEnabled ||
-      previousSettings.agentProvider !== settings.agentProvider ||
-      previousSettings.agentModelId !== settings.agentModelId
-    ) {
+    if (agentSessionMustStopForSettingsChange(previousSettings, settings)) {
       await agent.close()
       if (!settings.agentEnabled || previousSettings.agentProvider !== settings.agentProvider) {
         await agentAuth.close()

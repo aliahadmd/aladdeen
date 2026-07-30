@@ -5,6 +5,7 @@ import type { AppDatabase } from '@main/services/database'
 import type {
   AgentAuthType,
   AgentCredentialStatus,
+  AgentModel,
   AgentProvider,
   AgentProviderCredentialStatus
 } from '@shared/contracts'
@@ -28,7 +29,7 @@ export interface CredentialEncryption {
 export interface AgentProviderCapabilities {
   oauthAvailable: boolean
   apiKeyAvailable: boolean
-  modelIds: string[]
+  models: AgentModel[]
 }
 
 export type AgentCapabilities = Record<AgentProvider, AgentProviderCapabilities>
@@ -42,27 +43,42 @@ export const DEFAULT_AGENT_CAPABILITIES: AgentCapabilities = {
   anthropic: {
     oauthAvailable: true,
     apiKeyAvailable: true,
-    modelIds: ['claude-sonnet-4-5']
+    models: [{
+      provider: 'anthropic',
+      id: 'claude-sonnet-4-5',
+      name: 'Claude Sonnet 4.5',
+      supportsThinking: true
+    }]
   },
   'openai-codex': {
     oauthAvailable: true,
     apiKeyAvailable: false,
-    modelIds: ['gpt-5.5']
+    models: [{
+      provider: 'openai-codex',
+      id: 'gpt-5.5',
+      name: 'GPT-5.5',
+      supportsThinking: true
+    }]
   },
   'kimi-coding': {
     oauthAvailable: true,
     apiKeyAvailable: true,
-    modelIds: ['kimi-for-coding']
+    models: [{
+      provider: 'kimi-coding',
+      id: 'kimi-for-coding',
+      name: 'Kimi for Coding',
+      supportsThinking: true
+    }]
   },
   openai: {
     oauthAvailable: false,
     apiKeyAvailable: true,
-    modelIds: []
+    models: []
   },
   google: {
     oauthAvailable: false,
     apiKeyAvailable: true,
-    modelIds: []
+    models: []
   }
 }
 

@@ -83,12 +83,14 @@ if (!capabilities.providers.some((provider) => provider.provider === 'kimi-codin
   throw new Error('The pinned pi worker did not expose Kimi Code OAuth.')
 }
 if (!capabilities.providers.some((provider) => (
-  provider.provider === 'openai-codex' && provider.modelIds.includes('gpt-5.5')
+  provider.provider === 'openai-codex' &&
+  provider.models.some((model) => model.id === 'gpt-5.5' && model.name && typeof model.supportsThinking === 'boolean')
 ))) {
   throw new Error('The pinned pi worker did not expose the Codex default model gpt-5.5.')
 }
 if (!capabilities.providers.some((provider) => (
-  provider.provider === 'kimi-coding' && provider.modelIds.includes('kimi-for-coding')
+  provider.provider === 'kimi-coding' &&
+  provider.models.some((model) => model.id === 'kimi-for-coding')
 ))) {
   throw new Error('The pinned pi worker did not expose the Kimi default model.')
 }

@@ -40,7 +40,7 @@ test('connects Codex, Claude, and Kimi accounts, then replaces and disconnects a
     await expect(window.getByText('renderer-must-not-see-this')).toHaveCount(0)
     await window.getByRole('button', { name: 'Done' }).click()
     await expect(window.getByText('Connected · account').first()).toBeVisible()
-    await expect(window.getByLabel('Agent model ID')).toHaveValue('gpt-5.5')
+    await expect(window.getByLabel('Default agent model')).toHaveValue('gpt-5.5')
 
     await window.getByRole('button', { name: 'Continue with Claude' }).click()
     await expect(window.getByText('Complete Claude login, then paste the authorization code.')).toBeVisible()
@@ -48,14 +48,14 @@ test('connects Codex, Claude, and Kimi accounts, then replaces and disconnects a
     await window.getByRole('button', { name: 'Continue', exact: true }).click()
     await expect(window.getByRole('heading', { name: 'Account connected' })).toBeVisible()
     await window.getByRole('button', { name: 'Done' }).click()
-    await expect(window.getByLabel('Agent model ID')).toHaveValue('claude-sonnet-4-5')
+    await expect(window.getByLabel('Default agent model')).toHaveValue('claude-sonnet-4-5')
 
     await window.getByRole('button', { name: 'Continue with Kimi' }).click()
     await expect(window.getByText('KIMI-CODE')).toBeVisible()
     await expect(window.getByText('renderer-must-not-see-this')).toHaveCount(0)
     await expect(window.getByRole('heading', { name: 'Account connected' })).toBeVisible()
     await window.getByRole('button', { name: 'Done' }).click()
-    await expect(window.getByLabel('Agent model ID')).toHaveValue('kimi-for-coding')
+    await expect(window.getByLabel('Default agent model')).toHaveValue('kimi-for-coding')
 
     await window.getByLabel('kimi-coding API key').fill('fake-kimi-api-key')
     await window.getByRole('button', { name: 'Use API key' }).click()

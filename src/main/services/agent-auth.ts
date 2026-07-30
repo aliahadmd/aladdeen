@@ -17,6 +17,7 @@ import {
   IPC,
   type AgentAuthEvent,
   type AgentCredentialStatus,
+  type AgentModel,
   type AgentProvider
 } from '@shared/contracts'
 import type { AppDatabase } from './database'
@@ -43,6 +44,7 @@ interface ActiveLogin {
 export class AgentAuthService {
   private active?: ActiveLogin
   private capabilitiesLoaded = false
+  private capabilitiesLoading?: Promise<void>
 
   constructor(
     private readonly database: AppDatabase,
@@ -58,6 +60,16 @@ export class AgentAuthService {
       await this.refreshCapabilities().catch(() => undefined)
     }
     return this.vault.status()
+  }
+
+  async getModelCatalog(): Promise<AgentModel[]> {
+    if (!this.database.getSettings().agentEnabled) {
+      throw new DesktopError('PERMISSION_DENIED', 'Enable the coding agent to load available models.')
+    }
+    await this.refreshCapabilities()
+    return AGENT_PROVIDERS.flatMap((provider) => (
+      this.vault.getCapabilities()[provider].models.map((model) => ({ ...model }))
+    ))
   }
 
   async setApiKey(provider: AgentProvider, apiKey: string): Promise<void> {
@@ -275,8 +287,8 @@ export class AgentAuthService {
 
   private selectProviderAfterLogin(provider: AgentProvider): void {
     const settings = this.database.getSettings()
-    const modelIds = this.vault.getCapabilities()[provider].modelIds
-    const modelIsValid = modelIds.includes(settings.agentModelId)
+    const models = this.vault.getCapabilities()[provider].models
+    const modelIsValid = models.some((model) => model.id === settings.agentModelId)
     this.database.setSettings({
       ...settings,
       agentProvider: provider,
@@ -286,6 +298,18 @@ export class AgentAuthService {
 
   private async refreshCapabilities(): Promise<void> {
     if (this.capabilitiesLoaded || this.active) return
+    if (this.capabilitiesLoading) return this.capabilitiesLoading
+
+    const loading = this.discoverCapabilities()
+    this.capabilitiesLoading = loading
+    try {
+      await loading
+    } finally {
+      if (this.capabilitiesLoading === loading) this.capabilitiesLoading = undefined
+    }
+  }
+
+  private async discoverCapabilities(): Promise<void> {
     const child = this.createWorker({ mode: 'capabilities' })
     const detach = bindCredentialBridge(child, this.vault)
     const capabilities = await new Promise<AgentCapabilities>((resolve, reject) => {
@@ -373,18 +397,18 @@ export class AgentAuthService {
   }
 }
 
-function capabilitiesFromWorker(
+export function capabilitiesFromWorker(
   message: Extract<AgentWorkerAuthMessage, { type: 'capabilities' }>
 ): AgentCapabilities {
   if (!Array.isArray(message.providers) || message.providers.length > 100) {
     throw new Error('Pi capability discovery returned an invalid provider list.')
   }
   const capabilities: AgentCapabilities = {
-    anthropic: { oauthAvailable: false, apiKeyAvailable: false, modelIds: [] },
-    'openai-codex': { oauthAvailable: false, apiKeyAvailable: false, modelIds: [] },
-    'kimi-coding': { oauthAvailable: false, apiKeyAvailable: false, modelIds: [] },
-    openai: { oauthAvailable: false, apiKeyAvailable: false, modelIds: [] },
-    google: { oauthAvailable: false, apiKeyAvailable: false, modelIds: [] }
+    anthropic: { oauthAvailable: false, apiKeyAvailable: false, models: [] },
+    'openai-codex': { oauthAvailable: false, apiKeyAvailable: false, models: [] },
+    'kimi-coding': { oauthAvailable: false, apiKeyAvailable: false, models: [] },
+    openai: { oauthAvailable: false, apiKeyAvailable: false, models: [] },
+    google: { oauthAvailable: false, apiKeyAvailable: false, models: [] }
   }
   for (const item of message.providers as unknown[]) {
     if (
@@ -394,7 +418,7 @@ function capabilitiesFromWorker(
       typeof (item as { provider?: unknown }).provider !== 'string' ||
       typeof (item as { oauthAvailable?: unknown }).oauthAvailable !== 'boolean' ||
       typeof (item as { apiKeyAvailable?: unknown }).apiKeyAvailable !== 'boolean' ||
-      !Array.isArray((item as { modelIds?: unknown }).modelIds)
+      !Array.isArray((item as { models?: unknown }).models)
     ) {
       throw new Error('Pi capability discovery returned an invalid provider.')
     }
@@ -402,15 +426,32 @@ function capabilitiesFromWorker(
       provider: string
       oauthAvailable: boolean
       apiKeyAvailable: boolean
-      modelIds: unknown[]
+      models: unknown[]
     }
     if (!AGENT_PROVIDERS.includes(provider.provider as AgentProvider)) continue
     capabilities[provider.provider as AgentProvider] = {
       oauthAvailable: provider.oauthAvailable,
       apiKeyAvailable: provider.apiKeyAvailable,
-      modelIds: provider.modelIds
-        .filter((modelId): modelId is string => typeof modelId === 'string' && modelId.length <= 500)
+      models: provider.models
+        .filter((model): model is Record<string, unknown> => (
+          Boolean(model) &&
+          typeof model === 'object' &&
+          !Array.isArray(model) &&
+          typeof (model as { id?: unknown }).id === 'string' &&
+          (model as { id: string }).id.length > 0 &&
+          (model as { id: string }).id.length <= 500 &&
+          typeof (model as { name?: unknown }).name === 'string' &&
+          (model as { name: string }).name.length > 0 &&
+          (model as { name: string }).name.length <= 500 &&
+          typeof (model as { supportsThinking?: unknown }).supportsThinking === 'boolean'
+        ))
         .slice(0, 1_000)
+        .map((model) => ({
+          provider: provider.provider,
+          id: model.id as string,
+          name: model.name as string,
+          supportsThinking: model.supportsThinking as boolean
+        }))
     }
   }
   return capabilities

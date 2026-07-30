@@ -116,14 +116,19 @@ async function main(): Promise<void> {
   })
 
   if (options.mode === 'capabilities') {
-    send({
+    await sendFlushed({
       channel: 'auth',
       type: 'capabilities',
       providers: modelRuntime.getProviders().map((provider) => ({
         provider: provider.id,
         oauthAvailable: provider.auth.oauth !== undefined,
         apiKeyAvailable: provider.auth.apiKey?.login !== undefined,
-        modelIds: provider.getModels().map((model) => model.id)
+        models: provider.getModels().map((model) => ({
+          provider: provider.id,
+          id: model.id,
+          name: model.name,
+          supportsThinking: model.reasoning
+        }))
       }))
     })
     return
@@ -303,6 +308,21 @@ function send(message: AgentWorkerMessage): void {
   if (!process.send || !process.connected) throw new Error('The encrypted credential bridge is unavailable.')
   if (!ipcMessageWithinLimit(message)) throw new Error('The agent worker IPC message is too large.')
   process.send(message)
+}
+
+function sendFlushed(message: AgentWorkerMessage): Promise<void> {
+  if (!process.send || !process.connected) {
+    return Promise.reject(new Error('The encrypted credential bridge is unavailable.'))
+  }
+  if (!ipcMessageWithinLimit(message)) {
+    return Promise.reject(new Error('The agent worker IPC message is too large.'))
+  }
+  return new Promise<void>((resolve, reject) => {
+    process.send?.(message, (error) => {
+      if (error) reject(error)
+      else resolve()
+    })
+  })
 }
 
 function parseOptions(value: string | undefined): AgentWorkerOptions {

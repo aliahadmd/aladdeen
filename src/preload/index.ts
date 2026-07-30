@@ -78,6 +78,7 @@ const api: AladdeenApi = {
     cancelLogin: (attemptId) => ipcRenderer.invoke(IPC.agentCancelLogin, attemptId),
     disconnectProvider: (provider) => ipcRenderer.invoke(IPC.agentDisconnectProvider, provider),
     credentialStatus: () => ipcRenderer.invoke(IPC.agentCredentialStatus),
+    getModelCatalog: () => ipcRenderer.invoke(IPC.agentGetModelCatalog),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => callback(agentEvent)
       ipcRenderer.on(IPC.agentEvent, listener)
