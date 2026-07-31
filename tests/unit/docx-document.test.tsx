@@ -158,10 +158,12 @@ describe('Eigenpal DOCX adapter', () => {
       await new Promise((resolve) => window.setTimeout(resolve, 5))
     })
     fireEvent.click(screen.getByRole('button', { name: 'Edit document' }))
-    expect(useAppStore.getState().documents[0]).toMatchObject({
-      binaryDirty: true,
-      adapterRevision: 1,
-      status: 'editing'
+    await waitFor(() => {
+      expect(useAppStore.getState().documents[0]).toMatchObject({
+        binaryDirty: true,
+        adapterRevision: 1,
+        status: 'editing'
+      })
     })
   })
 
