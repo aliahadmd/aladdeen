@@ -104,7 +104,13 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$app"
           done < <(find release -type d -name 'Aladdeen.app' -print0)
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'push'
         with:
           name: aladdeen-macos-arm64
-          path: release/**
+          path: |
+            release/*/*.dmg
+            release/*/SHA256SUMS
+            release/*/*.dmg.size
           if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
