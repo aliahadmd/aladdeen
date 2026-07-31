@@ -3,8 +3,8 @@
   "build": 1,
   "macos": {
     "arm64": {
-      "byteSize": 226379700,
-      "sha256": "dadc26787ec8e58d2729e5bcda65a3cfa73f81ce6c99cdc58875770076ebc0c1"
+      "byteSize": 228486212,
+      "sha256": "67ba3bd89a63184af96687e781ac35a8f143b5270f61a39cf8a35b05c6d3cc02"
     }
   }
 }
