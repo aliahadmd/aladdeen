@@ -19,6 +19,7 @@ import { AgentCredentialVault } from '@main/services/agent-credentials'
 import { AgentService } from '@main/services/agent'
 import { ExportService } from '@main/services/export'
 import { GlobalSearchService } from '@main/services/global-search'
+import { resolveUserDataPolicy } from '@main/services/user-data-policy'
 import { WorkspaceService } from '@main/services/workspace'
 import { registerIpc } from '@main/ipc'
 import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
@@ -70,6 +71,12 @@ let pendingClose: {
   blocked: boolean
 } | null = null
 const systemOpenTokens = new Map<string, { path: string; expiresAt: number }>()
+const userDataPolicy = resolveUserDataPolicy({
+  appDataPath: app.getPath('appData'),
+  isPackaged: app.isPackaged,
+  hasExplicitUserDataPath: app.commandLine.hasSwitch('user-data-dir')
+})
+if (userDataPolicy.userDataPath) app.setPath('userData', userDataPolicy.userDataPath)
 
 function extractDocumentPath(argv: string[]): string | null {
   return argv.find((argument) => isSupportedDocumentName(argument)) ?? null
@@ -96,13 +103,9 @@ app.on('open-file', (event, filePath) => {
 })
 
 void app.whenReady().then(async () => {
-  const previousApplicationDirectory = ['Fl', 'uid', 'MD'].join('')
-  const previousUserDataPath = app.commandLine.hasSwitch('user-data-dir')
-    ? undefined
-    : join(app.getPath('appData'), previousApplicationDirectory)
   database = new AppDatabase(
     app.getPath('userData'),
-    previousUserDataPath
+    userDataPolicy.previousUserDataPath
   )
   const settings = database.getSettings()
   nativeTheme.themeSource = settings.theme

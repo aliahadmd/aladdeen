@@ -13,6 +13,7 @@ import type { AgentCredentialVault } from '@main/services/agent-credentials'
 import {
   bindCredentialBridge,
   bindModelsStoreBridge,
+  resolveWorkerWorkingDirectory,
   workerEnvironment,
   type AgentWorkerChild
 } from '@main/services/agent-worker-host'
@@ -43,6 +44,19 @@ describe('agent worker credential bridge', () => {
       write: vi.fn().mockResolvedValue(undefined),
       delete: vi.fn()
     }
+  })
+
+  it('uses a real Resources directory instead of app.asar in packaged builds', () => {
+    expect(resolveWorkerWorkingDirectory(
+      false,
+      '/workspace/aladdeen',
+      '/Applications/Aladdeen.app/Contents/Resources'
+    )).toBe('/workspace/aladdeen')
+    expect(resolveWorkerWorkingDirectory(
+      true,
+      '/Applications/Aladdeen.app/Contents/Resources/app.asar',
+      '/Applications/Aladdeen.app/Contents/Resources'
+    )).toBe('/Applications/Aladdeen.app/Contents/Resources')
   })
 
   it('serves read, list, write, and delete over child-process IPC', async () => {

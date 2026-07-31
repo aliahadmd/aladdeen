@@ -200,10 +200,14 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
 
     void (async () => {
       try {
-        const [pdfjs, viewerModule] = await Promise.all([
-          import('pdfjs-dist'),
-          import('pdfjs-dist/web/pdf_viewer.mjs')
-        ])
+        // pdf_viewer.mjs reads globalThis.pdfjsLib while its module body is
+        // evaluated. Loading both modules concurrently races that read against
+        // pdfjs-dist initializing the global, especially in split production
+        // chunks. Initialize core first and publish it before importing the
+        // viewer.
+        const pdfjs = await import('pdfjs-dist')
+        Object.assign(globalThis, { pdfjsLib: pdfjs })
+        const viewerModule = await import('pdfjs-dist/web/pdf_viewer.mjs')
         pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
         loadingTask = pdfjs.getDocument({
           url: sessionUrl,

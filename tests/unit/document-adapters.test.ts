@@ -93,6 +93,7 @@ describe('isolated HTML preview', () => {
   it('injects an offline CSP and reports malformed source diagnostics', () => {
     const result = prepareHtmlPreview('<p>hello</p>', '11111111-1111-4111-8111-111111111111')
     expect(result).toContain("default-src 'none'")
+    expect(result).not.toContain('navigate-to')
     expect(validateHtmlSource('<div><span></div>')).not.toHaveLength(0)
   })
 })

@@ -21,9 +21,17 @@ const MAX_MODELS_STORE_IPC_BYTES = 3 * 1024 * 1024
 
 export type AgentWorkerChild = ChildProcessByStdio<Writable, Readable, Readable>
 
+export function resolveWorkerWorkingDirectory(
+  packaged = app.isPackaged,
+  appPath = app.getAppPath(),
+  resourcesPath = process.resourcesPath
+): string {
+  return packaged ? resourcesPath : appPath
+}
+
 export function spawnAgentWorker(
   options: AgentWorkerOptions,
-  cwd = app.getAppPath()
+  cwd = resolveWorkerWorkingDirectory()
 ): AgentWorkerChild {
   return spawn(process.execPath, [resolveWorkerPath()], {
     cwd,

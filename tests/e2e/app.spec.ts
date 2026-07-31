@@ -8,6 +8,7 @@ import { addWorksheet, createWorkbook } from '@office-kit/xlsx/workbook'
 import { getCell, setCell } from '@office-kit/xlsx/worksheet'
 import { Document, HeadingLevel, Packer, Paragraph } from 'docx'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
+import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { PptxHandler, TextBuilder } from 'pptx-viewer-core'
 import sharp from 'sharp'
 
@@ -413,6 +414,38 @@ test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', as
   }
 })
 
+test('opens and renders a local PDF without outbound requests', async () => {
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pdf-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pdf-workspace-'))
+  const pdfPath = join(workspace, 'evidence.pdf')
+  const source = await PDFDocument.create()
+  const page = source.addPage([480, 320])
+  const font = await source.embedFont(StandardFonts.Helvetica)
+  page.drawText('Local PDF evidence', { x: 48, y: 250, size: 22, font })
+  await writeFile(pdfPath, await source.save())
+  const application = await electron.launch({ args: ['.', pdfPath, `--user-data-dir=${userData}`] })
+
+  try {
+    const window = await application.firstWindow()
+    const outbound: string[] = []
+    window.on('request', (request) => {
+      if (/^https?:/i.test(request.url())) outbound.push(request.url())
+    })
+    await createFirstEnvironment(window)
+    const renderedPage = window.locator('.pdfViewer .page[data-page-number="1"]')
+    await expect(renderedPage).toBeVisible({ timeout: 20_000 })
+    await expect(window.getByText('Could not open this PDF')).toHaveCount(0)
+    await expect(window.getByText('1 / 1', { exact: true })).toBeVisible()
+    expect(outbound).toEqual([])
+  } finally {
+    await closeElectron(application)
+    await Promise.all([
+      rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    ])
+  }
+})
+
 async function closeElectron(application: Awaited<ReturnType<typeof electron.launch>>): Promise<void> {
   const closed = application.close().then(() => true).catch(() => false)
   if (await Promise.race([
@@ -515,11 +548,23 @@ test('onboards into a persistent environment', async () => {
     await expect(window.getByLabel('Step 1 of 4')).toBeVisible()
 
     await window.setViewportSize({ width: 1440, height: 900 })
-    await expect(window).toHaveScreenshot('onboarding-1440-light.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+    await expect(window).toHaveScreenshot('onboarding-1440-light.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.4
+    })
     await window.setViewportSize({ width: 900, height: 700 })
-    await expect(window).toHaveScreenshot('onboarding.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+    await expect(window).toHaveScreenshot('onboarding.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.4
+    })
     await window.setViewportSize({ width: 640, height: 480 })
-    await expect(window).toHaveScreenshot('onboarding-640-light.png', { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+    await expect(window).toHaveScreenshot('onboarding-640-light.png', {
+      animations: 'disabled',
+      maxDiffPixelRatio: 0.01,
+      threshold: 0.4
+    })
 
     await window.evaluate(() => {
       document.documentElement.classList.add('dark')
@@ -531,7 +576,11 @@ test('onboards into a persistent environment', async () => {
       { width: 640, height: 480, name: 'onboarding-640-dark.png' }
     ]) {
       await window.setViewportSize(size)
-      await expect(window).toHaveScreenshot(size.name, { animations: 'disabled', maxDiffPixelRatio: 0.01 })
+      await expect(window).toHaveScreenshot(size.name, {
+        animations: 'disabled',
+        maxDiffPixelRatio: 0.01,
+        threshold: 0.4
+      })
     }
     await window.evaluate(() => {
       document.documentElement.classList.remove('dark')

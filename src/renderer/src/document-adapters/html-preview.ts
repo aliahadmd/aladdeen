@@ -53,7 +53,7 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
   document.documentElement.setAttribute('data-aladdeen-html-preview', '')
   const policy = document.createElement('meta')
   policy.httpEquiv = 'Content-Security-Policy'
-  policy.content = "default-src 'none'; img-src data: aladdeen-asset:; style-src 'unsafe-inline' aladdeen-asset:; font-src data: aladdeen-asset:; media-src aladdeen-asset:; form-action 'none'; navigate-to 'none'"
+  policy.content = "default-src 'none'; img-src data: aladdeen-asset:; style-src 'unsafe-inline' aladdeen-asset:; font-src data: aladdeen-asset:; media-src aladdeen-asset:; form-action 'none'"
   document.head.prepend(policy)
   const style = document.createElement('style')
   style.textContent = `

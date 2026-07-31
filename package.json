@@ -1,6 +1,6 @@
 {
   "name": "aladdeen",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": true,
   "description": "A private, offline-first research workspace for Markdown, HTML, DOCX, PDF, XLSX, and PPTX on macOS arm64.",
   "main": "./out/main/index.js",
@@ -26,9 +26,11 @@
     "check:presentations": "node scripts/assert-presentation-dependencies.mjs",
     "prepare:pi-runtime": "node scripts/prepare-pi-runtime.mjs",
     "smoke:pi-runtime": "node scripts/smoke-pi-worker.mjs",
+    "smoke:packaged": "node scripts/smoke-packaged-app.mjs",
+    "smoke:dmg": "node scripts/smoke-packaged-dmg.mjs",
     "icons": "node scripts/generate-icon.mjs",
     "dist": "pnpm dist:mac",
-    "dist:mac": "node scripts/assert-macos-arm.mjs && node scripts/assert-docx-editor-dependency.mjs && node scripts/assert-spreadsheet-dependencies.mjs && node scripts/assert-presentation-dependencies.mjs && pnpm prepare:pi-runtime && pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never"
+    "dist:mac": "node scripts/assert-macos-arm.mjs && node scripts/assert-docx-editor-dependency.mjs && node scripts/assert-spreadsheet-dependencies.mjs && node scripts/assert-presentation-dependencies.mjs && pnpm prepare:pi-runtime && pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never && pnpm smoke:dmg"
   },
   "dependencies": {
     "@office-kit/xlsx": "0.9.0",
