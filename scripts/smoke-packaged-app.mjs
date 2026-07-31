@@ -32,8 +32,6 @@ const workerDirectory = join(
 )
 const workerFiles = [
   'contracts.js',
-  'custom-provider.js',
-  'endpoint-security.js',
   'index.js'
 ]
 
@@ -41,6 +39,12 @@ await Promise.all([
   access(executablePath),
   ...workerFiles.map((name) => access(join(workerDirectory, name)))
 ])
+const stagedWorkerFiles = await readdir(workerDirectory)
+for (const removedFile of ['custom-provider.js', 'endpoint-security.js']) {
+  if (stagedWorkerFiles.includes(removedFile)) {
+    throw new Error(`The packaged app still contains removed custom-endpoint worker code: ${removedFile}`)
+  }
+}
 
 const auditRoot = await mkdtemp(join(tmpdir(), 'aladdeen-packaged-smoke-'))
 const userDataPath = join(auditRoot, 'profile')
@@ -133,6 +137,9 @@ try {
   }
   if (!catalogs.models.includes('openai-codex/gpt-5.5')) {
     throw new Error('The packaged agent catalog is missing openai-codex/gpt-5.5.')
+  }
+  if (catalogs.providers.some((provider) => provider.startsWith('custom:'))) {
+    throw new Error('The packaged provider catalog exposed a legacy custom endpoint.')
   }
 
   await closeApplication(application)

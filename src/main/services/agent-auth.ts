@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { shell, type BrowserWindow } from 'electron'
 import { DesktopError } from '@main/errors'
 import {
@@ -15,32 +15,30 @@ import {
 import {
   FEATURED_AGENT_PROVIDER_IDS,
   defaultModelForProvider,
+  isCustomAgentProviderId,
   isFeaturedAgentProvider,
+  isLegacyCustomAgentProvider,
   providerDisplayName
 } from '@shared/agent-providers'
 import type {
   AgentWorkerAuthMessage,
   AgentWorkerModel,
-  AgentWorkerOptions,
-  AgentWorkerProviderProfile
+  AgentWorkerOptions
 } from '@shared/agent-worker'
 import {
   IPC,
   type AgentAuthEvent,
   type AgentAuthType,
   type AgentCredentialStatus,
+  type AgentLegacyProviderProfile,
   type AgentModel,
-  type AgentProviderCompatibility,
   type AgentProviderDescriptor,
-  type AgentProviderId,
-  type AgentProviderProfile,
-  type AgentProviderProfileInput
+  type AgentProviderId
 } from '@shared/contracts'
 import type { AppDatabase } from './database'
 
 const MAX_AUTH_IPC_BYTES = 8 * 1024 * 1024
 const PROVIDER_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,199}$/
-const CUSTOM_PROVIDER_PATTERN = /^custom:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
 const AUTH_HOSTS: Readonly<Record<string, readonly string[]>> = {
   anthropic: ['claude.ai'],
   'openai-codex': ['auth.openai.com'],
@@ -103,25 +101,12 @@ export class AgentAuthService {
       .map(([id, capability]) => ({
         id,
         name: providerDisplayName(id) === id ? capability.name : providerDisplayName(id),
-        source: 'native' as const,
         featured: isFeaturedAgentProvider(id),
         oauthAvailable: capability.oauthAvailable,
         apiKeyAvailable: capability.apiKeyAvailable,
         modelCount: this.database.getAgentModelCache(id)?.models.length ?? capability.models.length,
         catalogKind: capability.dynamicCatalog ? 'dynamic' as const : 'bundled' as const
       }))
-    for (const profile of this.database.listAgentProviderProfiles()) {
-      descriptors.push({
-        id: profile.id,
-        name: profile.name,
-        source: 'custom',
-        featured: false,
-        oauthAvailable: false,
-        apiKeyAvailable: profile.authScheme !== 'none',
-        modelCount: profile.models.length,
-        catalogKind: profile.catalogMode
-      })
-    }
     const featuredIndex = new Map<string, number>(
       FEATURED_AGENT_PROVIDER_IDS.map((provider, index) => [provider, index])
     )
@@ -136,31 +121,10 @@ export class AgentAuthService {
     })
   }
 
-  getProviderProfiles(): AgentProviderProfile[] {
-    return this.database.listAgentProviderProfiles().map((profile) => ({
-      ...profile,
-      compatibility: { ...profile.compatibility },
-      models: this.profileModelsWithVerification(profile)
-    }))
-  }
-
-  validateDefaultModelSelection(providerId: AgentProviderId, modelId: string): void {
-    const profile = this.database.getAgentProviderProfile(providerId)
-    if (!profile || !modelId) return
-    const model = profile.models.find((candidate) => candidate.id === modelId)
-    if (!model) {
-      throw new DesktopError('NOT_FOUND', 'That custom model is not configured for this provider.')
-    }
-    const verification = this.database.getAgentModelVerification(providerId, modelId)
-    if (
-      model.metadataConfirmed !== true ||
-      verification?.configHash !== verificationFingerprint(profile, model)
-    ) {
-      throw new DesktopError(
-        'PERMISSION_DENIED',
-        'Run the compatibility test before making this custom model the default.'
-      )
-    }
+  getLegacyProviderProfiles(): AgentLegacyProviderProfile[] {
+    return this.database.listAgentProviderProfiles()
+      .filter((profile) => isLegacyCustomAgentProvider(profile.id))
+      .map(({ id, name }) => ({ id, name }))
   }
 
   async getModelCatalog(): Promise<AgentModel[]> {
@@ -176,40 +140,13 @@ export class AgentAuthService {
         verified: true
       })))
     }
-    for (const profile of this.database.listAgentProviderProfiles()) {
-      models.push(...this.profileModelsWithVerification(profile))
-    }
     return deduplicateModels(models)
   }
 
-  async createProviderProfile(input: AgentProviderProfileInput): Promise<AgentProviderProfile> {
-    this.requireEnabled('add a custom provider')
-    const id = `custom:${randomUUID()}`
-    const profile = await this.buildProfile(id, input, Date.now())
-    this.database.saveAgentProviderProfile(profile)
-    return profile
-  }
-
-  async updateProviderProfile(
-    providerId: AgentProviderId,
-    input: AgentProviderProfileInput
-  ): Promise<AgentProviderProfile> {
-    this.requireEnabled('edit a custom provider')
-    this.requireCustomProviderId(providerId)
-    const existing = this.database.getAgentProviderProfile(providerId)
-    if (!existing) throw new DesktopError('NOT_FOUND', 'That custom provider no longer exists.')
-    await this.cancelActiveLogin()
-    await this.stopAgentSession(providerId)
-    const profile = await this.buildProfile(providerId, input, existing.createdAt)
-    this.database.saveAgentProviderProfile(profile)
-    return { ...profile, models: this.profileModelsWithVerification(profile) }
-  }
-
-  async deleteProviderProfile(providerId: AgentProviderId): Promise<void> {
-    this.requireEnabled('delete a custom provider')
-    this.requireCustomProviderId(providerId)
+  async removeLegacyProviderProfile(providerId: AgentProviderId): Promise<void> {
+    this.requireLegacyProviderId(providerId)
     if (!this.database.getAgentProviderProfile(providerId)) {
-      throw new DesktopError('NOT_FOUND', 'That custom provider no longer exists.')
+      throw new DesktopError('NOT_FOUND', 'That legacy custom endpoint no longer exists.')
     }
     await this.cancelActiveLogin()
     await this.stopAgentSession(providerId)
@@ -224,117 +161,33 @@ export class AgentAuthService {
     }
   }
 
-  async discoverModels(providerId: AgentProviderId): Promise<AgentModel[]> {
-    return this.runExclusiveProviderOperation('model discovery', async () => {
-      this.requireEnabled('discover provider models')
-      const profile = this.requireProfile(providerId)
-      if (profile.protocol === 'anthropic-messages' || profile.catalogMode !== 'remote') {
-        throw new DesktopError(
-          'INVALID_PATH',
-          'This provider uses manual model entry because its protocol has no compatible discovery endpoint.'
-        )
-      }
-      await this.stopAgentSession(providerId)
-      const message = await this.runWorkerForMessage(
-        { mode: 'discover', provider: providerId, profile: toWorkerProfile(profile) },
-        (candidate): candidate is Extract<AgentWorkerAuthMessage, { type: 'models' }> => (
-          candidate.type === 'models' && candidate.provider === providerId
-        ),
-        35_000
-      )
-      const models = sanitizeWorkerModels(providerId, message.models, profile.protocol, 'discovered')
-      if (!models.length) throw new DesktopError('NOT_FOUND', 'The provider returned no usable models.')
-      const updated = { ...profile, models, updatedAt: Date.now() }
-      this.database.clearAgentModelVerifications(providerId)
-      this.database.saveAgentProviderProfile(updated)
-      this.database.setAgentModelCache(providerId, models)
-      return this.profileModelsWithVerification(updated)
-    })
-  }
-
   async refreshModelCatalog(providerId: AgentProviderId): Promise<AgentModel[]> {
     return this.runExclusiveProviderOperation('catalog refresh', async () => {
       this.requireEnabled('refresh provider models')
       validateProviderId(providerId)
       await this.refreshCapabilities()
-      const profile = this.database.getAgentProviderProfile(providerId)
-      if (!profile && !this.vault.getCapabilities()[providerId]) {
+      if (!this.vault.getCapabilities()[providerId]) {
         throw new DesktopError('NOT_FOUND', 'That provider is not available in the pinned pi runtime.')
       }
       await this.stopAgentSession(providerId)
       const message = await this.runWorkerForMessage(
         {
           mode: 'refresh',
-          provider: providerId,
-          ...(profile ? { profile: toWorkerProfile(profile) } : {})
+          provider: providerId
         },
         (candidate): candidate is Extract<AgentWorkerAuthMessage, { type: 'models' }> => (
           candidate.type === 'models' && candidate.provider === providerId
         ),
         60_000
       )
-      const models = sanitizeWorkerModels(
-        providerId,
-        message.models,
-        profile?.protocol,
-        profile ? 'discovered' : 'pi'
-      )
+      const models = sanitizeWorkerModels(providerId, message.models, undefined, 'pi')
       this.database.setAgentModelCache(providerId, models)
-      if (profile) {
-        const updated = { ...profile, models, updatedAt: Date.now() }
-        this.database.clearAgentModelVerifications(providerId)
-        this.database.saveAgentProviderProfile(updated)
-        return this.profileModelsWithVerification(updated)
-      }
       const capabilities = this.vault.getCapabilities()
       this.vault.setCapabilities({
         ...capabilities,
         [providerId]: { ...capabilities[providerId]!, models }
       })
       return models.map((model) => ({ ...model, verified: true }))
-    })
-  }
-
-  async verifyModel(providerId: AgentProviderId, modelId: string): Promise<AgentModel> {
-    return this.runExclusiveProviderOperation('compatibility test', async () => {
-      this.requireEnabled('verify a custom model')
-      const profile = this.requireProfile(providerId)
-      const model = profile.models.find((item) => item.id === modelId)
-      if (!model) throw new DesktopError('NOT_FOUND', 'That model is not configured for this provider.')
-      if (model.metadataConfirmed !== true) {
-        throw new DesktopError(
-          'PERMISSION_DENIED',
-          'Review and save the model metadata before running the compatibility test.'
-        )
-      }
-      await this.stopAgentSession(providerId)
-      const message = await this.runWorkerForMessage(
-        {
-          mode: 'verify',
-          provider: providerId,
-          modelId,
-          profile: toWorkerProfile(profile)
-        },
-        (candidate): candidate is Extract<AgentWorkerAuthMessage, { type: 'verified' }> => (
-          candidate.type === 'verified' &&
-          candidate.provider === providerId &&
-          candidate.model.id === modelId
-        ),
-        75_000
-      )
-      const verified = sanitizeWorkerModels(
-        providerId,
-        [message.model],
-        profile.protocol,
-        model.source ?? 'custom'
-      )[0]
-      if (!verified) throw new DesktopError('INTERNAL', 'The compatibility probe returned an invalid model.')
-      this.database.setAgentModelVerification(
-        providerId,
-        modelId,
-        verificationFingerprint(profile, model)
-      )
-      return { ...verified, verified: true }
     })
   }
 
@@ -358,11 +211,10 @@ export class AgentAuthService {
       throw new DesktopError('CONFLICT', 'Another provider operation is already in progress.')
     }
     await this.refreshCapabilities()
-    const profile = this.database.getAgentProviderProfile(provider)
     const capability = this.vault.getCapabilities()[provider]
     const available = authType === 'oauth'
       ? capability?.oauthAvailable
-      : capability?.apiKeyAvailable ?? Boolean(profile && profile.authScheme !== 'none')
+      : capability?.apiKeyAvailable
     if (!available) {
       throw new DesktopError(
         'INVALID_PATH',
@@ -375,8 +227,7 @@ export class AgentAuthService {
     const child = this.createWorker({
       mode: 'login',
       provider,
-      authType,
-      ...(profile ? { profile: toWorkerProfile(profile) } : {})
+      authType
     })
     const login: ActiveLogin = {
       id: attemptId,
@@ -453,88 +304,9 @@ export class AgentAuthService {
     ])))
   }
 
-  private async buildProfile(
-    id: AgentProviderId,
-    input: AgentProviderProfileInput,
-    createdAt: number
-  ): Promise<AgentProviderProfile> {
-    this.requireCustomProviderId(id)
-    if (input.authScheme === 'none' && input.endpointScope !== 'loopback') {
-      throw new DesktopError('PERMISSION_DENIED', 'Unauthenticated providers are allowed only on loopback.')
-    }
-    if (input.catalogMode === 'remote' && input.protocol === 'anthropic-messages') {
-      throw new DesktopError(
-        'INVALID_PATH',
-        'Anthropic-compatible providers require manual model entry.'
-      )
-    }
-    const endpoint = await validateAgentEndpoint(input.baseUrl, input.endpointScope)
-    const name = input.name.trim()
-    if (!name || name.length > 100) throw new DesktopError('INVALID_PATH', 'Enter a provider name.')
-    const seen = new Set<string>()
-    const models: AgentModel[] = []
-    for (const item of input.models.slice(0, 2_000)) {
-      const modelId = item.id.trim()
-      if (!modelId || modelId.length > 200 || seen.has(modelId)) continue
-      seen.add(modelId)
-      models.push({
-        provider: id,
-        id: modelId,
-        name: item.name?.trim().slice(0, 300) || modelId,
-        supportsThinking: item.supportsThinking,
-        protocol: input.protocol,
-        supportsVision: item.supportsVision,
-        contextWindow: item.contextWindow,
-        maxOutputTokens: item.maxOutputTokens,
-        source: 'custom',
-        metadataConfirmed: true,
-        verified: false
-      })
-    }
-    if (input.catalogMode === 'manual' && models.length === 0) {
-      throw new DesktopError('INVALID_PATH', 'Add at least one model to a manual provider catalog.')
-    }
-    return {
-      id,
-      name,
-      protocol: input.protocol,
-      baseUrl: endpoint.normalizedUrl,
-      endpointScope: input.endpointScope,
-      authScheme: input.authScheme,
-      catalogMode: input.catalogMode,
-      compatibility: {
-        ...defaultCompatibility(input.protocol),
-        ...input.compatibility
-      },
-      models,
-      createdAt,
-      updatedAt: Date.now()
-    }
-  }
-
-  private profileModelsWithVerification(profile: AgentProviderProfile): AgentModel[] {
-    return profile.models.map((model) => ({
-      ...model,
-      provider: profile.id,
-      protocol: profile.protocol,
-      source: model.source ?? 'custom',
-      metadataConfirmed: model.metadataConfirmed === true,
-      verified: model.metadataConfirmed === true &&
-        this.database.getAgentModelVerification(profile.id, model.id)?.configHash ===
-          verificationFingerprint(profile, model)
-    }))
-  }
-
-  private requireProfile(providerId: AgentProviderId): AgentProviderProfile {
-    this.requireCustomProviderId(providerId)
-    const profile = this.database.getAgentProviderProfile(providerId)
-    if (!profile) throw new DesktopError('NOT_FOUND', 'That custom provider no longer exists.')
-    return profile
-  }
-
-  private requireCustomProviderId(providerId: AgentProviderId): void {
-    if (!CUSTOM_PROVIDER_PATTERN.test(providerId)) {
-      throw new DesktopError('INVALID_PATH', 'That provider is not a custom endpoint.')
+  private requireLegacyProviderId(providerId: AgentProviderId): void {
+    if (!isLegacyCustomAgentProvider(providerId)) {
+      throw new DesktopError('INVALID_PATH', 'That provider is not a legacy custom endpoint.')
     }
   }
 
@@ -583,7 +355,7 @@ export class AgentAuthService {
 
   private async handleAuthMessage(login: ActiveLogin, message: AgentWorkerAuthMessage): Promise<void> {
     if (message.type === 'ready' || message.type === 'capabilities' ||
-      message.type === 'models' || message.type === 'verified') return
+      message.type === 'models') return
     if (message.type === 'url') {
       login.loginUrl = this.validateLoginUrl(login, message.url)
       await this.openExternal(login.loginUrl)
@@ -659,8 +431,7 @@ export class AgentAuthService {
 
   private selectProviderAfterLogin(provider: AgentProviderId): void {
     const settings = this.database.getSettings()
-    const profile = this.database.getAgentProviderProfile(provider)
-    const models = profile?.models ?? this.vault.getCapabilities()[provider]?.models ?? []
+    const models = this.vault.getCapabilities()[provider]?.models ?? []
     const modelIsValid = settings.agentProvider === provider &&
       models.some((model) => model.id === settings.agentModelId)
     this.database.setSettings({
@@ -910,69 +681,6 @@ function deduplicateModels(models: AgentModel[]): AgentModel[] {
   })
 }
 
-export function toWorkerProfile(profile: AgentProviderProfile): AgentWorkerProviderProfile {
-  return {
-    id: profile.id,
-    name: profile.name,
-    protocol: profile.protocol,
-    baseUrl: profile.baseUrl,
-    endpointScope: profile.endpointScope,
-    authScheme: profile.authScheme,
-    catalogMode: profile.catalogMode,
-    compatibility: { ...profile.compatibility },
-    models: profile.models.map((model) => ({ ...model }))
-  }
-}
-
-function defaultCompatibility(protocol: AgentProviderProfile['protocol']): AgentProviderCompatibility {
-  if (protocol === 'anthropic-messages') {
-    return {
-      supportsEagerToolInputStreaming: false,
-      supportsLongCacheRetention: false,
-      supportsCacheControlOnTools: false,
-      forceAdaptiveThinking: false,
-      supportsStrictTools: false
-    }
-  }
-  return {
-    supportsStore: false,
-    supportsDeveloperRole: false,
-    supportsReasoningEffort: false,
-    supportsUsageInStreaming: false,
-    supportsStrictMode: false,
-    maxTokensField: 'max_tokens'
-  }
-}
-
-export function verificationFingerprint(profile: AgentProviderProfile, model: AgentModel): string {
-  const value = {
-    baseUrl: profile.baseUrl,
-    protocol: profile.protocol,
-    endpointScope: profile.endpointScope,
-    authScheme: profile.authScheme,
-    compatibility: profile.compatibility,
-    model: {
-      id: model.id,
-      supportsThinking: model.supportsThinking,
-      supportsVision: model.supportsVision,
-      contextWindow: model.contextWindow,
-      maxOutputTokens: model.maxOutputTokens
-    }
-  }
-  return createHash('sha256').update(stableJson(value)).digest('hex')
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .filter(([, item]) => item !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(',')}}`
-  }
-  return JSON.stringify(value)
-}
-
 function isAuthWorkerMessage(value: unknown): value is AgentWorkerAuthMessage {
   return Boolean(
     value &&
@@ -983,7 +691,6 @@ function isAuthWorkerMessage(value: unknown): value is AgentWorkerAuthMessage {
       'ready',
       'capabilities',
       'models',
-      'verified',
       'url',
       'device-code',
       'prompt',
@@ -996,7 +703,7 @@ function isAuthWorkerMessage(value: unknown): value is AgentWorkerAuthMessage {
 }
 
 function validateProviderId(value: string): void {
-  if (!PROVIDER_ID_PATTERN.test(value)) {
+  if (!PROVIDER_ID_PATTERN.test(value) || isCustomAgentProviderId(value)) {
     throw new DesktopError('INVALID_PATH', 'The provider ID is invalid.')
   }
 }

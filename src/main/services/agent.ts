@@ -7,10 +7,6 @@ import {
   type BrowserWindow
 } from 'electron'
 import { DesktopError } from '@main/errors'
-import {
-  toWorkerProfile,
-  verificationFingerprint
-} from '@main/services/agent-auth'
 import type { AgentCredentialVault } from '@main/services/agent-credentials'
 import {
   bindCredentialBridge,
@@ -20,6 +16,7 @@ import {
 } from '@main/services/agent-worker-host'
 import type { AppDatabase } from '@main/services/database'
 import { PiRpcClient, type PiRpcRecord } from '@main/services/agent-rpc'
+import { isCustomAgentProviderId } from '@shared/agent-providers'
 import {
   IPC,
   type AgentApprovalDecision,
@@ -302,34 +299,23 @@ export class AgentService {
     }
     const project = this.database.getProject(projectId)
     if (!project) throw new DesktopError('NOT_FOUND', 'The active project no longer exists.')
-    const profile = this.database.getAgentProviderProfile(settings.agentProvider)
+    if (isCustomAgentProviderId(settings.agentProvider)) {
+      throw new DesktopError(
+        'NOT_FOUND',
+        'This saved custom endpoint is no longer supported. Choose a pi provider in Settings.'
+      )
+    }
     if (!settings.agentModelId) {
       throw new DesktopError('NOT_FOUND', 'Choose a default model in Agent Settings.')
     }
-    if (profile) {
-      const model = profile.models.find((item) => item.id === settings.agentModelId)
-      if (!model) {
-        throw new DesktopError('NOT_FOUND', 'The selected custom model is no longer available.')
-      }
-      const verification = this.database.getAgentModelVerification(profile.id, model.id)
-      if (
-        model.metadataConfirmed !== true ||
-        verification?.configHash !== verificationFingerprint(profile, model)
-      ) {
-        throw new DesktopError(
-          'PERMISSION_DENIED',
-          'Run the compatibility test before using this custom model.'
-        )
-      }
-    }
-    if (profile?.authScheme !== 'none' && !this.vault.encryptionAvailable()) {
+    if (!this.vault.encryptionAvailable()) {
       throw new DesktopError(
         'PERMISSION_DENIED',
         'Secure credential storage is unavailable on this Mac, so the agent cannot start.'
       )
     }
     const credential = await this.vault.read(settings.agentProvider)
-    if (!credential && profile?.authScheme !== 'none') {
+    if (!credential) {
       throw new DesktopError('NOT_FOUND', `Connect ${settings.agentProvider} in Agent Settings.`)
     }
 
@@ -365,8 +351,7 @@ export class AgentService {
           cwd: project.path,
           sessionDirectory,
           agentDirectory: configDirectory,
-          approvalExtensionPath: this.resolveApprovalsExtensionPath(),
-          ...(profile ? { profile: toWorkerProfile(profile) } : {})
+          approvalExtensionPath: this.resolveApprovalsExtensionPath()
         }, project.path)
     const detachCredentialBridge = legacyCliPath
       ? undefined

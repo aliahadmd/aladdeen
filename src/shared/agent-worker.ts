@@ -1,6 +1,5 @@
 export type {
   AgentWorkerModel,
-  AgentWorkerProviderProfile,
   AgentWorkerAuthMessage,
   AgentWorkerControlMessage,
   AgentWorkerCredentialRequest,

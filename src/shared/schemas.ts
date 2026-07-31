@@ -11,6 +11,7 @@ import {
   READING_LINE_HEIGHTS,
   READING_SURFACES
 } from './reading'
+import { isCustomAgentProviderId, isLegacyCustomAgentProvider } from './agent-providers'
 
 const searchBufferSchema = z.string()
   .max(MAX_SEARCH_DOCUMENT_BYTES)
@@ -33,6 +34,11 @@ export const agentProviderSchema = z
   .min(1)
   .max(200)
   .regex(/^[a-z0-9][a-z0-9._:-]*$/, 'Invalid agent provider ID')
+  .refine((value) => !isCustomAgentProviderId(value), 'Custom endpoints are no longer supported')
+export const legacyAgentProviderSchema = z
+  .string()
+  .trim()
+  .refine(isLegacyCustomAgentProvider, 'Invalid legacy custom provider ID')
 
 export const relativePathSchema = z
   .string()
@@ -204,69 +210,6 @@ export const settingsSchema = z.object({
 
 export const agentThinkingLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
 export const agentAuthTypeSchema = z.enum(['oauth', 'api_key'])
-export const agentEndpointScopeSchema = z.enum(['public_https', 'loopback'])
-export const agentApiProtocolSchema = z.enum([
-  'openai-completions',
-  'openai-responses',
-  'anthropic-messages'
-])
-export const agentAuthSchemeSchema = z.enum(['bearer', 'x-api-key', 'none'])
-export const agentCompatibilitySchema = z.object({
-  supportsStore: z.boolean().optional(),
-  supportsDeveloperRole: z.boolean().optional(),
-  supportsReasoningEffort: z.boolean().optional(),
-  supportsUsageInStreaming: z.boolean().optional(),
-  supportsStrictMode: z.boolean().optional(),
-  supportsOpenAIGrammarTools: z.boolean().optional(),
-  supportsToolSearch: z.boolean().optional(),
-  maxTokensField: z.enum(['max_tokens', 'max_completion_tokens']).optional(),
-  requiresToolResultName: z.boolean().optional(),
-  requiresAssistantAfterToolResult: z.boolean().optional(),
-  requiresThinkingAsText: z.boolean().optional(),
-  requiresReasoningContentOnAssistantMessages: z.boolean().optional(),
-  thinkingFormat: z.enum([
-    'openai',
-    'openrouter',
-    'together',
-    'deepseek',
-    'zai',
-    'qwen',
-    'chat-template',
-    'qwen-chat-template',
-    'string-thinking',
-    'ant-ling'
-  ]).optional(),
-  cacheControlFormat: z.literal('anthropic').optional(),
-  sendSessionAffinityHeaders: z.boolean().optional(),
-  sessionAffinityFormat: z.enum(['openai', 'openai-nosession', 'openrouter']).optional(),
-  deferredToolsMode: z.literal('kimi').optional(),
-  supportsEagerToolInputStreaming: z.boolean().optional(),
-  supportsLongCacheRetention: z.boolean().optional(),
-  supportsCacheControlOnTools: z.boolean().optional(),
-  supportsTemperature: z.boolean().optional(),
-  forceAdaptiveThinking: z.boolean().optional(),
-  allowEmptySignature: z.boolean().optional(),
-  supportsStrictTools: z.boolean().optional(),
-  supportsToolReferences: z.boolean().optional()
-}).strict()
-export const agentProviderModelInputSchema = z.object({
-  id: z.string().trim().min(1).max(200),
-  name: z.string().trim().min(1).max(300).optional(),
-  supportsThinking: z.boolean(),
-  supportsVision: z.boolean(),
-  contextWindow: z.number().int().min(1_024).max(4_000_000),
-  maxOutputTokens: z.number().int().min(1).max(1_000_000)
-}).strict()
-export const agentProviderProfileInputSchema = z.object({
-  name: z.string().trim().min(1).max(80),
-  protocol: agentApiProtocolSchema,
-  baseUrl: z.string().trim().url().max(2_048),
-  endpointScope: agentEndpointScopeSchema,
-  authScheme: agentAuthSchemeSchema,
-  catalogMode: z.enum(['manual', 'remote']),
-  compatibility: agentCompatibilitySchema.optional(),
-  models: z.array(agentProviderModelInputSchema).max(2_000)
-}).strict()
 export const agentStartSessionSchema = z.object({ projectId: idSchema })
 export const agentSessionSchema = z.object({ sessionId: idSchema })
 export const agentPromptSchema = z.object({
@@ -291,14 +234,6 @@ export const agentThinkingRequestSchema = z.object({
 export const agentBeginLoginSchema = z.object({
   providerId: agentProviderSchema,
   authType: agentAuthTypeSchema.optional().default('oauth')
-})
-export const agentProviderProfileUpdateSchema = z.object({
-  providerId: agentProviderSchema,
-  profile: agentProviderProfileInputSchema
-})
-export const agentProviderModelSchema = z.object({
-  providerId: agentProviderSchema,
-  modelId: z.string().trim().min(1).max(200)
 })
 export const agentLoginPromptResponseSchema = z.object({
   attemptId: idSchema,

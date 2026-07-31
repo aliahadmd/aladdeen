@@ -137,9 +137,9 @@ const agentCapabilities = [
 			"File writes and commands surface as explicit approval requests inside the conversation instead of running invisibly.",
 	},
 	{
-		title: "Extends beyond a fixed provider list",
+		title: "Keeps provider setup straightforward",
 		detail:
-			"Use native pi providers, OpenAI- or Anthropic-compatible endpoints, or a loopback local server with compatibility checks before use.",
+			"Choose from the native pi provider catalog, then connect with the account or API-key method that provider supports.",
 	},
 ] as const;
 
@@ -172,7 +172,7 @@ const faqItems = [
 	{
 		question: "Which AI providers can I use?",
 		answer:
-			"Aladdeen supports account or API-key connections for providers exposed by its pinned pi runtime, including Claude, ChatGPT Codex, Kimi Code, DeepSeek, OpenRouter, OpenAI API, and Google. You can also configure supported OpenAI- or Anthropic-compatible endpoints and loopback local servers.",
+			"Aladdeen supports account or API-key connections for providers exposed by its pinned pi runtime, including Claude, ChatGPT Codex, Kimi Code, DeepSeek, OpenRouter, OpenAI API, Google, and many more available through provider search.",
 	},
 	{
 		question: "How are provider credentials stored?",
@@ -197,7 +197,7 @@ const faqItems = [
 	{
 		question: "Is Aladdeen free?",
 		answer:
-			"Aladdeen is free during the current beta-testing period. Provider accounts, subscriptions, API usage, and compatible endpoints are separate and may have their own charges. Aladdeen is proprietary, closed-source software, and future releases may be offered as a paid product.",
+			"Aladdeen is free during the current beta-testing period. Provider accounts, subscriptions, and API usage are separate and may have their own charges. Aladdeen is proprietary, closed-source software, and future releases may be offered as a paid product.",
 	},
 ] as const;
 
@@ -540,7 +540,7 @@ function App() {
 								<div>
 									<p className="text-sm text-neutral-500">Bring your provider</p>
 									<h3 className="mt-3 text-xl font-bold tracking-tight text-white">
-										Your account, key, or compatible endpoint.
+										Your account or API key.
 									</h3>
 								</div>
 								<div>
@@ -555,7 +555,7 @@ function App() {
 										))}
 									</div>
 									<p className="mt-5 max-w-2xl text-sm leading-relaxed text-neutral-400">
-										Connect supported subscription accounts or API keys, search the native pi provider catalog, or add an OpenAI-compatible, Anthropic-compatible, or loopback endpoint. Custom models must pass a small streaming and tool-call check before becoming the default.
+										Connect supported subscription accounts or API keys, choose from featured providers, or search the broader native pi catalog. Aladdeen keeps provider-specific authentication and model metadata behind one consistent setup flow.
 									</p>
 								</div>
 							</div>

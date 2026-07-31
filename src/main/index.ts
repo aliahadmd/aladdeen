@@ -22,6 +22,7 @@ import { GlobalSearchService } from '@main/services/global-search'
 import { resolveUserDataPolicy } from '@main/services/user-data-policy'
 import { WorkspaceService } from '@main/services/workspace'
 import { registerIpc } from '@main/ipc'
+import { defaultModelForProvider, isCustomAgentProviderId } from '@shared/agent-providers'
 import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { documentKindFromName, isSupportedDocumentName } from '@shared/documents'
 
@@ -107,7 +108,14 @@ void app.whenReady().then(async () => {
     app.getPath('userData'),
     userDataPolicy.previousUserDataPath
   )
-  const settings = database.getSettings()
+  let settings = database.getSettings()
+  if (isCustomAgentProviderId(settings.agentProvider)) {
+    settings = database.setSettings({
+      ...settings,
+      agentProvider: 'anthropic',
+      agentModelId: defaultModelForProvider('anthropic')
+    })
+  }
   nativeTheme.themeSource = settings.theme
 
   workspace = new WorkspaceService(database, (environmentEvent) => {

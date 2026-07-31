@@ -460,7 +460,7 @@ describe('application metadata database', () => {
     migrated.close()
   })
 
-  it('persists custom providers and transactionally removes credentials, catalogs, and verifications', async () => {
+  it('preserves legacy provider records and transactionally removes all associated data', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-agent-providers-'))
     created.push(directory)
     const database = new AppDatabase(directory)

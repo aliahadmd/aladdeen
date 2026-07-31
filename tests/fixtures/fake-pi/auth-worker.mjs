@@ -238,45 +238,13 @@ setTimeout(() => {
     finish()
     return
   }
-  if (options.mode === 'discover') {
-    send({
-      channel: 'auth',
-      type: 'models',
-      provider: options.provider,
-      models: [{
-        provider: options.provider,
-        id: 'discovered-coder',
-        name: 'Discovered Coder',
-        supportsThinking: false,
-        protocol: options.profile?.protocol,
-        supportsVision: false,
-        contextWindow: 128000,
-        maxOutputTokens: 16384,
-        source: 'discovered',
-        verified: false
-      }]
-    })
-    finish()
-    return
-  }
   if (options.mode === 'refresh') {
     send({
       channel: 'auth',
       type: 'models',
       provider: options.provider,
-      models: options.profile?.models || []
+      models: []
     })
-    finish()
-    return
-  }
-  if (options.mode === 'verify') {
-    const model = options.profile?.models?.find((item) => item.id === options.modelId)
-    if (!model) {
-      send({ channel: 'auth', type: 'failed', message: 'Model missing from fake profile.' })
-      finish(1)
-      return
-    }
-    send({ channel: 'auth', type: 'verified', provider: options.provider, model })
     finish()
     return
   }

@@ -4,8 +4,6 @@ export type AgentApiProtocol =
   | 'openai-completions'
   | 'openai-responses'
   | 'anthropic-messages'
-export type AgentEndpointScope = 'public_https' | 'loopback'
-export type AgentAuthScheme = 'bearer' | 'x-api-key' | 'none'
 
 export type AgentAuthPromptType = 'text' | 'secret' | 'select' | 'manual_code'
 
@@ -24,20 +22,8 @@ export interface AgentWorkerModel {
   supportsVision?: boolean
   contextWindow?: number
   maxOutputTokens?: number
-  source?: 'pi' | 'custom' | 'discovered'
+  source?: 'pi'
   verified?: boolean
-}
-
-export interface AgentWorkerProviderProfile {
-  id: string
-  name: string
-  protocol: AgentApiProtocol
-  baseUrl: string
-  endpointScope: AgentEndpointScope
-  authScheme: AgentAuthScheme
-  catalogMode: 'manual' | 'remote'
-  compatibility: Record<string, unknown>
-  models: AgentWorkerModel[]
 }
 
 export type AgentWorkerMode =
@@ -45,15 +31,12 @@ export type AgentWorkerMode =
   | 'login'
   | 'capabilities'
   | 'refresh'
-  | 'discover'
-  | 'verify'
 
 export interface AgentWorkerOptions {
   mode: AgentWorkerMode
   provider?: AgentProvider
   authType?: AgentAuthType
   modelId?: string
-  profile?: AgentWorkerProviderProfile
   thinkingLevel?: string
   cwd?: string
   sessionDirectory?: string
@@ -101,7 +84,6 @@ export type AgentWorkerAuthMessage =
       }>
     }
   | { channel: 'auth'; type: 'models'; provider: string; models: AgentWorkerModel[] }
-  | { channel: 'auth'; type: 'verified'; provider: string; model: AgentWorkerModel }
   | { channel: 'auth'; type: 'url'; url: string; kind: 'browser' | 'device' }
   | {
       channel: 'auth'

@@ -27,9 +27,6 @@ import {
   agentModelRequestSchema,
   agentPromptSchema,
   agentProviderSchema,
-  agentProviderModelSchema,
-  agentProviderProfileInputSchema,
-  agentProviderProfileUpdateSchema,
   agentSessionSchema,
   agentStartSessionSchema,
   agentThinkingRequestSchema,
@@ -43,6 +40,7 @@ import {
   externalUrlSchema,
   globalSearchRequestSchema,
   idSchema,
+  legacyAgentProviderSchema,
   projectImportSelectionSchema,
   relativePathSchema,
   renameEntrySchema,
@@ -259,26 +257,12 @@ export function registerIpc({
   handle(IPC.agentCredentialStatus, async () => agentAuth.credentialStatus())
   handle(IPC.agentGetModelCatalog, async () => agentAuth.getModelCatalog())
   handle(IPC.agentGetProviderCatalog, async () => agentAuth.getProviderCatalog())
-  handle(IPC.agentGetProviderProfiles, async () => agentAuth.getProviderProfiles())
-  handle(IPC.agentCreateProviderProfile, async (_event, input) => {
-    return agentAuth.createProviderProfile(parse(agentProviderProfileInputSchema, input))
-  })
-  handle(IPC.agentUpdateProviderProfile, async (_event, input) => {
-    const request = parse(agentProviderProfileUpdateSchema, input)
-    return agentAuth.updateProviderProfile(request.providerId, request.profile)
-  })
-  handle(IPC.agentDeleteProviderProfile, async (_event, input) => {
-    await agentAuth.deleteProviderProfile(parse(agentProviderSchema, input))
-  })
-  handle(IPC.agentDiscoverModels, async (_event, input) => {
-    return agentAuth.discoverModels(parse(agentProviderSchema, input))
+  handle(IPC.agentGetLegacyProviderProfiles, async () => agentAuth.getLegacyProviderProfiles())
+  handle(IPC.agentRemoveLegacyProviderProfile, async (_event, input) => {
+    await agentAuth.removeLegacyProviderProfile(parse(legacyAgentProviderSchema, input))
   })
   handle(IPC.agentRefreshModelCatalog, async (_event, input) => {
     return agentAuth.refreshModelCatalog(parse(agentProviderSchema, input))
-  })
-  handle(IPC.agentVerifyModel, async (_event, input) => {
-    const request = parse(agentProviderModelSchema, input)
-    return agentAuth.verifyModel(request.providerId, request.modelId)
   })
   handle(IPC.openDocument, async (_event, input) => workspace.openDocument(parse(documentTargetSchema, input)))
   handle(IPC.readDocument, async (_event, input) => workspace.readDocument(parse(idSchema, input)))
@@ -402,15 +386,6 @@ export function registerIpc({
   handle(IPC.updateSettings, async (_event, input) => {
     const previousSettings = database.getSettings()
     const requestedSettings = parse(settingsSchema, input)
-    if (
-      requestedSettings.agentProvider !== previousSettings.agentProvider ||
-      requestedSettings.agentModelId !== previousSettings.agentModelId
-    ) {
-      agentAuth.validateDefaultModelSelection(
-        requestedSettings.agentProvider,
-        requestedSettings.agentModelId
-      )
-    }
     const settings = database.setSettings(requestedSettings)
     nativeTheme.themeSource = settings.theme
     if (agentSessionMustStopForSettingsChange(previousSettings, settings)) {

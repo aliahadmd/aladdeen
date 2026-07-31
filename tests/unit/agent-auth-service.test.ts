@@ -13,10 +13,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-import {
-  AgentAuthService,
-  verificationFingerprint
-} from '@main/services/agent-auth'
+import { AgentAuthService } from '@main/services/agent-auth'
 import type {
   AgentCapabilities,
   AgentCredentialVault
@@ -24,7 +21,6 @@ import type {
 import type { AgentWorkerChild } from '@main/services/agent-worker-host'
 import type { AppDatabase } from '@main/services/database'
 import type {
-  AgentModel,
   AgentProvider,
   AgentProviderProfile,
   AppSettings
@@ -370,7 +366,7 @@ describe('agent account authentication service', () => {
     )
     expect(disabledHarness.capabilityChild.listenerCount('message')).toBe(0)
     await expect(disabledHarness.service.credentialStatus()).resolves.toBeDefined()
-    expect(disabledHarness.service.getProviderProfiles()).toEqual([])
+    expect(disabledHarness.service.getLegacyProviderProfiles()).toEqual([])
     expect(disabledHarness.createWorker).not.toHaveBeenCalled()
   })
 
@@ -395,7 +391,6 @@ describe('agent account authentication service', () => {
     await expect(catalog).resolves.toContainEqual({
       id: 'deepseek',
       name: 'DeepSeek',
-      source: 'native',
       featured: true,
       oauthAvailable: false,
       apiKeyAvailable: true,
@@ -404,132 +399,82 @@ describe('agent account authentication service', () => {
     })
   })
 
-  it('creates loopback profiles with conservative compatibility and fingerprints model-affecting edits', async () => {
+  it('keeps legacy profiles out of native catalogs and exposes only a sanitized cleanup record', async () => {
     const harness = createHarness()
-    const profile = await harness.service.createProviderProfile({
-      name: 'Local vLLM',
+    const profile: AgentProviderProfile = {
+      id: 'custom:fa2a4d2b-0499-45ae-b5fa-24b6217bf256',
+      name: 'Old Local Server',
       protocol: 'openai-completions',
-      baseUrl: 'http://127.0.0.1:8000/v1/',
+      baseUrl: 'http://127.0.0.1:8000/v1',
       endpointScope: 'loopback',
-      authScheme: 'none',
+      authScheme: 'bearer',
       catalogMode: 'manual',
+      compatibility: {},
       models: [{
+        provider: 'custom:fa2a4d2b-0499-45ae-b5fa-24b6217bf256',
         id: 'local-coder',
+        name: 'Local Coder',
         supportsThinking: false,
-        supportsVision: false,
-        contextWindow: 32_768,
-        maxOutputTokens: 4_096
-      }]
-    })
+        source: 'custom'
+      }],
+      createdAt: 1,
+      updatedAt: 2
+    }
+    harness.database.profiles.set(profile.id, profile)
 
-    expect(profile).toMatchObject({
-      id: expect.stringMatching(/^custom:/),
-      baseUrl: 'http://127.0.0.1:8000/v1',
-      compatibility: {
-        supportsDeveloperRole: false,
-        supportsStore: false,
-        supportsReasoningEffort: false,
-        supportsUsageInStreaming: false,
-        supportsStrictMode: false,
-        maxTokensField: 'max_tokens'
-      }
-    })
-    const model = profile.models[0] as AgentModel
-    expect(model.metadataConfirmed).toBe(true)
-    const first = verificationFingerprint(profile, model)
-    expect(verificationFingerprint({
-      ...profile,
-      compatibility: { ...profile.compatibility, supportsStrictMode: true }
-    }, model)).not.toBe(first)
-    expect(verificationFingerprint(profile, {
-      ...model,
-      contextWindow: 65_536
-    })).not.toBe(first)
-  })
-
-  it('requires explicit metadata confirmation before a discovered model can be tested', async () => {
-    const harness = createHarness()
-    const profile = await harness.service.createProviderProfile({
-      name: 'Local discovery',
-      protocol: 'openai-completions',
-      baseUrl: 'http://127.0.0.1:8000/v1',
-      endpointScope: 'loopback',
-      authScheme: 'none',
-      catalogMode: 'remote',
-      models: []
-    })
-    harness.database.profiles.set(profile.id, {
-      ...profile,
-      models: [{
-        provider: profile.id,
-        id: 'discovered-coder',
-        name: 'Discovered Coder',
-        supportsThinking: false,
-        supportsVision: false,
-        contextWindow: 128_000,
-        maxOutputTokens: 16_384,
-        protocol: profile.protocol,
-        source: 'discovered',
-        metadataConfirmed: false,
-        verified: false
-      }]
-    })
-
-    await expect(harness.service.verifyModel(profile.id, 'discovered-coder')).rejects.toThrow(
-      'Review and save the model metadata'
+    const catalogPromise = harness.service.getProviderCatalog()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    harness.capabilityChild.emit('message', capabilitiesMessage)
+    await expect(catalogPromise).resolves.not.toContainEqual(
+      expect.objectContaining({ id: profile.id })
     )
-    expect(() => harness.service.validateDefaultModelSelection(
-      profile.id,
-      'discovered-coder'
-    )).toThrow('compatibility test')
-    expect(harness.stopAgent).not.toHaveBeenCalled()
+    expect(harness.service.getLegacyProviderProfiles()).toEqual([{
+      id: profile.id,
+      name: profile.name
+    }])
+    expect(JSON.stringify(harness.service.getLegacyProviderProfiles())).not.toContain(profile.baseUrl)
   })
 
-  it('routes custom API-key prompts through the worker without exposing the key', async () => {
+  it('removes a legacy profile while disabled and repairs a stale selected provider', async () => {
     const harness = createHarness()
-    const profile = await harness.service.createProviderProfile({
-      name: 'Compatible API',
+    const providerId = 'custom:9c47b46c-cf1d-4249-a742-09d8f6d6505d'
+    harness.database.settings = {
+      ...harness.database.settings,
+      agentEnabled: false,
+      agentProvider: providerId,
+      agentModelId: 'old-model'
+    }
+    harness.database.profiles.set(providerId, {
+      id: providerId,
+      name: 'Old Endpoint',
       protocol: 'openai-completions',
       baseUrl: 'http://localhost:9000/v1',
       endpointScope: 'loopback',
       authScheme: 'bearer',
       catalogMode: 'manual',
-      models: [{
-        id: 'coder',
-        supportsThinking: false,
-        supportsVision: false,
-        contextWindow: 16_384,
-        maxOutputTokens: 2_048
-      }]
+      compatibility: {},
+      models: [],
+      createdAt: 1,
+      updatedAt: 1
     })
-    const login = harness.service.beginLogin(profile.id, 'api_key')
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    harness.capabilityChild.emit('message', capabilitiesMessage)
-    const { attemptId } = await login
-    expect(harness.createWorker).toHaveBeenLastCalledWith(expect.objectContaining({
-      mode: 'login',
-      provider: profile.id,
-      authType: 'api_key',
-      profile: expect.objectContaining({ id: profile.id })
-    }))
 
-    harness.loginChild.emit('message', {
-      channel: 'auth',
-      type: 'prompt',
-      promptId: '0b4116da-f98f-4c36-a07c-9772596f5248',
-      promptType: 'secret',
-      message: 'Enter the provider API key'
+    await harness.service.removeLegacyProviderProfile(providerId)
+
+    expect(harness.database.profiles.has(providerId)).toBe(false)
+    expect(harness.stopAgent).toHaveBeenCalledWith(providerId)
+    expect(harness.database.settings).toMatchObject({
+      agentProvider: 'anthropic',
+      agentModelId: 'claude-sonnet-4-5'
     })
-    await harness.service.respondLoginPrompt(
-      attemptId,
-      '0b4116da-f98f-4c36-a07c-9772596f5248',
-      'secret-value'
-    )
-    expect(harness.loginChild.send).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'prompt-response',
-      value: 'secret-value'
-    }))
-    expect(JSON.stringify(harness.sentEvents)).not.toContain('secret-value')
+  })
+
+  it('rejects attempts to authenticate a legacy custom endpoint', async () => {
+    const harness = createHarness()
+    await expect(harness.service.beginLogin(
+      'custom:9c47b46c-cf1d-4249-a742-09d8f6d6505d',
+      'api_key'
+    )).rejects.toThrow('provider ID is invalid')
+    expect(harness.createWorker).not.toHaveBeenCalled()
   })
 
   it('relays Kimi device codes without the verification URL and supports cancellation', async () => {

@@ -9,6 +9,7 @@ import type {
   AgentProviderConnectionStatus,
   AgentProviderId
 } from '@shared/contracts'
+import { isCustomAgentProviderId } from '@shared/agent-providers'
 
 const CREDENTIAL_ENVELOPE_VERSION = 1
 const MAX_CREDENTIAL_BYTES = 512 * 1024
@@ -247,8 +248,9 @@ export class AgentCredentialVault {
   async status(): Promise<AgentCredentialStatus> {
     const providerIds = new Set([
       ...Object.keys(this.capabilities),
-      ...this.database.listAgentSecretProviderIds(),
-      ...this.database.listAgentProviderProfiles().map((profile) => profile.id)
+      ...this.database.listAgentSecretProviderIds().filter(
+        (provider) => !isCustomAgentProviderId(provider)
+      )
     ])
     const providers: AgentProviderConnectionStatus[] = []
     for (const provider of [...providerIds].sort((left, right) => left.localeCompare(right))) {
@@ -260,14 +262,13 @@ export class AgentCredentialVault {
         this.markReauthRequired(provider)
       }
       const capability = this.capabilities[provider]
-      const profile = this.database.getAgentProviderProfile(provider)
       providers.push({
         providerId: provider,
-        configured: credential !== undefined || hasStoredCredential || profile?.authScheme === 'none',
+        configured: credential !== undefined || hasStoredCredential,
         ...(credential ? { authType: credential.type as AgentAuthType } : {}),
         reauthRequired: this.reauthRequired.has(provider),
         oauthAvailable: capability?.oauthAvailable ?? false,
-        apiKeyAvailable: capability?.apiKeyAvailable ?? (profile ? profile.authScheme !== 'none' : false)
+        apiKeyAvailable: capability?.apiKeyAvailable ?? false
       })
     }
     return {

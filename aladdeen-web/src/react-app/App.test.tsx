@@ -57,7 +57,7 @@ describe("Aladdeen landing page", () => {
 		).toHaveAttribute("src", "/screenshots/agent-project-dark.png");
 		expect(
 			screen.getByRole("heading", {
-				name: "Your account, key, or compatible endpoint.",
+				name: "Your account or API key.",
 			}),
 		).toBeInTheDocument();
 		expect(

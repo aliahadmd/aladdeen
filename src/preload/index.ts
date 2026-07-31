@@ -78,17 +78,11 @@ const api: AladdeenApi = {
     credentialStatus: () => ipcRenderer.invoke(IPC.agentCredentialStatus),
     getModelCatalog: () => ipcRenderer.invoke(IPC.agentGetModelCatalog),
     getProviderCatalog: () => ipcRenderer.invoke(IPC.agentGetProviderCatalog),
-    getProviderProfiles: () => ipcRenderer.invoke(IPC.agentGetProviderProfiles),
-    createProviderProfile: (input) => ipcRenderer.invoke(IPC.agentCreateProviderProfile, input),
-    updateProviderProfile: (providerId, profile) =>
-      ipcRenderer.invoke(IPC.agentUpdateProviderProfile, { providerId, profile }),
-    deleteProviderProfile: (providerId) =>
-      ipcRenderer.invoke(IPC.agentDeleteProviderProfile, providerId),
-    discoverModels: (providerId) => ipcRenderer.invoke(IPC.agentDiscoverModels, providerId),
+    getLegacyProviderProfiles: () => ipcRenderer.invoke(IPC.agentGetLegacyProviderProfiles),
+    removeLegacyProviderProfile: (providerId) =>
+      ipcRenderer.invoke(IPC.agentRemoveLegacyProviderProfile, providerId),
     refreshModelCatalog: (providerId) =>
       ipcRenderer.invoke(IPC.agentRefreshModelCatalog, providerId),
-    verifyModel: (providerId, modelId) =>
-      ipcRenderer.invoke(IPC.agentVerifyModel, { providerId, modelId }),
     onEvent: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => callback(agentEvent)
       ipcRenderer.on(IPC.agentEvent, listener)

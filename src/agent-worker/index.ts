@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type {
-  AssistantMessage,
   AuthEvent,
   AuthInteraction,
   AuthPrompt,
@@ -17,10 +16,6 @@ import type {
   AgentWorkerMessage,
   AgentWorkerOptions
 } from './contracts.js'
-import {
-  discoverCustomModels,
-  registerCustomProvider
-} from './custom-provider.js'
 
 const MAX_IPC_BYTES = 3 * 1024 * 1024
 const WORKER_OPTIONS_ENV = 'ALADDEEN_AGENT_WORKER_OPTIONS'
@@ -154,10 +149,6 @@ async function main(): Promise<void> {
     // prevents it from refreshing every configured dynamic provider.
     allowModelNetwork: false
   })
-  const runtimeRoot = required(process.env[RUNTIME_ROOT_ENV], 'pi runtime')
-  if (options.profile) {
-    await registerCustomProvider(modelRuntime, options.profile, runtimeRoot)
-  }
 
   if (options.mode === 'capabilities') {
     await sendFlushed({
@@ -188,17 +179,6 @@ async function main(): Promise<void> {
     await runLogin(modelRuntime)
     return
   }
-  if (options.mode === 'discover') {
-    const profile = required(options.profile, 'custom provider profile')
-    const credential = await credentialStore.read(profile.id)
-    await sendFlushed({
-      channel: 'auth',
-      type: 'models',
-      provider: profile.id,
-      models: await discoverCustomModels(profile, credential)
-    })
-    return
-  }
   if (options.mode === 'refresh') {
     const provider = required(options.provider, 'provider')
     for (const candidate of modelRuntime.getProviders()) {
@@ -224,13 +204,9 @@ async function main(): Promise<void> {
         supportsVision: model.input.includes('image'),
         contextWindow: model.contextWindow,
         maxOutputTokens: model.maxTokens,
-        source: options.profile ? 'custom' : 'pi'
+        source: 'pi'
       }))
     })
-    return
-  }
-  if (options.mode === 'verify') {
-    await runVerification(modelRuntime)
     return
   }
   await runSession(pi, modelRuntime)
@@ -268,121 +244,6 @@ async function runLogin(modelRuntime: PiModelRuntime): Promise<void> {
     send({ channel: 'auth', type: 'failed', message: safeError(error) })
     process.exitCode = 1
   }
-}
-
-async function consumeVerificationStream(
-  stream: ReturnType<PiModelRuntime['streamSimple']>
-): Promise<AssistantMessage> {
-  let started = false
-  let terminal: AssistantMessage | undefined
-  for await (const event of stream) {
-    if (event.type === 'start') started = true
-    if (event.type === 'done') terminal = event.message
-    if (event.type === 'error') throw new Error(event.error.errorMessage ?? 'The provider stream failed.')
-  }
-  if (!started || !terminal) throw new Error('The provider did not return a valid streaming response.')
-  return terminal
-}
-
-async function runVerification(modelRuntime: PiModelRuntime): Promise<void> {
-  const provider = required(options.provider, 'provider')
-  const modelId = required(options.modelId, 'model')
-  const model = modelRuntime.getModel(provider, modelId)
-  if (!model) throw new Error(`Model ${provider}/${modelId} is unavailable.`)
-  const signal = AbortSignal.any([abortController.signal, AbortSignal.timeout(60_000)])
-  const userMessage = {
-    role: 'user' as const,
-    content: 'Call aladdeen_compatibility_probe exactly once with value "ok". Do not answer in text.',
-    timestamp: Date.now()
-  }
-  const first = await consumeVerificationStream(modelRuntime.streamSimple(model, {
-    systemPrompt: 'This is a compatibility check. Follow the user instruction exactly.',
-    messages: [userMessage],
-    tools: [{
-      name: 'aladdeen_compatibility_probe',
-      description: 'Verifies that this model can call coding-agent tools.',
-      parameters: {
-        type: 'object',
-        properties: { value: { type: 'string', const: 'ok' } },
-        required: ['value'],
-        additionalProperties: false
-      } as never
-    }]
-  }, {
-    signal,
-    maxTokens: 64,
-    onPayload(payload) {
-      if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload
-      const record = payload as Record<string, unknown>
-      if (model.api === 'anthropic-messages') {
-        return {
-          ...record,
-          tool_choice: { type: 'tool', name: 'aladdeen_compatibility_probe' }
-        }
-      }
-      if (model.api === 'openai-responses') {
-        return {
-          ...record,
-          tool_choice: { type: 'function', name: 'aladdeen_compatibility_probe' }
-        }
-      }
-      return {
-        ...record,
-        tool_choice: {
-          type: 'function',
-          function: { name: 'aladdeen_compatibility_probe' }
-        }
-      }
-    },
-    ...(model.reasoning ? { reasoning: 'medium' as const } : {})
-  }))
-  const toolCall = first.content.find((block) => block.type === 'toolCall')
-  if (
-    !toolCall ||
-    toolCall.name !== 'aladdeen_compatibility_probe' ||
-    toolCall.arguments.value !== 'ok'
-  ) {
-    throw new Error('The model did not produce the required valid tool call.')
-  }
-  const second = await consumeVerificationStream(modelRuntime.streamSimple(model, {
-    systemPrompt: 'This is a compatibility check. After a successful tool result, reply ALADDEEN_OK.',
-    messages: [
-      userMessage,
-      first,
-      {
-        role: 'toolResult',
-        toolCallId: toolCall.id,
-        toolName: toolCall.name,
-        content: [{ type: 'text', text: 'success' }],
-        isError: false,
-        timestamp: Date.now()
-      }
-    ]
-  }, { signal, maxTokens: 64 }))
-  const text = second.content
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text)
-    .join('')
-  if (!text.includes('ALADDEEN_OK')) {
-    throw new Error('The model could not continue after a tool result.')
-  }
-  await sendFlushed({
-    channel: 'auth',
-    type: 'verified',
-    provider,
-    model: {
-      provider,
-      id: model.id,
-      name: model.name,
-      supportsThinking: model.reasoning,
-      protocol: model.api as never,
-      supportsVision: model.input.includes('image'),
-      contextWindow: model.contextWindow,
-      maxOutputTokens: model.maxTokens,
-      source: options.profile ? 'custom' : 'pi',
-      verified: true
-    }
-  })
 }
 
 async function runSession(pi: PiModule, modelRuntime: PiModelRuntime): Promise<never> {
@@ -571,7 +432,7 @@ function parseOptions(value: string | undefined): AgentWorkerOptions {
   const parsed = JSON.parse(value) as AgentWorkerOptions
   if (
     !parsed ||
-    !['session', 'login', 'capabilities', 'refresh', 'discover', 'verify'].includes(parsed.mode)
+    !['session', 'login', 'capabilities', 'refresh'].includes(parsed.mode)
   ) {
     throw new Error('Invalid agent worker mode.')
   }

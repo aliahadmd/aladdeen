@@ -78,32 +78,6 @@ describe('agent model picker', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('blocks unverified custom models from becoming the default', () => {
-    const onChange = vi.fn()
-    render(
-      <AgentModelPicker
-        models={[{
-          provider: 'custom:123e4567-e89b-42d3-a456-426614174000',
-          id: 'custom-coder',
-          name: 'Custom Coder',
-          supportsThinking: false,
-          verified: false
-        }]}
-        provider="custom:123e4567-e89b-42d3-a456-426614174000"
-        value=""
-        variant="settings"
-        ariaLabel="Default agent model"
-        onChange={onChange}
-      />
-    )
-
-    expect(screen.getByRole('option', { name: 'Custom Coder (verify first)' })).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Default agent model'), {
-      target: { value: 'custom-coder' }
-    })
-    expect(onChange).not.toHaveBeenCalled()
-  })
-
   it('uses an accessible searchable combobox for a large OpenRouter catalog', () => {
     const onChange = vi.fn()
     const largeCatalog: AgentModel[] = Array.from({ length: 90 }, (_, index) => ({

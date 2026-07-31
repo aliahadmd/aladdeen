@@ -1,6 +1,6 @@
 {
   "name": "aladdeen",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "description": "A private, offline-first research workspace for Markdown, HTML, DOCX, PDF, XLSX, and PPTX on macOS arm64.",
   "main": "./out/main/index.js",
@@ -15,7 +15,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "start": "electron-vite preview",
-    "build": "pnpm typecheck && electron-vite build && tsc --project tsconfig.agent-worker.json && pnpm smoke:pi-runtime",
+    "build": "pnpm typecheck && electron-vite build && node scripts/clean-agent-worker.mjs && tsc --project tsconfig.agent-worker.json && pnpm smoke:pi-runtime",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",

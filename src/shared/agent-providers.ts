@@ -40,6 +40,17 @@ export const FEATURED_AGENT_PROVIDER_IDS = [
   'openrouter'
 ] as const
 
+const LEGACY_CUSTOM_PROVIDER_PATTERN =
+  /^custom:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+export function isCustomAgentProviderId(provider: AgentProviderId): boolean {
+  return provider.startsWith('custom:')
+}
+
+export function isLegacyCustomAgentProvider(provider: AgentProviderId): boolean {
+  return LEGACY_CUSTOM_PROVIDER_PATTERN.test(provider)
+}
+
 export function isFeaturedAgentProvider(provider: AgentProviderId): boolean {
   return (FEATURED_AGENT_PROVIDER_IDS as readonly string[]).includes(provider)
 }

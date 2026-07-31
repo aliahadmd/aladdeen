@@ -27,8 +27,9 @@ describe('settings dialog', () => {
   const credentialStatus = vi.fn()
   const getModelCatalog = vi.fn()
   const getProviderCatalog = vi.fn()
-  const getProviderProfiles = vi.fn()
-  const createProviderProfile = vi.fn()
+  const getLegacyProviderProfiles = vi.fn()
+  const removeLegacyProviderProfile = vi.fn()
+  const refreshModelCatalog = vi.fn()
   const beginLogin = vi.fn()
   const respondLoginPrompt = vi.fn()
   const reopenLoginUrl = vi.fn()
@@ -44,6 +45,8 @@ describe('settings dialog', () => {
     reopenLoginUrl.mockResolvedValue({ ok: true, value: undefined })
     cancelLogin.mockResolvedValue({ ok: true, value: undefined })
     disconnectProvider.mockResolvedValue({ ok: true, value: undefined })
+    removeLegacyProviderProfile.mockResolvedValue({ ok: true, value: undefined })
+    refreshModelCatalog.mockResolvedValue({ ok: true, value: [] })
     onAuthEvent.mockReturnValue(() => undefined)
     credentialStatus.mockResolvedValue({
       ok: true,
@@ -88,14 +91,13 @@ describe('settings dialog', () => {
         ]
       }
     })
-    getProviderProfiles.mockResolvedValue({ ok: true, value: [] })
+    getLegacyProviderProfiles.mockResolvedValue({ ok: true, value: [] })
     getProviderCatalog.mockResolvedValue({
       ok: true,
       value: [
         {
           id: 'anthropic',
           name: 'Claude',
-          source: 'native',
           featured: true,
           oauthAvailable: true,
           apiKeyAvailable: true,
@@ -103,22 +105,6 @@ describe('settings dialog', () => {
           catalogKind: 'bundled'
         }
       ]
-    })
-    createProviderProfile.mockResolvedValue({
-      ok: true,
-      value: {
-        id: 'custom:123e4567-e89b-42d3-a456-426614174000',
-        name: 'Local Ollama',
-        protocol: 'openai-completions',
-        baseUrl: 'http://127.0.0.1:11434/v1',
-        endpointScope: 'loopback',
-        authScheme: 'none',
-        catalogMode: 'remote',
-        compatibility: {},
-        models: [],
-        createdAt: 100,
-        updatedAt: 100
-      }
     })
     getModelCatalog.mockResolvedValue({
       ok: true,
@@ -157,8 +143,9 @@ describe('settings dialog', () => {
           credentialStatus,
           getModelCatalog,
           getProviderCatalog,
-          getProviderProfiles,
-          createProviderProfile,
+          getLegacyProviderProfiles,
+          removeLegacyProviderProfile,
+          refreshModelCatalog,
           onAuthEvent
         },
         system: { openExternal }
@@ -234,7 +221,7 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'About' }))
     expect(screen.getByRole('heading', { name: 'About' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Aladdeen Research' })).toBeVisible()
-    expect(screen.getByText('Version 0.9.1')).toBeVisible()
+    expect(screen.getByText('Version 0.9.2')).toBeVisible()
     expect(screen.getByText(/original disk locations/i)).toBeVisible()
     expect(screen.queryByText('Quick open')).not.toBeInTheDocument()
 
@@ -302,29 +289,26 @@ describe('settings dialog', () => {
     }))
   })
 
-  it('guides creation of a loopback custom endpoint without collecting secrets in profile state', async () => {
-    const enabledSettings = { ...defaultSettings, agentEnabled: true }
-    useAppStore.setState({ settings: enabledSettings, persistedSettings: enabledSettings })
+  it('removes custom creation and keeps only sanitized legacy cleanup', async () => {
+    getLegacyProviderProfiles.mockResolvedValue({
+      ok: true,
+      value: [{
+        id: 'custom:123e4567-e89b-42d3-a456-426614174000',
+        name: 'Local Ollama'
+      }]
+    })
+    vi.stubGlobal('confirm', vi.fn(() => true))
     render(<SettingsDialog open onOpenChange={vi.fn()} />)
     fireEvent.click(screen.getByRole('tab', { name: 'Coding agent' }))
-    fireEvent.click(await screen.findByRole('button', { name: /Add custom endpoint/i }))
-    fireEvent.click(screen.getByRole('button', { name: /Local server/i }))
 
-    fireEvent.change(screen.getByLabelText('Provider name'), {
-      target: { value: 'Local Ollama' }
-    })
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }))
-    fireEvent.click(screen.getByRole('button', { name: /^Continue$/ }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save provider' }))
+    expect(screen.queryByRole('button', { name: /Add custom endpoint/i })).not.toBeInTheDocument()
+    expect(await screen.findByText('Local Ollama')).toBeVisible()
+    expect(screen.queryByText(/127\.0\.0\.1|openai-completions|bearer/i)).not.toBeInTheDocument()
 
-    await waitFor(() => expect(createProviderProfile).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Local Ollama',
-      protocol: 'openai-completions',
-      baseUrl: 'http://127.0.0.1:11434/v1',
-      endpointScope: 'loopback',
-      authScheme: 'none'
-    })))
-    expect(JSON.stringify(createProviderProfile.mock.calls)).not.toContain('apiKey')
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect and remove' }))
+    await waitFor(() => expect(removeLegacyProviderProfile).toHaveBeenCalledWith(
+      'custom:123e4567-e89b-42d3-a456-426614174000'
+    ))
   })
 
   it('closes with Escape and restores focus to the opener', async () => {

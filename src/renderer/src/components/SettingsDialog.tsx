@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AtSign, Bot, BookOpen, Check, Command, ExternalLink, FlaskConical, Github, Info, KeyRound, LoaderCircle, LogOut, Mail, Minus, Palette, Pencil, Plus, RotateCcw, Search, Server, ShieldAlert, Trash2, X } from 'lucide-react'
+import { AtSign, Bot, BookOpen, Check, Command, ExternalLink, Github, Info, KeyRound, LoaderCircle, LogOut, Mail, Minus, Palette, Plus, RotateCcw, Search, ShieldAlert, Trash2, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
 import {
@@ -10,15 +10,13 @@ import {
   providerDisplayName
 } from '@shared/agent-providers'
 import type {
-  AgentApiProtocol,
   AgentAuthEvent,
   AgentAuthType,
   AgentCredentialStatus,
+  AgentLegacyProviderProfile,
   AgentModel,
   AgentProviderDescriptor,
   AgentProviderId,
-  AgentProviderProfile,
-  AgentProviderProfileInput,
   AgentThinkingLevel,
   AppSettings
 } from '@shared/contracts'
@@ -626,9 +624,8 @@ function AgentSettings({
 }): React.JSX.Element {
   const [credentials, setCredentials] = useState<AgentCredentialStatus>()
   const [providerCatalog, setProviderCatalog] = useState<AgentProviderDescriptor[]>([])
-  const [profiles, setProfiles] = useState<AgentProviderProfile[]>([])
+  const [legacyProfiles, setLegacyProfiles] = useState<AgentLegacyProviderProfile[]>([])
   const [providerSearch, setProviderSearch] = useState('')
-  const [profileDialog, setProfileDialog] = useState<AgentProviderProfile | null | undefined>()
   const [modelCatalog, setModelCatalog] = useState<AgentModel[]>([])
   const [modelCatalogStatus, setModelCatalogStatus] = useState<AgentModelPickerStatus>(
     settings.agentEnabled ? 'loading' : 'disabled'
@@ -674,8 +671,8 @@ function AgentSettings({
   }, [settings.agentEnabled])
 
   const refreshProviderData = useCallback(async (): Promise<void> => {
-    const profilesResult = await window.aladdeen.agent.getProviderProfiles()
-    if (profilesResult.ok) setProfiles(profilesResult.value)
+    const legacyResult = await window.aladdeen.agent.getLegacyProviderProfiles()
+    if (legacyResult.ok) setLegacyProfiles(legacyResult.value)
     if (!settings.agentEnabled) {
       setProviderCatalog([])
       return
@@ -737,9 +734,7 @@ function AgentSettings({
     (provider) => provider.id === settings.agentProvider
   ) ?? {
     id: settings.agentProvider,
-    name: profiles.find((profile) => profile.id === settings.agentProvider)?.name ??
-      providerDisplayName(settings.agentProvider),
-    source: settings.agentProvider.startsWith('custom:') ? 'custom' as const : 'native' as const,
+    name: providerDisplayName(settings.agentProvider),
     featured: true,
     oauthAvailable: providerStatus?.oauthAvailable ?? false,
     apiKeyAvailable: providerStatus?.apiKeyAvailable ?? false,
@@ -808,17 +803,6 @@ function AgentSettings({
     }
     await refreshCredentials()
   }
-  const discoverProviderModels = async (provider: AgentProviderId): Promise<void> => {
-    if (!confirmSessionEnd('Discovering models', provider)) return
-    setProviderOperation(`discover:${provider}`)
-    const result = await window.aladdeen.agent.discoverModels(provider)
-    setProviderOperation(undefined)
-    if (!result.ok) {
-      setCredentialError(result.error.message)
-      return
-    }
-    await Promise.all([refreshProviderData(), refreshModelCatalog()])
-  }
   const refreshNativeProviderModels = async (provider: AgentProviderId): Promise<void> => {
     if (!confirmSessionEnd('Refreshing this model catalog', provider)) return
     setProviderOperation(`refresh:${provider}`)
@@ -830,43 +814,17 @@ function AgentSettings({
     }
     await Promise.all([refreshProviderData(), refreshModelCatalog()])
   }
-  const verifyProviderModel = async (
-    profile: AgentProviderProfile,
-    model: AgentModel
-  ): Promise<void> => {
-    let origin: string
-    try {
-      origin = new URL(profile.baseUrl).origin
-    } catch {
-      origin = profile.baseUrl
-    }
-    const endsActiveSession = activeSessionProvider === profile.id
+  const removeLegacyProfile = async (profile: AgentLegacyProviderProfile): Promise<void> => {
     if (!window.confirm(
-      `Run a small streaming and tool-call test against ${origin}? The provider may charge for this request${endsActiveSession ? ' and the active coding-agent session will end' : ''}.`
+      `Disconnect and remove the legacy custom endpoint “${profile.name}” and its local credential?`
     )) return
-    setProviderOperation(`verify:${profile.id}:${model.id}`)
-    const result = await window.aladdeen.agent.verifyModel(profile.id, model.id)
-    setProviderOperation(undefined)
+    if (!confirmSessionEnd('Removing this legacy connection', profile.id)) return
+    const result = await window.aladdeen.agent.removeLegacyProviderProfile(profile.id)
     if (!result.ok) {
       setCredentialError(result.error.message)
       return
     }
-    await Promise.all([refreshProviderData(), refreshModelCatalog()])
-  }
-  const deleteProfile = async (profile: AgentProviderProfile): Promise<void> => {
-    if (!window.confirm(`Delete the custom provider “${profile.name}” and its local credential?`)) return
-    if (!confirmSessionEnd('Deleting this provider', profile.id)) return
-    const result = await window.aladdeen.agent.deleteProviderProfile(profile.id)
-    if (!result.ok) {
-      setCredentialError(result.error.message)
-      return
-    }
-    await Promise.all([refreshCredentials(), refreshProviderData(), refreshModelCatalog()])
-    const current = await window.aladdeen.settings.get()
-    if (current.ok) onUpdate({
-      agentProvider: current.value.agentProvider,
-      agentModelId: current.value.agentModelId
-    })
+    await Promise.all([refreshCredentials(), refreshProviderData()])
   }
 
   const renderProviderCard = (
@@ -875,7 +833,6 @@ function AgentSettings({
   ): React.JSX.Element => {
     const status = credentials?.providers.find((item) => item.providerId === provider.id)
     const selected = settings.agentProvider === provider.id
-    const profile = profiles.find((item) => item.id === provider.id)
     const originalDefinition = AGENT_PROVIDER_DEFINITIONS.find(
       (definition) => definition.id === provider.id
     )
@@ -899,9 +856,6 @@ function AgentSettings({
           >
             <span className="flex items-center gap-2 text-[12px] font-[650] text-foreground">
               {provider.name}
-              <span className="rounded border border-border px-1 py-px text-[8px] font-medium uppercase text-foreground-muted">
-                {provider.source}
-              </span>
               {selected && <Check size={13} className="text-accent" aria-hidden="true" />}
             </span>
             <span className={cn(
@@ -911,9 +865,7 @@ function AgentSettings({
               {status?.reauthRequired
                 ? 'Authentication expired · reconnect required'
                 : status?.configured
-                  ? `Connected · ${profile?.authScheme === 'none'
-                    ? 'local'
-                    : status.authType === 'oauth' ? 'account' : 'API key'}`
+                  ? `Connected · ${status.authType === 'oauth' ? 'account' : 'API key'}`
                   : `${provider.modelCount.toLocaleString()} model${provider.modelCount === 1 ? '' : 's'}`}
             </span>
           </button>
@@ -941,7 +893,7 @@ function AgentSettings({
                 {status?.authType === 'api_key' ? 'Replace key' : 'API key'}
               </button>
             )}
-            {!profile && provider.catalogKind === 'dynamic' && (
+            {provider.catalogKind === 'dynamic' && (
               <button
                 type="button"
                 disabled={!settings.agentEnabled || !status?.configured ||
@@ -952,31 +904,7 @@ function AgentSettings({
                 {providerOperation === `refresh:${provider.id}` ? 'Refreshing…' : 'Refresh models'}
               </button>
             )}
-            {profile && (
-              <>
-                <button
-                  type="button"
-                  disabled={!settings.agentEnabled}
-                  className="grid h-7 w-7 place-items-center rounded-md border border-border bg-surface text-foreground-muted hover:bg-surface-hover"
-                  aria-label={`Edit ${provider.name}`}
-                  onClick={() => {
-                    if (confirmSessionEnd('Editing this provider', provider.id)) setProfileDialog(profile)
-                  }}
-                >
-                  <Pencil size={12} />
-                </button>
-                <button
-                  type="button"
-                  disabled={!settings.agentEnabled}
-                  className="grid h-7 w-7 place-items-center rounded-md border border-border bg-surface text-foreground-muted hover:bg-danger-soft hover:text-danger"
-                  aria-label={`Delete ${provider.name}`}
-                  onClick={() => void deleteProfile(profile)}
-                >
-                  <Trash2 size={12} />
-                </button>
-              </>
-            )}
-            {status?.configured && profile?.authScheme !== 'none' && (
+            {status?.configured && (
               <button
                 type="button"
                 className="grid h-7 w-7 place-items-center rounded-md border border-border bg-transparent text-foreground-muted hover:bg-danger-soft hover:text-danger"
@@ -1003,64 +931,6 @@ function AgentSettings({
               onClick={() => void window.aladdeen.system.openExternal('https://openrouter.ai/docs/guides/features/zdr')}
             >Review controls</button>
           </p>
-        )}
-        {selected && profile && (
-          <div className="mt-3 border-t border-border pt-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[9px] text-foreground-muted">
-                {profile.protocol} · {new URL(profile.baseUrl).origin}
-              </span>
-              {profile.catalogMode === 'remote' && profile.protocol !== 'anthropic-messages' && (
-                <button
-                  type="button"
-                  disabled={providerOperation === `discover:${profile.id}`}
-                  className="h-6 rounded border border-border px-2 text-[9px] font-semibold text-foreground-soft disabled:opacity-50"
-                  onClick={() => void discoverProviderModels(profile.id)}
-                >
-                  {providerOperation === `discover:${profile.id}` ? 'Discovering…' : 'Discover models'}
-                </button>
-              )}
-            </div>
-            {profile.models.length > 0 && (
-              <div className="mt-2 grid gap-1.5">
-                {profile.models.map((model) => (
-                  <div
-                    key={model.id}
-                    className="flex items-center justify-between gap-2 rounded-md border border-border bg-surface-elevated px-2 py-1.5"
-                  >
-                    <span className="min-w-0 truncate text-[9px] text-foreground-soft">
-                      {model.name} · {model.metadataConfirmed === false
-                        ? 'Confirm metadata'
-                        : model.verified ? 'Verified' : 'Not verified'}
-                    </span>
-                    {model.metadataConfirmed === false ? (
-                      <button
-                        type="button"
-                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border px-2 text-[9px] font-semibold text-foreground"
-                        onClick={() => {
-                          if (confirmSessionEnd('Reviewing this model', profile.id)) setProfileDialog(profile)
-                        }}
-                      >
-                        <Pencil size={10} />
-                        Review
-                      </button>
-                    ) : !model.verified && (
-                      <button
-                        type="button"
-                        disabled={providerOperation === `verify:${profile.id}:${model.id}` ||
-                          profile.authScheme !== 'none' && !status?.configured}
-                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded border border-border px-2 text-[9px] font-semibold text-foreground disabled:opacity-40"
-                        onClick={() => void verifyProviderModel(profile, model)}
-                      >
-                        <FlaskConical size={10} />
-                        {providerOperation === `verify:${profile.id}:${model.id}` ? 'Testing…' : 'Test'}
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         )}
       </div>
     )
@@ -1146,18 +1016,9 @@ function AgentSettings({
           )}
           {settings.agentEnabled && (
             <div>
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <p className="m-0 text-[9px] font-bold uppercase tracking-[.08em] text-foreground-muted">
-                  More providers
-                </p>
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-[9px] font-semibold text-foreground-soft hover:bg-surface-hover"
-                  onClick={() => setProfileDialog(null)}
-                >
-                  <Server size={11} /> Add custom endpoint
-                </button>
-              </div>
+              <p className="mt-0 mb-1.5 text-[9px] font-bold uppercase tracking-[.08em] text-foreground-muted">
+                More providers
+              </p>
               <div className="relative">
                 <Search size={13} className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-foreground-muted" />
                 <input
@@ -1179,6 +1040,44 @@ function AgentSettings({
                   )}
                 </div>
               )}
+            </div>
+          )}
+          {legacyProfiles.length > 0 && (
+            <div>
+              <p className="mt-0 mb-1.5 text-[9px] font-bold uppercase tracking-[.08em] text-foreground-muted">
+                Legacy connections
+              </p>
+              <div className="rounded-lg border border-border bg-surface p-3">
+                <p className="mt-0 mb-2.5 text-[10px] leading-[1.5] text-foreground-muted">
+                  Custom endpoints are no longer supported. Aladdeen kept these local records so
+                  you can remove them explicitly.
+                </p>
+                <div className="grid gap-2">
+                  {legacyProfiles.map((profile) => (
+                    <div
+                      className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-elevated px-2.5 py-2"
+                      key={profile.id}
+                    >
+                      <div className="min-w-0">
+                        <p className="m-0 truncate text-[11px] font-semibold text-foreground">
+                          {profile.name}
+                        </p>
+                        <p className="mt-0.5 mb-0 text-[9px] text-foreground-muted">
+                          Legacy custom endpoint
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 text-[9px] font-semibold text-foreground-soft hover:bg-danger-soft hover:text-danger"
+                        onClick={() => void removeLegacyProfile(profile)}
+                      >
+                        <Trash2 size={11} />
+                        Disconnect and remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1253,644 +1152,7 @@ function AgentSettings({
           })
         }}
       />
-      <CustomProviderDialog
-        value={profileDialog}
-        onClose={() => setProfileDialog(undefined)}
-        onSaved={(profile) => {
-          setProfileDialog(undefined)
-          const preserveDefault = settings.agentProvider === profile.id &&
-            profile.models.some((model) => model.id === settings.agentModelId && model.verified)
-          onUpdate({
-            agentProvider: profile.id,
-            agentModelId: preserveDefault ? settings.agentModelId : ''
-          })
-          void Promise.all([refreshCredentials(), refreshProviderData(), refreshModelCatalog()])
-        }}
-      />
     </div>
-  )
-}
-
-const CUSTOM_PROVIDER_TEMPLATES: Array<{
-  id: string
-  label: string
-  description: string
-  protocol: AgentApiProtocol
-  endpointScope: AgentProviderProfileInput['endpointScope']
-  authScheme: AgentProviderProfileInput['authScheme']
-  catalogMode: AgentProviderProfileInput['catalogMode']
-}> = [
-  {
-    id: 'openai-chat',
-    label: 'OpenAI-compatible Chat Completions',
-    description: 'The safest generic default for hosted compatible APIs.',
-    protocol: 'openai-completions',
-    endpointScope: 'public_https',
-    authScheme: 'bearer',
-    catalogMode: 'remote'
-  },
-  {
-    id: 'openai-responses',
-    label: 'OpenAI-compatible Responses',
-    description: 'Advanced opt-in for endpoints that explicitly implement Responses.',
-    protocol: 'openai-responses',
-    endpointScope: 'public_https',
-    authScheme: 'bearer',
-    catalogMode: 'remote'
-  },
-  {
-    id: 'anthropic',
-    label: 'Anthropic-compatible Messages',
-    description: 'For non-pi endpoints implementing the Anthropic Messages protocol.',
-    protocol: 'anthropic-messages',
-    endpointScope: 'public_https',
-    authScheme: 'x-api-key',
-    catalogMode: 'manual'
-  },
-  {
-    id: 'local',
-    label: 'Local server',
-    description: 'Loopback-only Ollama, LM Studio, vLLM, or a similar local server.',
-    protocol: 'openai-completions',
-    endpointScope: 'loopback',
-    authScheme: 'none',
-    catalogMode: 'remote'
-  }
-]
-
-function emptyProviderProfileInput(): AgentProviderProfileInput {
-  return {
-    name: '',
-    protocol: 'openai-completions',
-    baseUrl: 'https://',
-    endpointScope: 'public_https',
-    authScheme: 'bearer',
-    catalogMode: 'remote',
-    models: []
-  }
-}
-
-function profileAsInput(profile: AgentProviderProfile): AgentProviderProfileInput {
-  return {
-    name: profile.name,
-    protocol: profile.protocol,
-    baseUrl: profile.baseUrl,
-    endpointScope: profile.endpointScope,
-    authScheme: profile.authScheme,
-    catalogMode: profile.catalogMode,
-    compatibility: { ...profile.compatibility },
-    models: profile.models.map((model) => ({
-      id: model.id,
-      name: model.name,
-      supportsThinking: model.supportsThinking,
-      supportsVision: model.supportsVision ?? false,
-      contextWindow: model.contextWindow ?? 128_000,
-      maxOutputTokens: model.maxOutputTokens ?? 16_384
-    }))
-  }
-}
-
-function CustomProviderDialog({
-  value,
-  onClose,
-  onSaved
-}: {
-  value: AgentProviderProfile | null | undefined
-  onClose(): void
-  onSaved(profile: AgentProviderProfile): void
-}): React.JSX.Element {
-  const [step, setStep] = useState(0)
-  const [input, setInput] = useState<AgentProviderProfileInput>(emptyProviderProfileInput)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string>()
-
-  useEffect(() => {
-    if (value === undefined) return
-    setStep(value ? 1 : 0)
-    setInput(value ? profileAsInput(value) : emptyProviderProfileInput())
-    setError(undefined)
-    setSaving(false)
-  }, [value])
-
-  const updateModel = (
-    index: number,
-    change: Partial<AgentProviderProfileInput['models'][number]>
-  ): void => {
-    setInput((current) => ({
-      ...current,
-      models: current.models.map((model, modelIndex) => (
-        modelIndex === index ? { ...model, ...change } : model
-      ))
-    }))
-  }
-
-  const save = async (): Promise<void> => {
-    const prepared: AgentProviderProfileInput = {
-      ...input,
-      models: input.models.filter((model) => model.id.trim())
-    }
-    if (!prepared.name.trim() || !prepared.baseUrl.trim()) {
-      setError('Enter a provider name and base URL.')
-      return
-    }
-    if (prepared.catalogMode === 'manual' && prepared.models.length === 0) {
-      setError('Add at least one model for a manual catalog.')
-      return
-    }
-    setSaving(true)
-    setError(undefined)
-    const result = value
-      ? await window.aladdeen.agent.updateProviderProfile(value.id, prepared)
-      : await window.aladdeen.agent.createProviderProfile(prepared)
-    setSaving(false)
-    if (!result.ok) {
-      setError(result.error.message)
-      return
-    }
-    onSaved(result.value)
-  }
-
-  return (
-    <Dialog.Root open={value !== undefined} onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className={dialogOverlayClasses} />
-        <Dialog.Content className={cn(
-          dialogContentClasses,
-          'max-h-[min(720px,calc(100vh-32px))] w-[min(calc(100vw-32px),560px)] overflow-y-auto'
-        )}>
-          <div className={dialogIconClasses('default')}><Server size={19} /></div>
-          <Dialog.Title className={dialogTitleClasses}>
-            {value ? 'Edit custom provider' : 'Add custom endpoint'}
-          </Dialog.Title>
-          <Dialog.Description className={dialogDescriptionClasses}>
-            Credentials stay in encrypted storage. Provider configuration contains no secrets.
-          </Dialog.Description>
-
-          {step === 0 && (
-            <div className="mt-4 grid gap-2">
-              {CUSTOM_PROVIDER_TEMPLATES.map((template) => (
-                <button
-                  type="button"
-                  key={template.id}
-                  className="rounded-lg border border-border bg-surface p-3 text-left hover:border-accent hover:bg-accent-soft"
-                  onClick={() => {
-                    setInput({
-                      ...emptyProviderProfileInput(),
-                      protocol: template.protocol,
-                      endpointScope: template.endpointScope,
-                      authScheme: template.authScheme,
-                      catalogMode: template.catalogMode,
-                      baseUrl: template.endpointScope === 'loopback' ? 'http://127.0.0.1:11434/v1' : 'https://'
-                    })
-                    setStep(1)
-                  }}
-                >
-                  <span className="block text-[12px] font-semibold text-foreground">{template.label}</span>
-                  <span className="mt-1 block text-[10px] leading-[1.45] text-foreground-muted">
-                    {template.description}
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {step === 1 && (
-            <div className="mt-4 grid gap-3">
-              <label className="grid gap-1 text-[10px] font-semibold text-foreground-soft">
-                Provider name
-                <input
-                  className="h-9 rounded-lg border border-border-strong bg-surface px-3 text-[12px] text-foreground outline-none focus:border-accent"
-                  value={input.name}
-                  autoFocus
-                  onChange={(event) => setInput({ ...input, name: event.currentTarget.value })}
-                />
-              </label>
-              <label className="grid gap-1 text-[10px] font-semibold text-foreground-soft">
-                Base URL
-                <input
-                  className="h-9 rounded-lg border border-border-strong bg-surface px-3 font-mono text-[11px] text-foreground outline-none focus:border-accent"
-                  value={input.baseUrl}
-                  placeholder={input.endpointScope === 'loopback'
-                    ? 'http://127.0.0.1:11434/v1'
-                    : 'https://api.example.com/v1'}
-                  onChange={(event) => setInput({ ...input, baseUrl: event.currentTarget.value })}
-                />
-              </label>
-              <label className="grid gap-1 text-[10px] font-semibold text-foreground-soft">
-                API protocol
-                <select
-                  className="h-9 rounded-lg border border-border-strong bg-surface px-2 text-[11px]"
-                  value={input.protocol}
-                  onChange={(event) => {
-                    const protocol = event.currentTarget.value as AgentProviderProfileInput['protocol']
-                    setInput({
-                      ...input,
-                      protocol,
-                      compatibility: undefined,
-                      ...(protocol === 'anthropic-messages' ? { catalogMode: 'manual' as const } : {})
-                    })
-                  }}
-                >
-                  <option value="openai-completions">OpenAI Chat Completions</option>
-                  <option value="openai-responses">OpenAI Responses</option>
-                  <option value="anthropic-messages">Anthropic Messages</option>
-                </select>
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="grid gap-1 text-[10px] font-semibold text-foreground-soft">
-                  Endpoint scope
-                  <select
-                    className="h-9 rounded-lg border border-border-strong bg-surface px-2 text-[11px]"
-                    value={input.endpointScope}
-                    onChange={(event) => {
-                      const endpointScope = event.currentTarget.value as AgentProviderProfileInput['endpointScope']
-                      setInput({
-                        ...input,
-                        endpointScope,
-                        ...(endpointScope === 'public_https' && input.authScheme === 'none'
-                          ? { authScheme: 'bearer' as const }
-                          : {})
-                      })
-                    }}
-                  >
-                    <option value="public_https">Public HTTPS</option>
-                    <option value="loopback">Loopback only</option>
-                  </select>
-                </label>
-                <label className="grid gap-1 text-[10px] font-semibold text-foreground-soft">
-                  Authentication
-                  <select
-                    className="h-9 rounded-lg border border-border-strong bg-surface px-2 text-[11px]"
-                    value={input.authScheme}
-                    onChange={(event) => setInput({
-                      ...input,
-                      authScheme: event.currentTarget.value as AgentProviderProfileInput['authScheme']
-                    })}
-                  >
-                    <option value="bearer">Bearer API key</option>
-                    <option value="x-api-key">x-api-key</option>
-                    {input.endpointScope === 'loopback' && <option value="none">No authentication</option>}
-                  </select>
-                </label>
-              </div>
-              <label className="grid gap-1 text-[10px] font-semibold text-foreground-soft">
-                Model catalog
-                <select
-                  className="h-9 rounded-lg border border-border-strong bg-surface px-2 text-[11px]"
-                  value={input.catalogMode}
-                  disabled={input.protocol === 'anthropic-messages'}
-                  onChange={(event) => setInput({
-                    ...input,
-                    catalogMode: event.currentTarget.value as AgentProviderProfileInput['catalogMode']
-                  })}
-                >
-                  <option value="remote">Discover from /models</option>
-                  <option value="manual">Enter models manually</option>
-                </select>
-              </label>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="mt-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="m-0 text-[12px] font-semibold text-foreground">Models and confirmed limits</h3>
-                  <p className="mt-1 mb-0 text-[10px] leading-[1.45] text-foreground-muted">
-                    Discovered models start conservative. Confirm capabilities here before testing.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="h-7 shrink-0 rounded border border-border px-2 text-[9px] font-semibold"
-                  onClick={() => setInput({
-                    ...input,
-                    models: [...input.models, {
-                      id: '',
-                      supportsThinking: false,
-                      supportsVision: false,
-                      contextWindow: 128_000,
-                      maxOutputTokens: 16_384
-                    }]
-                  })}
-                >
-                  Add model
-                </button>
-              </div>
-              <div className="mt-3 grid gap-2">
-                {input.models.map((model, index) => (
-                  <div className="rounded-lg border border-border bg-surface p-3" key={index}>
-                    <div className="flex gap-2">
-                      <input
-                        className="h-8 min-w-0 flex-1 rounded border border-border-strong bg-surface-elevated px-2 font-mono text-[10px]"
-                        value={model.id}
-                        placeholder="Model ID"
-                        aria-label={`Custom model ${index + 1} ID`}
-                        onChange={(event) => updateModel(index, { id: event.currentTarget.value })}
-                      />
-                      <button
-                        type="button"
-                        className="grid h-8 w-8 place-items-center rounded border border-border text-foreground-muted hover:text-danger"
-                        aria-label={`Remove custom model ${index + 1}`}
-                        onClick={() => setInput({
-                          ...input,
-                          models: input.models.filter((_, modelIndex) => modelIndex !== index)
-                        })}
-                      ><Trash2 size={12} /></button>
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                      <label className="grid gap-1 text-[9px] text-foreground-muted">
-                        Context window
-                        <input
-                          type="number"
-                          min={1024}
-                          max={4_000_000}
-                          className="h-8 rounded border border-border bg-surface-elevated px-2 text-[10px]"
-                          value={model.contextWindow}
-                          onChange={(event) => updateModel(index, {
-                            contextWindow: Number(event.currentTarget.value)
-                          })}
-                        />
-                      </label>
-                      <label className="grid gap-1 text-[9px] text-foreground-muted">
-                        Output-token limit
-                        <input
-                          type="number"
-                          min={1}
-                          max={1_000_000}
-                          className="h-8 rounded border border-border bg-surface-elevated px-2 text-[10px]"
-                          value={model.maxOutputTokens}
-                          onChange={(event) => updateModel(index, {
-                            maxOutputTokens: Number(event.currentTarget.value)
-                          })}
-                        />
-                      </label>
-                    </div>
-                    <div className="mt-2 flex gap-4">
-                      <label className="flex items-center gap-1.5 text-[9px] text-foreground-soft">
-                        <input
-                          type="checkbox"
-                          checked={model.supportsThinking}
-                          onChange={(event) => updateModel(index, {
-                            supportsThinking: event.currentTarget.checked
-                          })}
-                        /> Reasoning
-                      </label>
-                      <label className="flex items-center gap-1.5 text-[9px] text-foreground-soft">
-                        <input
-                          type="checkbox"
-                          checked={model.supportsVision}
-                          onChange={(event) => updateModel(index, {
-                            supportsVision: event.currentTarget.checked
-                          })}
-                        /> Vision
-                      </label>
-                    </div>
-                  </div>
-                ))}
-                {input.models.length === 0 && (
-                  <p className="m-0 rounded-lg border border-dashed border-border p-3 text-center text-[10px] text-foreground-muted">
-                    {input.catalogMode === 'remote'
-                      ? 'Save the profile, connect its credential, then discover models from /models.'
-                      : 'Add at least one model.'}
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="mt-4">
-              <details className="rounded-lg border border-border bg-surface p-3">
-                <summary className="cursor-pointer text-[11px] font-semibold text-foreground">
-                  Advanced compatibility
-                </summary>
-                <p className="mt-2 mb-3 text-[9px] leading-[1.45] text-foreground-muted">
-                  Defaults are deliberately conservative. Enable a feature only when the endpoint documents it.
-                </p>
-                <div className="grid grid-cols-2 gap-2">
-                  {input.protocol === 'anthropic-messages'
-                    ? [
-                        ['supportsEagerToolInputStreaming', 'Eager tool streaming'],
-                        ['supportsLongCacheRetention', 'Long cache retention'],
-                        ['supportsCacheControlOnTools', 'Tool cache control'],
-                        ['supportsTemperature', 'Temperature'],
-                        ['forceAdaptiveThinking', 'Adaptive thinking'],
-                        ['allowEmptySignature', 'Empty thinking signature'],
-                        ['supportsStrictTools', 'Strict tools'],
-                        ['supportsToolReferences', 'Tool references'],
-                        ['sendSessionAffinityHeaders', 'Session affinity headers']
-                      ].map(([key, label]) => (
-                        <label className="flex items-center gap-1.5 text-[9px] text-foreground-soft" key={key}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(input.compatibility?.[key as keyof NonNullable<typeof input.compatibility>])}
-                            onChange={(event) => setInput({
-                              ...input,
-                              compatibility: {
-                                ...input.compatibility,
-                                [key!]: event.currentTarget.checked
-                              }
-                            })}
-                          /> {label}
-                        </label>
-                      ))
-                    : (input.protocol === 'openai-responses'
-                        ? [
-                            ['supportsDeveloperRole', 'Developer role'],
-                            ['supportsStrictMode', 'Strict tools'],
-                            ['supportsOpenAIGrammarTools', 'Grammar tools'],
-                            ['supportsToolSearch', 'Tool search'],
-                            ['supportsLongCacheRetention', 'Long cache retention']
-                          ]
-                        : [
-                            ['supportsDeveloperRole', 'Developer role'],
-                            ['supportsStore', 'Store'],
-                            ['supportsReasoningEffort', 'Reasoning effort'],
-                            ['supportsUsageInStreaming', 'Streaming usage'],
-                            ['supportsStrictMode', 'Strict tools'],
-                            ['supportsOpenAIGrammarTools', 'Grammar tools'],
-                            ['requiresToolResultName', 'Tool-result name'],
-                            ['requiresAssistantAfterToolResult', 'Assistant after tool result'],
-                            ['requiresThinkingAsText', 'Thinking as text'],
-                            ['requiresReasoningContentOnAssistantMessages', 'Preserve reasoning content'],
-                            ['supportsLongCacheRetention', 'Long cache retention'],
-                            ['sendSessionAffinityHeaders', 'Session affinity headers']
-                          ]).map(([key, label]) => (
-                        <label className="flex items-center gap-1.5 text-[9px] text-foreground-soft" key={key}>
-                          <input
-                            type="checkbox"
-                            checked={Boolean(input.compatibility?.[key as keyof NonNullable<typeof input.compatibility>])}
-                            onChange={(event) => setInput({
-                              ...input,
-                              compatibility: {
-                                ...input.compatibility,
-                                [key!]: event.currentTarget.checked
-                              }
-                            })}
-                          /> {label}
-                        </label>
-                      ))}
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2">
-                  {input.protocol === 'openai-completions' && (
-                    <>
-                      <label className="grid gap-1 text-[9px] text-foreground-soft">
-                        Output-token field
-                        <select
-                          className="h-8 rounded-md border border-border-strong bg-surface px-2 text-[10px]"
-                          value={input.compatibility?.maxTokensField ?? 'max_tokens'}
-                          onChange={(event) => setInput({
-                            ...input,
-                            compatibility: {
-                              ...input.compatibility,
-                              maxTokensField: event.currentTarget.value as 'max_tokens' | 'max_completion_tokens'
-                            }
-                          })}
-                        >
-                          <option value="max_tokens">max_tokens</option>
-                          <option value="max_completion_tokens">max_completion_tokens</option>
-                        </select>
-                      </label>
-                      <label className="grid gap-1 text-[9px] text-foreground-soft">
-                        Thinking format
-                        <select
-                          className="h-8 rounded-md border border-border-strong bg-surface px-2 text-[10px]"
-                          value={input.compatibility?.thinkingFormat ?? ''}
-                          onChange={(event) => setInput({
-                            ...input,
-                            compatibility: {
-                              ...input.compatibility,
-                              thinkingFormat: (event.currentTarget.value || undefined) as NonNullable<
-                                AgentProviderProfileInput['compatibility']
-                              >['thinkingFormat']
-                            }
-                          })}
-                        >
-                          <option value="">Provider default</option>
-                          {[
-                            'openai',
-                            'openrouter',
-                            'together',
-                            'deepseek',
-                            'zai',
-                            'qwen',
-                            'chat-template',
-                            'qwen-chat-template',
-                            'string-thinking',
-                            'ant-ling'
-                          ].map((format) => <option key={format} value={format}>{format}</option>)}
-                        </select>
-                      </label>
-                      <label className="grid gap-1 text-[9px] text-foreground-soft">
-                        Cache-control format
-                        <select
-                          className="h-8 rounded-md border border-border-strong bg-surface px-2 text-[10px]"
-                          value={input.compatibility?.cacheControlFormat ?? ''}
-                          onChange={(event) => setInput({
-                            ...input,
-                            compatibility: {
-                              ...input.compatibility,
-                              cacheControlFormat: event.currentTarget.value === 'anthropic' ? 'anthropic' : undefined
-                            }
-                          })}
-                        >
-                          <option value="">Disabled</option>
-                          <option value="anthropic">Anthropic</option>
-                        </select>
-                      </label>
-                      <label className="grid gap-1 text-[9px] text-foreground-soft">
-                        Deferred tools
-                        <select
-                          className="h-8 rounded-md border border-border-strong bg-surface px-2 text-[10px]"
-                          value={input.compatibility?.deferredToolsMode ?? ''}
-                          onChange={(event) => setInput({
-                            ...input,
-                            compatibility: {
-                              ...input.compatibility,
-                              deferredToolsMode: event.currentTarget.value === 'kimi' ? 'kimi' : undefined
-                            }
-                          })}
-                        >
-                          <option value="">Disabled</option>
-                          <option value="kimi">Kimi</option>
-                        </select>
-                      </label>
-                    </>
-                  )}
-                  <label className="grid gap-1 text-[9px] text-foreground-soft">
-                    Session affinity format
-                    <select
-                      className="h-8 rounded-md border border-border-strong bg-surface px-2 text-[10px]"
-                      value={input.compatibility?.sessionAffinityFormat ?? ''}
-                      onChange={(event) => setInput({
-                        ...input,
-                        compatibility: {
-                          ...input.compatibility,
-                          sessionAffinityFormat: (event.currentTarget.value || undefined) as NonNullable<
-                            AgentProviderProfileInput['compatibility']
-                          >['sessionAffinityFormat']
-                        }
-                      })}
-                    >
-                      <option value="">Provider default</option>
-                      <option value="openai">OpenAI</option>
-                      <option value="openai-nosession">OpenAI without session ID</option>
-                      <option value="openrouter">OpenRouter</option>
-                    </select>
-                  </label>
-                </div>
-              </details>
-              <div className="mt-3 rounded-lg border border-warning/30 bg-[color-mix(in_oklab,var(--warning)_7%,var(--surface))] p-3">
-                <p className="m-0 text-[10px] font-semibold text-warning">Compatibility test required</p>
-                <p className="mt-1 mb-0 text-[9px] leading-[1.45] text-foreground-muted">
-                  After saving, connect the credential and run the streaming/tool-call test. Unverified custom models cannot become the default.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {error && <p className="mt-3 mb-0 text-[10px] text-danger">{error}</p>}
-
-          {step > 0 && (
-            <div className={dialogActionsClasses}>
-              <button
-                type="button"
-                className="h-8 rounded-md border border-border bg-surface px-3 text-[11px] text-foreground-soft"
-                onClick={() => step === 1 && !value ? setStep(0) : setStep(Math.max(1, step - 1))}
-              >
-                Back
-              </button>
-              {step < 3 ? (
-                <button
-                  type="button"
-                  className="h-8 rounded-md border border-transparent bg-accent px-3 text-[11px] font-semibold text-accent-contrast"
-                  onClick={() => {
-                    if (step === 1 && (!input.name.trim() || !input.baseUrl.trim())) {
-                      setError('Enter a provider name and base URL.')
-                      return
-                    }
-                    setError(undefined)
-                    setStep(step + 1)
-                  }}
-                >
-                  Continue
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled={saving}
-                  className="h-8 rounded-md border border-transparent bg-accent px-3 text-[11px] font-semibold text-accent-contrast disabled:opacity-50"
-                  onClick={() => void save()}
-                >
-                  {saving ? 'Saving…' : value ? 'Save changes' : 'Save provider'}
-                </button>
-              )}
-            </div>
-          )}
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
   )
 }
 

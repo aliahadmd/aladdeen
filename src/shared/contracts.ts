@@ -421,7 +421,6 @@ export type AgentApiProtocol =
   | 'openai-responses'
   | 'anthropic-messages'
 export type AgentAuthScheme = 'bearer' | 'x-api-key' | 'none'
-export type AgentProviderSource = 'native' | 'custom'
 export type AgentCatalogKind = 'bundled' | 'dynamic' | 'manual' | 'remote'
 export type AgentThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AgentRunState = 'idle' | 'running' | 'aborting'
@@ -488,7 +487,6 @@ export interface AgentProviderCompatibility {
 export interface AgentProviderDescriptor {
   id: AgentProviderId
   name: string
-  source: AgentProviderSource
   featured: boolean
   oauthAvailable: boolean
   apiKeyAvailable: boolean
@@ -510,22 +508,9 @@ export interface AgentProviderProfile {
   updatedAt: number
 }
 
-export interface AgentProviderProfileInput {
+export interface AgentLegacyProviderProfile {
+  id: AgentProviderId
   name: string
-  protocol: AgentApiProtocol
-  baseUrl: string
-  endpointScope: AgentEndpointScope
-  authScheme: AgentAuthScheme
-  catalogMode: Extract<AgentCatalogKind, 'manual' | 'remote'>
-  compatibility?: AgentProviderCompatibility
-  models: Array<{
-    id: string
-    name?: string
-    supportsThinking: boolean
-    supportsVision: boolean
-    contextWindow: number
-    maxOutputTokens: number
-  }>
 }
 
 export interface AgentProviderConnectionStatus {
@@ -801,16 +786,9 @@ export interface AladdeenApi {
     credentialStatus(): Promise<Result<AgentCredentialStatus>>
     getModelCatalog(): Promise<Result<AgentModel[]>>
     getProviderCatalog(): Promise<Result<AgentProviderDescriptor[]>>
-    getProviderProfiles(): Promise<Result<AgentProviderProfile[]>>
-    createProviderProfile(input: AgentProviderProfileInput): Promise<Result<AgentProviderProfile>>
-    updateProviderProfile(
-      providerId: AgentProviderId,
-      input: AgentProviderProfileInput
-    ): Promise<Result<AgentProviderProfile>>
-    deleteProviderProfile(providerId: AgentProviderId): Promise<Result<void>>
-    discoverModels(providerId: AgentProviderId): Promise<Result<AgentModel[]>>
+    getLegacyProviderProfiles(): Promise<Result<AgentLegacyProviderProfile[]>>
+    removeLegacyProviderProfile(providerId: AgentProviderId): Promise<Result<void>>
     refreshModelCatalog(providerId: AgentProviderId): Promise<Result<AgentModel[]>>
-    verifyModel(providerId: AgentProviderId, modelId: string): Promise<Result<AgentModel>>
     onEvent(callback: (event: AgentEvent) => void): () => void
     onAuthEvent(callback: (event: AgentAuthEvent) => void): () => void
   }
@@ -896,13 +874,9 @@ export const IPC = {
   agentCredentialStatus: 'agent:credential-status',
   agentGetModelCatalog: 'agent:get-model-catalog',
   agentGetProviderCatalog: 'agent:get-provider-catalog',
-  agentGetProviderProfiles: 'agent:get-provider-profiles',
-  agentCreateProviderProfile: 'agent:create-provider-profile',
-  agentUpdateProviderProfile: 'agent:update-provider-profile',
-  agentDeleteProviderProfile: 'agent:delete-provider-profile',
-  agentDiscoverModels: 'agent:discover-models',
+  agentGetLegacyProviderProfiles: 'agent:get-legacy-provider-profiles',
+  agentRemoveLegacyProviderProfile: 'agent:remove-legacy-provider-profile',
   agentRefreshModelCatalog: 'agent:refresh-model-catalog',
-  agentVerifyModel: 'agent:verify-model',
   agentEvent: 'agent:event',
   agentAuthEvent: 'agent:auth-event',
   environmentEvent: 'environment:event',

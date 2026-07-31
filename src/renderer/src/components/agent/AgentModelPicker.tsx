@@ -42,7 +42,6 @@ export function AgentModelPicker({
   const providerModels = modelsForProvider(models, provider)
   const selectedModel = providerModels.find((model) => model.id === value)
   const unavailable = status === 'ready' && Boolean(value) && !selectedModel
-  const verificationRequired = status === 'ready' && selectedModel?.verified === false
   const selectDisabled = disabled || status !== 'ready' || providerModels.length === 0
   const searchable = providerModels.length > 80 || provider === 'openrouter' && providerModels.length > 20
   const listboxId = useId()
@@ -101,11 +100,9 @@ export function AgentModelPicker({
               }
               if (event.key === 'Enter') {
                 const model = filteredModels[0]
-                if (model?.verified !== false) {
-                  event.preventDefault()
-                  if (model) onChange(model)
-                  setSearchOpen(false)
-                }
+                event.preventDefault()
+                if (model) onChange(model)
+                setSearchOpen(false)
               }
             }}
           />
@@ -121,8 +118,7 @@ export function AgentModelPicker({
                   type="button"
                   role="option"
                   aria-selected={model.id === value}
-                  disabled={model.verified === false}
-                  className="block w-full rounded-md border-0 bg-transparent px-2 py-2 text-left text-[10px] text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-45"
+                  className="block w-full rounded-md border-0 bg-transparent px-2 py-2 text-left text-[10px] text-foreground hover:bg-surface-hover"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => {
                     onChange(model)
@@ -132,7 +128,7 @@ export function AgentModelPicker({
                 >
                   <span className="block truncate font-semibold">{model.name}</span>
                   <span className="mt-0.5 block truncate font-mono text-[8px] text-foreground-muted">
-                    {model.id}{model.verified === false ? ' · verification required' : ''}
+                    {model.id}
                   </span>
                 </button>
               ))}
@@ -157,7 +153,7 @@ export function AgentModelPicker({
           value={value}
           onChange={(event) => {
             const model = providerModels.find((candidate) => candidate.id === event.currentTarget.value)
-            if (model && model.verified !== false) onChange(model)
+            if (model) onChange(model)
           }}
         >
           {(!selectedModel || status !== 'ready') && (
@@ -167,9 +163,8 @@ export function AgentModelPicker({
             <option
               key={`${model.provider}/${model.id}`}
               value={model.id}
-              disabled={model.verified === false}
             >
-              {model.name}{model.verified === false ? ' (verify first)' : ''}
+              {model.name}
             </option>
           ))}
         </select>
@@ -193,8 +188,7 @@ export function AgentModelPicker({
             </span>
           )}
           {unavailable && 'This saved model is unavailable. Choose another model.'}
-          {verificationRequired && 'Run the compatibility test before selecting this custom model.'}
-          {status === 'ready' && selectedModel && !verificationRequired && (
+          {status === 'ready' && selectedModel && (
             <span>Model ID: <code className="font-mono">{selectedModel.id}</code></span>
           )}
           {status === 'ready' && !value && providerModels.length === 0 && 'No models are available for this provider.'}
