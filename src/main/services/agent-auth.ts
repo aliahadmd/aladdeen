@@ -42,7 +42,7 @@ const PROVIDER_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,199}$/
 const AUTH_HOSTS: Readonly<Record<string, readonly string[]>> = {
   anthropic: ['claude.ai'],
   'openai-codex': ['auth.openai.com'],
-  'kimi-coding': ['auth.kimi.com'],
+  'kimi-coding': ['auth.kimi.com', 'www.kimi.com'],
   openrouter: ['openrouter.ai'],
   xai: ['auth.x.ai'],
   'github-copilot': ['github.com'],

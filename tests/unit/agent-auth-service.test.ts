@@ -480,7 +480,7 @@ describe('agent account authentication service', () => {
   it('relays Kimi device codes without the verification URL and supports cancellation', async () => {
     const harness = createHarness()
     const { attemptId } = await begin(harness, 'kimi-coding')
-    const verificationUrl = 'https://auth.kimi.com/device?user_code=ABCD-EFGH'
+    const verificationUrl = 'https://www.kimi.com/code?user_code=ABCD-EFGH'
     harness.loginChild.emit('message', {
       channel: 'auth',
       type: 'device-code',
@@ -510,6 +510,26 @@ describe('agent account authentication service', () => {
     expect(harness.sentEvents).toContainEqual(expect.objectContaining({
       type: 'cancelled',
       provider: 'kimi-coding'
+    }))
+  })
+
+  it('rejects unapproved Kimi lookalike authorization hosts', async () => {
+    const harness = createHarness()
+    await begin(harness, 'kimi-coding')
+    harness.loginChild.emit('message', {
+      channel: 'auth',
+      type: 'device-code',
+      userCode: 'ABCD-EFGH',
+      verificationUri: 'https://www.kimi.com.attacker.example/code?user_code=ABCD-EFGH',
+      expiresInSeconds: 900
+    })
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(harness.openExternal).not.toHaveBeenCalled()
+    expect(harness.loginChild.kill).toHaveBeenCalledWith('SIGTERM')
+    expect(harness.sentEvents).toContainEqual(expect.objectContaining({
+      type: 'failed',
+      message: 'Untrusted provider authorization URL.'
     }))
   })
 

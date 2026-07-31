@@ -296,7 +296,7 @@ setTimeout(() => {
       channel: 'auth',
       type: 'device-code',
       userCode: 'KIMI-CODE',
-      verificationUri: 'https://auth.kimi.com/device?code=renderer-must-not-see-this',
+      verificationUri: 'https://www.kimi.com/code?code=renderer-must-not-see-this',
       expiresInSeconds: 900
     })
     setTimeout(() => void persistOAuth(), 1_000)
