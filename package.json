@@ -33,6 +33,7 @@
     "dist:mac": "node scripts/assert-macos-arm.mjs && node scripts/assert-docx-editor-dependency.mjs && node scripts/assert-spreadsheet-dependencies.mjs && node scripts/assert-presentation-dependencies.mjs && pnpm prepare:pi-runtime && pnpm icons && pnpm build && electron-builder --mac --arm64 --publish never && pnpm smoke:dmg"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
     "@office-kit/xlsx": "0.9.0",
     "@univerjs/core": "0.25.1",
     "@univerjs/preset-sheets-conditional-formatting": "0.25.1",
