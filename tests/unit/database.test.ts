@@ -21,7 +21,7 @@ describe('application metadata database', () => {
     const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(12)
+    ).toBe(13)
     migrated.close()
 
     expect(database.getSettings()).toEqual({
@@ -30,12 +30,6 @@ describe('application metadata database', () => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
-      agentEnabled: false,
-      agentProvider: 'anthropic',
-      agentModelId: 'claude-sonnet-4-5',
-      agentThinkingLevel: 'medium',
-      agentPanelWidth: 380,
-      agentPanelCollapsed: false,
       ...DEFAULT_READING_SETTINGS
     })
     database.setSettings({
@@ -44,23 +38,12 @@ describe('application metadata database', () => {
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
-      agentEnabled: true,
-      agentProvider: 'openai-codex',
-      agentModelId: 'gpt-5.5',
-      agentThinkingLevel: 'high',
-      agentPanelWidth: 440,
-      agentPanelCollapsed: true,
       readingFont: 'iowan',
       readingFontSize: 19,
       readingLineHeight: 'relaxed',
       readingColumnWidth: 'narrow',
       readingSurface: 'paper'
     })
-    const encryptedAgentKey = Buffer.from('ciphertext-only')
-    database.setAgentSecret('openai-codex', encryptedAgentKey)
-    expect(database.getAgentSecret('openai-codex')).toEqual(encryptedAgentKey)
-    database.clearAgentSecret('openai-codex')
-    expect(database.getAgentSecret('openai-codex')).toBeNull()
     const environment = database.createEnvironment('Personal')
     const project = database.addProject(environment.id, '/notes', 'notes')
     expect(project.enabledDocumentKinds).toEqual(['markdown'])
@@ -100,12 +83,6 @@ describe('application metadata database', () => {
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
-      agentEnabled: true,
-      agentProvider: 'openai-codex',
-      agentModelId: 'gpt-5.5',
-      agentThinkingLevel: 'high',
-      agentPanelWidth: 440,
-      agentPanelCollapsed: true,
       readingFont: 'iowan',
       readingFontSize: 19,
       readingLineHeight: 'relaxed',
@@ -339,7 +316,7 @@ describe('application metadata database', () => {
     const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(12)
+    ).toBe(13)
     for (const table of ['environment_note_locations', 'research_notes', 'research_note_links']) {
       expect(verified.prepare(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
@@ -458,73 +435,6 @@ describe('application metadata database', () => {
     expect(migrated.listProjectIndex(complete.id)[0]?.documentKind).toBe('pptx')
     expect(migrated.listTrackedFiles(environment.id)[0]?.documentKind).toBe('pptx')
     migrated.close()
-  })
-
-  it('preserves legacy provider records and transactionally removes all associated data', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-agent-providers-'))
-    created.push(directory)
-    const database = new AppDatabase(directory)
-    const providerId = 'custom:123e4567-e89b-42d3-a456-426614174000'
-    const profile = {
-      id: providerId,
-      name: 'Local vLLM',
-      protocol: 'openai-completions' as const,
-      baseUrl: 'http://127.0.0.1:8000/v1',
-      endpointScope: 'loopback' as const,
-      authScheme: 'none' as const,
-      catalogMode: 'manual' as const,
-      compatibility: { supportsStrictMode: false },
-      models: [{
-        provider: providerId,
-        id: 'local-coder',
-        name: 'Local Coder',
-        supportsThinking: false,
-        supportsVision: false,
-        contextWindow: 32_768,
-        maxOutputTokens: 4_096,
-        source: 'custom' as const,
-        verified: false
-      }],
-      createdAt: 100,
-      updatedAt: 100
-    }
-    database.saveAgentProviderProfile(profile)
-    database.setAgentSecret(providerId, Buffer.from('encrypted-only'))
-    database.setAgentModelCache(providerId, profile.models)
-    database.setAgentModelVerification(providerId, 'local-coder', 'config-hash')
-    database.setAgentRuntimeModelCache(providerId, {
-      checkedAt: 101,
-      models: [{
-        provider: providerId,
-        id: 'local-coder',
-        name: 'Local Coder',
-        api: 'openai-completions',
-        reasoning: false,
-        input: ['text'],
-        contextWindow: 32_768,
-        maxTokens: 4_096
-      }]
-    })
-
-    expect(database.getAgentProviderProfile(providerId)).toEqual(profile)
-    expect(database.getAgentModelCache(providerId)?.models[0]).toMatchObject({
-      provider: providerId,
-      id: 'local-coder'
-    })
-    expect(database.getAgentRuntimeModelCache(providerId)).toMatchObject({
-      checkedAt: 101,
-      models: [expect.objectContaining({ id: 'local-coder' })]
-    })
-    expect(database.getAgentModelVerification(providerId, 'local-coder')).toMatchObject({
-      configHash: 'config-hash'
-    })
-
-    database.deleteAgentProviderProfile(providerId)
-    expect(database.getAgentProviderProfile(providerId)).toBeUndefined()
-    expect(database.getAgentSecret(providerId)).toBeNull()
-    expect(database.getAgentModelCache(providerId)).toBeUndefined()
-    expect(database.getAgentModelVerification(providerId, 'local-coder')).toBeUndefined()
-    database.close()
   })
 
   it('refuses a database created by a newer schema without downgrading it', async () => {

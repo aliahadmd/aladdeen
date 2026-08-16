@@ -14,15 +14,11 @@ import {
   type MenuItemConstructorOptions
 } from 'electron'
 import { AppDatabase } from '@main/services/database'
-import { AgentAuthService } from '@main/services/agent-auth'
-import { AgentCredentialVault } from '@main/services/agent-credentials'
-import { AgentService } from '@main/services/agent'
 import { ExportService } from '@main/services/export'
 import { GlobalSearchService } from '@main/services/global-search'
 import { resolveUserDataPolicy } from '@main/services/user-data-policy'
 import { WorkspaceService } from '@main/services/workspace'
 import { registerIpc } from '@main/ipc'
-import { defaultModelForProvider, isCustomAgentProviderId } from '@shared/agent-providers'
 import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { documentKindFromName, isSupportedDocumentName } from '@shared/documents'
 
@@ -56,8 +52,6 @@ let mainWindow: BrowserWindow | null = null
 let database: AppDatabase | null = null
 let workspace: WorkspaceService | null = null
 let globalSearch: GlobalSearchService | null = null
-let agent: AgentService | null = null
-let agentAuth: AgentAuthService | null = null
 let pendingSystemFile: string | null = null
 let pendingOpenRequest: OpenFileRequest | undefined
 let quitting = false
@@ -108,36 +102,19 @@ void app.whenReady().then(async () => {
     app.getPath('userData'),
     userDataPolicy.previousUserDataPath
   )
-  let settings = database.getSettings()
-  if (isCustomAgentProviderId(settings.agentProvider)) {
-    settings = database.setSettings({
-      ...settings,
-      agentProvider: 'anthropic',
-      agentModelId: defaultModelForProvider('anthropic')
-    })
-  }
+  const settings = database.getSettings()
   nativeTheme.themeSource = settings.theme
 
   workspace = new WorkspaceService(database, (environmentEvent) => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(IPC.environmentEvent, environmentEvent)
   })
   globalSearch = new GlobalSearchService(database, workspace, () => mainWindow)
-  const agentVault = new AgentCredentialVault(database)
-  agent = new AgentService(database, agentVault, app.getPath('userData'), () => mainWindow)
-  agentAuth = new AgentAuthService(
-    database,
-    agentVault,
-    () => mainWindow,
-    async (providerId) => providerId ? agent?.closeProvider(providerId) : agent?.close()
-  )
   const exportService = new ExportService(workspace, () => mainWindow)
   registerIpc({
     database,
     workspace,
     exports: exportService,
     search: globalSearch,
-    agent,
-    agentAuth,
     getWindow: () => mainWindow,
     getPendingOpenRequest: () => pendingOpenRequest,
     acceptSystemOpenFile,
@@ -556,8 +533,6 @@ async function finishQuit(): Promise<void> {
   if (!servicesClosed) {
     servicesClosed = true
     globalSearch?.close()
-    await agentAuth?.close()
-    await agent?.close()
     await workspace?.close()
     database?.close()
   }

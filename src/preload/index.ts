@@ -1,8 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   IPC,
-  type AgentAuthEvent,
-  type AgentEvent,
   type CloseRequest,
   type EnvironmentEvent,
   type GlobalSearchEvent,
@@ -54,44 +52,6 @@ const api: AladdeenApi = {
       const listener = (): void => callback()
       ipcRenderer.on(IPC.globalSearchOpenRequest, listener)
       return () => ipcRenderer.removeListener(IPC.globalSearchOpenRequest, listener)
-    }
-  },
-  agent: {
-    startSession: (projectId) => ipcRenderer.invoke(IPC.agentStartSession, { projectId }),
-    stopSession: (sessionId) => ipcRenderer.invoke(IPC.agentStopSession, { sessionId }),
-    prompt: (sessionId, message, steer) =>
-      ipcRenderer.invoke(IPC.agentPrompt, { sessionId, message, steer }),
-    abort: (sessionId) => ipcRenderer.invoke(IPC.agentAbort, { sessionId }),
-    respondApproval: (sessionId, requestId, decision) =>
-      ipcRenderer.invoke(IPC.agentRespondApproval, { sessionId, requestId, decision }),
-    setModel: (sessionId, provider, modelId) =>
-      ipcRenderer.invoke(IPC.agentSetModel, { sessionId, provider, modelId }),
-    getModels: (sessionId) => ipcRenderer.invoke(IPC.agentGetModels, { sessionId }),
-    setThinkingLevel: (sessionId, level) =>
-      ipcRenderer.invoke(IPC.agentSetThinkingLevel, { sessionId, level }),
-    beginLogin: (request) => ipcRenderer.invoke(IPC.agentBeginLogin, request),
-    respondLoginPrompt: (attemptId, promptId, value) =>
-      ipcRenderer.invoke(IPC.agentRespondLoginPrompt, { attemptId, promptId, value }),
-    reopenLoginUrl: (attemptId) => ipcRenderer.invoke(IPC.agentReopenLoginUrl, attemptId),
-    cancelLogin: (attemptId) => ipcRenderer.invoke(IPC.agentCancelLogin, attemptId),
-    disconnectProvider: (provider) => ipcRenderer.invoke(IPC.agentDisconnectProvider, provider),
-    credentialStatus: () => ipcRenderer.invoke(IPC.agentCredentialStatus),
-    getModelCatalog: () => ipcRenderer.invoke(IPC.agentGetModelCatalog),
-    getProviderCatalog: () => ipcRenderer.invoke(IPC.agentGetProviderCatalog),
-    getLegacyProviderProfiles: () => ipcRenderer.invoke(IPC.agentGetLegacyProviderProfiles),
-    removeLegacyProviderProfile: (providerId) =>
-      ipcRenderer.invoke(IPC.agentRemoveLegacyProviderProfile, providerId),
-    refreshModelCatalog: (providerId) =>
-      ipcRenderer.invoke(IPC.agentRefreshModelCatalog, providerId),
-    onEvent: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, agentEvent: AgentEvent): void => callback(agentEvent)
-      ipcRenderer.on(IPC.agentEvent, listener)
-      return () => ipcRenderer.removeListener(IPC.agentEvent, listener)
-    },
-    onAuthEvent: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, authEvent: AgentAuthEvent): void => callback(authEvent)
-      ipcRenderer.on(IPC.agentAuthEvent, listener)
-      return () => ipcRenderer.removeListener(IPC.agentAuthEvent, listener)
     }
   },
   document: {

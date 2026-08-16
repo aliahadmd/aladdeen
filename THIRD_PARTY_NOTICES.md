@@ -15,19 +15,6 @@ their own licenses.
 Eigenpal DOCX Editor is used for local DOCX parsing, rendering, editing, and
 serialization. Its inclusion does not change Aladdeen's proprietary license.
 
-## Pi coding agent runtime
-
-- Packages: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`
-- Version: `0.83.0` (both packages)
-- Project: https://github.com/earendil-works/pi
-- Copyright: Pi contributors
-- License: MIT License
-- License text: https://github.com/earendil-works/pi/blob/main/LICENSE
-
-Pi provides Aladdeen's embedded coding-agent runtime and provider
-authentication flows. Aladdeen stores credentials in its own encrypted vault
-and does not use Pi's plaintext credential file.
-
 ## Univer spreadsheet engine
 
 - Packages: `@univerjs/core`, `@univerjs/preset-sheets-core`,

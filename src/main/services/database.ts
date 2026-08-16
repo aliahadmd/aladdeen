@@ -5,9 +5,6 @@ import { DatabaseSync } from 'node:sqlite'
 import { DesktopError } from '@main/errors'
 import type {
   AppSettings,
-  AgentModel,
-  AgentProviderId,
-  AgentProviderProfile,
   DocumentKind,
   EnvironmentSummary,
   WorkspaceTreeNode
@@ -34,71 +31,16 @@ const DEFAULT_SETTINGS: AppSettings = {
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 0,
-  agentEnabled: false,
-  agentProvider: 'anthropic',
-  agentModelId: 'claude-sonnet-4-5',
-  agentThinkingLevel: 'medium',
-  agentPanelWidth: 380,
-  agentPanelCollapsed: false,
   ...DEFAULT_READING_SETTINGS
 }
 
 const DATABASE_FILENAME = 'aladdeen.sqlite'
 const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
-// Version 7 was briefly used by the removed Research Notes feature. Keep that
-// migration number reserved and migrate its metadata away instead of treating a
-// user's existing profile as a database from an unknown future release.
-const CURRENT_DATABASE_VERSION = 12
-
-interface AgentModelCacheEnvelope {
-  version: 1
-  models: AgentModel[]
-  runtimeEntry?: unknown
-}
-
-function agentModelsFromRuntimeEntry(providerId: AgentProviderId, entry: unknown): AgentModel[] {
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
-  const models = (entry as { models?: unknown }).models
-  if (!Array.isArray(models)) return []
-  const seen = new Set<string>()
-  return models.flatMap((value): AgentModel[] => {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
-    const model = value as Record<string, unknown>
-    const id = typeof model.id === 'string' ? model.id : ''
-    if (!id || seen.has(id)) return []
-    seen.add(id)
-    return [{
-      provider: providerId,
-      id,
-      name: typeof model.name === 'string' && model.name ? model.name : id,
-      supportsThinking: model.reasoning === true,
-      ...(typeof model.api === 'string' ? { protocol: model.api as AgentModel['protocol'] } : {}),
-      ...(Array.isArray(model.input) ? { supportsVision: model.input.includes('image') } : {}),
-      ...(typeof model.contextWindow === 'number' ? { contextWindow: model.contextWindow } : {}),
-      ...(typeof model.maxTokens === 'number' ? { maxOutputTokens: model.maxTokens } : {}),
-      source: 'pi'
-    }]
-  })
-}
-
-function parseAgentModelCache(providerId: AgentProviderId, value: string): AgentModelCacheEnvelope {
-  const parsed = JSON.parse(value) as unknown
-  if (Array.isArray(parsed)) {
-    return { version: 1, models: parsed as AgentModel[] }
-  }
-  if (
-    parsed &&
-    typeof parsed === 'object' &&
-    !Array.isArray(parsed) &&
-    (parsed as { version?: unknown }).version === 1 &&
-    Array.isArray((parsed as { models?: unknown }).models)
-  ) return parsed as AgentModelCacheEnvelope
-  return {
-    version: 1,
-    models: agentModelsFromRuntimeEntry(providerId, parsed),
-    runtimeEntry: parsed
-  }
-}
+// Versions 7, 11, and 12 were briefly used by removed features (Research Notes
+// and the coding agent). Keep those migration numbers reserved and migrate the
+// leftover metadata away instead of treating a user's existing profile as a
+// database from an unknown future release.
+const CURRENT_DATABASE_VERSION = 13
 
 function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
   if (existsSync(destination)) return
@@ -495,47 +437,22 @@ export class AppDatabase {
       }
     }
 
-    if (row.user_version < 11) {
+    if (row.user_version < 13) {
       this.db.exec(`
         BEGIN;
-        CREATE TABLE IF NOT EXISTS agent_secrets (
-          provider TEXT PRIMARY KEY,
-          ciphertext BLOB NOT NULL
-        ) STRICT;
-        PRAGMA user_version = 11;
-        COMMIT;
-      `)
-    }
-
-    if (row.user_version < 12) {
-      this.db.exec(`
-        BEGIN;
-        CREATE TABLE IF NOT EXISTS agent_provider_profiles (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          protocol TEXT NOT NULL,
-          base_url TEXT NOT NULL,
-          endpoint_scope TEXT NOT NULL,
-          auth_scheme TEXT NOT NULL,
-          catalog_mode TEXT NOT NULL,
-          compatibility_json TEXT NOT NULL,
-          models_json TEXT NOT NULL,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS agent_model_cache (
-          provider TEXT PRIMARY KEY,
-          models_json TEXT NOT NULL,
-          checked_at INTEGER NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS agent_model_verifications (
-          provider TEXT NOT NULL,
-          model_id TEXT NOT NULL,
-          config_hash TEXT NOT NULL,
-          verified_at INTEGER NOT NULL,
-          PRIMARY KEY(provider, model_id)
-        ) STRICT;
-        PRAGMA user_version = 12;
+        DROP TABLE IF EXISTS agent_secrets;
+        DROP TABLE IF EXISTS agent_provider_profiles;
+        DROP TABLE IF EXISTS agent_model_cache;
+        DROP TABLE IF EXISTS agent_model_verifications;
+        DELETE FROM app_settings WHERE key IN (
+          'agent_enabled',
+          'agent_provider',
+          'agent_model_id',
+          'agent_thinking_level',
+          'agent_panel_width',
+          'agent_panel_collapsed'
+        );
+        PRAGMA user_version = 13;
         COMMIT;
       `)
     }
@@ -640,28 +557,6 @@ export class AppDatabase {
       if (row.key === 'sidebar_collapsed' && ['true', 'false'].includes(row.value)) {
         settings.sidebarCollapsed = row.value === 'true'
       }
-      if (row.key === 'agent_enabled' && ['true', 'false'].includes(row.value)) {
-        settings.agentEnabled = row.value === 'true'
-      }
-      if (row.key === 'agent_provider' && /^[a-z0-9][a-z0-9._:-]{0,199}$/.test(row.value)) {
-        settings.agentProvider = row.value as AppSettings['agentProvider']
-      }
-      if (row.key === 'agent_model_id' && row.value.length <= 200) {
-        settings.agentModelId = row.value
-      }
-      if (
-        row.key === 'agent_thinking_level' &&
-        ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(row.value)
-      ) {
-        settings.agentThinkingLevel = row.value as AppSettings['agentThinkingLevel']
-      }
-      if (row.key === 'agent_panel_width') {
-        const width = Number(row.value)
-        if (Number.isInteger(width) && width >= 300 && width <= 560) settings.agentPanelWidth = width
-      }
-      if (row.key === 'agent_panel_collapsed' && ['true', 'false'].includes(row.value)) {
-        settings.agentPanelCollapsed = row.value === 'true'
-      }
       if (row.key === 'completed_onboarding_version') {
         const version = Number(row.value)
         if (Number.isInteger(version) && version >= 0 && version <= 1_000) {
@@ -698,12 +593,6 @@ export class AppDatabase {
       this.setSetting('sidebar_width', String(settings.sidebarWidth))
       this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
       this.setSetting('completed_onboarding_version', String(settings.completedOnboardingVersion))
-      this.setSetting('agent_enabled', String(settings.agentEnabled))
-      this.setSetting('agent_provider', settings.agentProvider)
-      this.setSetting('agent_model_id', settings.agentModelId)
-      this.setSetting('agent_thinking_level', settings.agentThinkingLevel)
-      this.setSetting('agent_panel_width', String(settings.agentPanelWidth))
-      this.setSetting('agent_panel_collapsed', String(settings.agentPanelCollapsed))
       this.setSetting('reading_font', settings.readingFont)
       this.setSetting('reading_font_size', String(settings.readingFontSize))
       this.setSetting('reading_line_height', settings.readingLineHeight)
@@ -722,181 +611,6 @@ export class AppDatabase {
       .prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(key, value, Date.now())
-  }
-
-  getAgentSecret(provider: AgentProviderId): Buffer | null {
-    const row = this.db.prepare('SELECT ciphertext FROM agent_secrets WHERE provider = ?').get(provider) as
-      | { ciphertext: Uint8Array }
-      | undefined
-    return row ? Buffer.from(row.ciphertext) : null
-  }
-
-  setAgentSecret(provider: AgentProviderId, ciphertext: Buffer): void {
-    this.db.prepare(`INSERT INTO agent_secrets (provider, ciphertext) VALUES (?, ?)
-      ON CONFLICT(provider) DO UPDATE SET ciphertext = excluded.ciphertext`)
-      .run(provider, ciphertext)
-  }
-
-  clearAgentSecret(provider: AgentProviderId): void {
-    this.db.prepare('DELETE FROM agent_secrets WHERE provider = ?').run(provider)
-  }
-
-  listAgentSecretProviderIds(): AgentProviderId[] {
-    return (this.db.prepare('SELECT provider FROM agent_secrets ORDER BY provider').all() as Array<{
-      provider: string
-    }>).map((row) => row.provider)
-  }
-
-  listAgentProviderProfiles(): AgentProviderProfile[] {
-    return (this.db.prepare(`
-      SELECT id, name, protocol, base_url, endpoint_scope, auth_scheme, catalog_mode,
-             compatibility_json, models_json, created_at, updated_at
-      FROM agent_provider_profiles
-      ORDER BY name COLLATE NOCASE, id
-    `).all() as Array<Record<string, unknown>>).map((row) => ({
-      id: String(row.id),
-      name: String(row.name),
-      protocol: String(row.protocol) as AgentProviderProfile['protocol'],
-      baseUrl: String(row.base_url),
-      endpointScope: String(row.endpoint_scope) as AgentProviderProfile['endpointScope'],
-      authScheme: String(row.auth_scheme) as AgentProviderProfile['authScheme'],
-      catalogMode: String(row.catalog_mode) as AgentProviderProfile['catalogMode'],
-      compatibility: JSON.parse(String(row.compatibility_json)) as AgentProviderProfile['compatibility'],
-      models: JSON.parse(String(row.models_json)) as AgentModel[],
-      createdAt: Number(row.created_at),
-      updatedAt: Number(row.updated_at)
-    }))
-  }
-
-  getAgentProviderProfile(providerId: AgentProviderId): AgentProviderProfile | undefined {
-    return this.listAgentProviderProfiles().find((profile) => profile.id === providerId)
-  }
-
-  saveAgentProviderProfile(profile: AgentProviderProfile): void {
-    this.db.prepare(`
-      INSERT INTO agent_provider_profiles (
-        id, name, protocol, base_url, endpoint_scope, auth_scheme, catalog_mode,
-        compatibility_json, models_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        name = excluded.name,
-        protocol = excluded.protocol,
-        base_url = excluded.base_url,
-        endpoint_scope = excluded.endpoint_scope,
-        auth_scheme = excluded.auth_scheme,
-        catalog_mode = excluded.catalog_mode,
-        compatibility_json = excluded.compatibility_json,
-        models_json = excluded.models_json,
-        updated_at = excluded.updated_at
-    `).run(
-      profile.id,
-      profile.name,
-      profile.protocol,
-      profile.baseUrl,
-      profile.endpointScope,
-      profile.authScheme,
-      profile.catalogMode,
-      JSON.stringify(profile.compatibility),
-      JSON.stringify(profile.models),
-      profile.createdAt,
-      profile.updatedAt
-    )
-  }
-
-  deleteAgentProviderProfile(providerId: AgentProviderId): void {
-    this.db.exec('BEGIN')
-    try {
-      this.db.prepare('DELETE FROM agent_provider_profiles WHERE id = ?').run(providerId)
-      this.db.prepare('DELETE FROM agent_model_cache WHERE provider = ?').run(providerId)
-      this.db.prepare('DELETE FROM agent_model_verifications WHERE provider = ?').run(providerId)
-      this.db.prepare('DELETE FROM agent_secrets WHERE provider = ?').run(providerId)
-      this.db.exec('COMMIT')
-    } catch (error) {
-      this.db.exec('ROLLBACK')
-      throw error
-    }
-  }
-
-  getAgentModelCache(providerId: AgentProviderId): { models: AgentModel[]; checkedAt: number } | undefined {
-    const row = this.db.prepare(
-      'SELECT models_json, checked_at FROM agent_model_cache WHERE provider = ?'
-    ).get(providerId) as { models_json: string; checked_at: number } | undefined
-    if (!row) return undefined
-    const envelope = parseAgentModelCache(providerId, row.models_json)
-    return {
-      models: envelope.models,
-      checkedAt: row.checked_at
-    }
-  }
-
-  setAgentModelCache(providerId: AgentProviderId, models: AgentModel[]): void {
-    const existing = this.db.prepare(
-      'SELECT models_json FROM agent_model_cache WHERE provider = ?'
-    ).get(providerId) as { models_json: string } | undefined
-    const envelope: AgentModelCacheEnvelope = {
-      version: 1,
-      models,
-      ...(existing
-        ? { runtimeEntry: parseAgentModelCache(providerId, existing.models_json).runtimeEntry }
-        : {})
-    }
-    this.db.prepare(`
-      INSERT INTO agent_model_cache (provider, models_json, checked_at) VALUES (?, ?, ?)
-      ON CONFLICT(provider) DO UPDATE SET
-        models_json = excluded.models_json,
-        checked_at = excluded.checked_at
-    `).run(providerId, JSON.stringify(envelope), Date.now())
-  }
-
-  getAgentRuntimeModelCache(providerId: AgentProviderId): unknown {
-    const row = this.db.prepare(
-      'SELECT models_json FROM agent_model_cache WHERE provider = ?'
-    ).get(providerId) as { models_json: string } | undefined
-    return row ? parseAgentModelCache(providerId, row.models_json).runtimeEntry : undefined
-  }
-
-  setAgentRuntimeModelCache(providerId: AgentProviderId, runtimeEntry: unknown): void {
-    const existing = this.getAgentModelCache(providerId)
-    const models = runtimeEntry === undefined
-      ? existing?.models ?? []
-      : agentModelsFromRuntimeEntry(providerId, runtimeEntry)
-    const envelope: AgentModelCacheEnvelope = {
-      version: 1,
-      models,
-      ...(runtimeEntry === undefined ? {} : { runtimeEntry })
-    }
-    this.db.prepare(`
-      INSERT INTO agent_model_cache (provider, models_json, checked_at) VALUES (?, ?, ?)
-      ON CONFLICT(provider) DO UPDATE SET
-        models_json = excluded.models_json,
-        checked_at = excluded.checked_at
-    `).run(providerId, JSON.stringify(envelope), Date.now())
-  }
-
-  getAgentModelVerification(
-    providerId: AgentProviderId,
-    modelId: string
-  ): { configHash: string; verifiedAt: number } | undefined {
-    const row = this.db.prepare(`
-      SELECT config_hash, verified_at
-      FROM agent_model_verifications
-      WHERE provider = ? AND model_id = ?
-    `).get(providerId, modelId) as { config_hash: string; verified_at: number } | undefined
-    return row ? { configHash: row.config_hash, verifiedAt: row.verified_at } : undefined
-  }
-
-  setAgentModelVerification(providerId: AgentProviderId, modelId: string, configHash: string): void {
-    this.db.prepare(`
-      INSERT INTO agent_model_verifications (provider, model_id, config_hash, verified_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(provider, model_id) DO UPDATE SET
-        config_hash = excluded.config_hash,
-        verified_at = excluded.verified_at
-    `).run(providerId, modelId, configHash, Date.now())
-  }
-
-  clearAgentModelVerifications(providerId: AgentProviderId): void {
-    this.db.prepare('DELETE FROM agent_model_verifications WHERE provider = ?').run(providerId)
   }
 
   listEnvironments(): EnvironmentSummary[] {

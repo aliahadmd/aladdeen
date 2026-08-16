@@ -11,7 +11,6 @@ import {
   READING_LINE_HEIGHTS,
   READING_SURFACES
 } from './reading'
-import { isCustomAgentProviderId, isLegacyCustomAgentProvider } from './agent-providers'
 
 const searchBufferSchema = z.string()
   .max(MAX_SEARCH_DOCUMENT_BYTES)
@@ -28,17 +27,6 @@ export const documentContentSchema = z.string()
   )
 
 export const idSchema = z.string().uuid()
-export const agentProviderSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(200)
-  .regex(/^[a-z0-9][a-z0-9._:-]*$/, 'Invalid agent provider ID')
-  .refine((value) => !isCustomAgentProviderId(value), 'Custom endpoints are no longer supported')
-export const legacyAgentProviderSchema = z
-  .string()
-  .trim()
-  .refine(isLegacyCustomAgentProvider, 'Invalid legacy custom provider ID')
 
 export const relativePathSchema = z
   .string()
@@ -195,50 +183,11 @@ export const settingsSchema = z.object({
   sidebarWidth: z.number().int().min(248).max(420),
   sidebarCollapsed: z.boolean(),
   completedOnboardingVersion: z.number().int().min(0).max(1_000),
-  agentEnabled: z.boolean(),
-  agentProvider: agentProviderSchema,
-  agentModelId: z.string().trim().max(200),
-  agentThinkingLevel: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']),
-  agentPanelWidth: z.number().int().min(300).max(560),
-  agentPanelCollapsed: z.boolean(),
   readingFont: z.enum(READING_FONTS),
   readingFontSize: z.number().int().min(READING_FONT_SIZE_MIN).max(READING_FONT_SIZE_MAX),
   readingLineHeight: z.enum(READING_LINE_HEIGHTS),
   readingColumnWidth: z.enum(READING_COLUMN_WIDTHS),
   readingSurface: z.enum(READING_SURFACES)
-})
-
-export const agentThinkingLevelSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
-export const agentAuthTypeSchema = z.enum(['oauth', 'api_key'])
-export const agentStartSessionSchema = z.object({ projectId: idSchema })
-export const agentSessionSchema = z.object({ sessionId: idSchema })
-export const agentPromptSchema = z.object({
-  sessionId: idSchema,
-  message: z.string().trim().min(1).max(200_000),
-  steer: z.boolean().optional()
-})
-export const agentApprovalResponseSchema = z.object({
-  sessionId: idSchema,
-  requestId: z.string().min(1).max(200),
-  decision: z.enum(['allow', 'allow-always', 'deny'])
-})
-export const agentModelRequestSchema = z.object({
-  sessionId: idSchema,
-  provider: agentProviderSchema,
-  modelId: z.string().trim().min(1).max(200)
-})
-export const agentThinkingRequestSchema = z.object({
-  sessionId: idSchema,
-  level: agentThinkingLevelSchema
-})
-export const agentBeginLoginSchema = z.object({
-  providerId: agentProviderSchema,
-  authType: agentAuthTypeSchema.optional().default('oauth')
-})
-export const agentLoginPromptResponseSchema = z.object({
-  attemptId: idSchema,
-  promptId: idSchema,
-  value: z.string().max(16_384)
 })
 
 export const exportRequestSchema = z.object({

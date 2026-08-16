@@ -1,6 +1,6 @@
 /* global console */
 import { Buffer } from 'node:buffer'
-import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -21,30 +21,9 @@ const appPath = process.env.ALADDEEN_PACKAGED_APP_PATH
       'Aladdeen.app'
     )
 const contentsPath = join(appPath, 'Contents')
-const resourcesPath = join(contentsPath, 'Resources')
 const executablePath = join(contentsPath, 'MacOS', 'Aladdeen')
-const workerDirectory = join(
-  resourcesPath,
-  'app.asar.unpacked',
-  'out',
-  'worker',
-  'agent-worker'
-)
-const workerFiles = [
-  'contracts.js',
-  'index.js'
-]
 
-await Promise.all([
-  access(executablePath),
-  ...workerFiles.map((name) => access(join(workerDirectory, name)))
-])
-const stagedWorkerFiles = await readdir(workerDirectory)
-for (const removedFile of ['custom-provider.js', 'endpoint-security.js']) {
-  if (stagedWorkerFiles.includes(removedFile)) {
-    throw new Error(`The packaged app still contains removed custom-endpoint worker code: ${removedFile}`)
-  }
-}
+await access(executablePath)
 
 const auditRoot = await mkdtemp(join(tmpdir(), 'aladdeen-packaged-smoke-'))
 const userDataPath = join(auditRoot, 'profile')
@@ -105,43 +84,6 @@ try {
     throw new Error(`The packaged PDF viewer failed: ${(await window.locator('body').innerText()).slice(0, 1_500)}`)
   }
 
-  const catalogs = await window.evaluate(async () => {
-    const current = await window.aladdeen.settings.get()
-    if (!current.ok) return { ok: false, error: current.error.message }
-    const enabled = await window.aladdeen.settings.update({
-      ...current.value,
-      agentEnabled: true
-    })
-    if (!enabled.ok) return { ok: false, error: enabled.error.message }
-    const [providers, models] = await Promise.all([
-      window.aladdeen.agent.getProviderCatalog(),
-      window.aladdeen.agent.getModelCatalog()
-    ])
-    await window.aladdeen.settings.update({
-      ...enabled.value,
-      agentEnabled: false
-    })
-    if (!providers.ok) return { ok: false, error: providers.error.message }
-    if (!models.ok) return { ok: false, error: models.error.message }
-    return {
-      ok: true,
-      providers: providers.value.map((provider) => provider.id),
-      models: models.value.map((model) => `${model.provider}/${model.id}`)
-    }
-  })
-  if (!catalogs.ok) throw new Error(`The packaged agent catalog failed: ${catalogs.error}`)
-  for (const provider of ['anthropic', 'openai-codex', 'kimi-coding', 'deepseek', 'openrouter']) {
-    if (!catalogs.providers.includes(provider)) {
-      throw new Error(`The packaged agent catalog is missing ${provider}.`)
-    }
-  }
-  if (!catalogs.models.includes('openai-codex/gpt-5.5')) {
-    throw new Error('The packaged agent catalog is missing openai-codex/gpt-5.5.')
-  }
-  if (catalogs.providers.some((provider) => provider.startsWith('custom:'))) {
-    throw new Error('The packaged provider catalog exposed a legacy custom endpoint.')
-  }
-
   await closeApplication(application)
   application = await electron.launch({
     executablePath,
@@ -162,27 +104,14 @@ try {
   await closeApplication(application)
   application = undefined
 
-  const profileFiles = await readdir(userDataPath, { recursive: true })
-  const plaintextStores = profileFiles.filter((path) => (
-    path === 'auth.json' ||
-    path.endsWith('/auth.json') ||
-    path === 'models.json' ||
-    path.endsWith('/models.json')
-  ))
-  if (plaintextStores.length) {
-    throw new Error(`The packaged app created plaintext pi stores: ${plaintextStores.join(', ')}`)
-  }
   if (rendererErrors.length) {
     throw new Error(`The packaged renderer reported errors:\n${rendererErrors.join('\n')}`)
   }
 
   console.log(JSON.stringify({
     appPath,
-    workerFiles,
     pdf: 'pass',
-    localAsset: 'pass',
-    agentCatalog: 'pass',
-    plaintextPiStores: 'absent'
+    localAsset: 'pass'
   }, null, 2))
 } finally {
   if (application) await closeApplication(application)
