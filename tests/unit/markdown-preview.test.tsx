@@ -44,6 +44,26 @@ describe('Markdown preview', () => {
     expect(container.querySelector('script')).toBeNull()
   })
 
+  it('gives every table a keyboard-scrollable container so wide tables scroll instead of collapsing', () => {
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { system: { openExternal: vi.fn() } } as unknown as AladdeenApi
+    })
+    const { container } = render(<MarkdownPreview document={document} />)
+
+    // Scoped to this render's container: the suite keeps earlier renders mounted.
+    const table = container.querySelector<HTMLElement>('table')
+    const scroller = container.querySelector<HTMLElement>('.markdown-table-scroll')
+    expect(table).not.toBeNull()
+    expect(scroller).not.toBeNull()
+    // The table must be inside the scroller: without an element that can overflow,
+    // a wide table is compressed into the reading column instead of scrolling.
+    expect(scroller).toContainElement(table)
+    expect(scroller).toHaveAttribute('tabindex', '0')
+    // An unnamed ARIA region around every table would add a nameless landmark.
+    expect(scroller).not.toHaveAttribute('role')
+  })
+
   it('clears a local-image failure when the document or source changes', () => {
     const view = render(<MarkdownImage documentId="first-document" src="./missing.png" alt="First" />)
     fireEvent.error(screen.getByAltText('First'))

@@ -714,7 +714,12 @@ export const aladdeenMarkdownRehypePlugins: PluggableList = [
   rehypeRaw,
   [rehypeSanitize, aladdeenMarkdownSanitizeSchema],
   [rehypeKatex, { throwOnError: false, strict: 'ignore', trust: false }],
-  [rehypeHighlight, { detect: false, subset: false }],
+  // highlight.js's Markdown grammar has no CommonMark flanking rules, so a single
+  // intraword underscore (op_id, BUILD_PLAN) opens an emphasis run that swallows the
+  // rest of the block and silently drops the real tokens inside it — headings and
+  // list markers after that point render unstyled. Half-highlighted source is worse
+  // than none, so nested Markdown is rendered as plain text.
+  [rehypeHighlight, { detect: false, subset: false, plainText: ['markdown', 'md', 'mkd'] }],
   rehypeAladdeenPolish
 ]
 
