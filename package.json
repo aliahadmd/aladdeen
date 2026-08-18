@@ -47,7 +47,7 @@
     "github-slugger": "^2.0.0",
     "image-size": "^2.0.2",
     "katex": "^0.16.27",
-    "pdfjs-dist": "^6.1.200",
+    "pdfjs-dist": "^6.2.108",
     "pptx-vanilla-viewer": "1.7.0",
     "pptx-viewer-core": "2.0.7",
     "pptx-viewer-mcp": "2.0.2",
