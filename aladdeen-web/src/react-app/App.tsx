@@ -120,39 +120,6 @@ const featureGroups = [
 	},
 ] as const;
 
-const agentCapabilities = [
-	{
-		title: "Understands the active project",
-		detail:
-			"Ask questions, inspect source files, trace behavior, or request a focused change without rebuilding project context in every prompt.",
-	},
-	{
-		title: "Uses the model you choose",
-		detail:
-			"Connect a supported account or API key, choose a default for new sessions, and switch the current model without changing that default.",
-	},
-	{
-		title: "Pauses before consequential actions",
-		detail:
-			"File writes and commands surface as explicit approval requests inside the conversation instead of running invisibly.",
-	},
-	{
-		title: "Keeps provider setup straightforward",
-		detail:
-			"Choose from the native pi provider catalog, then connect with the account or API-key method that provider supports.",
-	},
-] as const;
-
-const featuredProviders = [
-	"Claude",
-	"ChatGPT / Codex",
-	"Kimi Code",
-	"DeepSeek",
-	"OpenRouter",
-	"OpenAI API",
-	"Google",
-] as const;
-
 const faqItems = [
 	{
 		question: "Where are my research files stored?",
@@ -162,22 +129,7 @@ const faqItems = [
 	{
 		question: "Does Aladdeen need an internet connection?",
 		answer:
-			"The document workspace does not. Opening, editing, searching, local assets, and Markdown export work offline. The optional coding agent needs a connection when you choose a cloud provider; a loopback model can remain on your Mac.",
-	},
-	{
-		question: "What does the optional agent send online?",
-		answer:
-			"Only after you enable it, the agent sends your prompts and the project content needed for the request to the provider you selected. The rest of the workspace stays offline, and disabling the agent stops its provider activity.",
-	},
-	{
-		question: "Which AI providers can I use?",
-		answer:
-			"Aladdeen supports account or API-key connections for providers exposed by its pinned pi runtime, including Claude, ChatGPT Codex, Kimi Code, DeepSeek, OpenRouter, OpenAI API, Google, and many more available through provider search.",
-	},
-	{
-		question: "How are provider credentials stored?",
-		answer:
-			"Account tokens and API keys are encrypted with macOS secure storage and kept out of documents, project files, session transcripts, and the website. If secure storage is unavailable, Aladdeen refuses to save a plaintext credential.",
+			"No. Opening, editing, searching, local assets, and export all work offline. Aladdeen blocks outbound network requests in release builds, so the workspace keeps working with Wi-Fi switched off.",
 	},
 	{
 		question: "Which Mac does Aladdeen support?",
@@ -197,7 +149,7 @@ const faqItems = [
 	{
 		question: "Is Aladdeen free?",
 		answer:
-			"Aladdeen is free during the current beta-testing period. Provider accounts, subscriptions, and API usage are separate and may have their own charges. Aladdeen is proprietary, closed-source software, and future releases may be offered as a paid product.",
+			"Aladdeen is free during the current beta-testing period. Aladdeen is proprietary, closed-source software, and future releases may be offered as a paid product.",
 	},
 ] as const;
 
@@ -378,7 +330,6 @@ function App() {
 
 						<nav aria-label="Primary" className="hidden items-center gap-6 md:flex">
 							<a href="#product" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Product</a>
-							<a href="#agent" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Agent</a>
 							<a href="#privacy" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">Privacy</a>
 							<a href="#faq" className="text-sm text-neutral-500 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100">FAQ</a>
 							<a href="#download" className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-300">Download</a>
@@ -421,12 +372,11 @@ function App() {
 					<nav id="mobile-navigation" aria-label="Mobile" className="absolute inset-x-0 top-full h-[calc(100dvh-5.5rem)] overflow-y-auto bg-white px-6 py-10 dark:bg-neutral-950 md:hidden">
 						<div className="mx-auto flex max-w-2xl flex-col gap-6">
 							<a onClick={closeMenu} href="#product" className="text-xl font-semibold">Product</a>
-							<a onClick={closeMenu} href="#agent" className="text-xl font-semibold">Agent</a>
 							<a onClick={closeMenu} href="#privacy" className="text-xl font-semibold">Privacy</a>
 							<a onClick={closeMenu} href="#download" className="text-xl font-semibold">Download</a>
 							<a onClick={closeMenu} href="#faq" className="text-xl font-semibold">FAQ</a>
 							<p className="mt-6 border-t border-neutral-100 pt-6 text-sm text-neutral-400 dark:border-neutral-800 dark:text-neutral-400">
-								Local-first workspace. Optional agent. Free during beta.
+								Local-first workspace. Offline by default. Free during beta.
 							</p>
 						</div>
 					</nav>
@@ -443,20 +393,20 @@ function App() {
 							Your research, one calm workspace.
 						</h1>
 						<p className="mt-6 max-w-2xl text-[17px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Read, edit, organize, and search Markdown, HTML, Word, PDF, Excel, and PowerPoint files in place. When you want help, turn on a project-aware agent using the provider and model you choose.
+							Read, edit, organize, and search Markdown, HTML, Word, PDF, Excel, and PowerPoint files in place—each format opening in a workspace built for it, with no conversion step.
 						</p>
 						<p className="mt-4 max-w-2xl text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-							The document workspace stays local and works offline. The agent is off by default, scoped to your active project, and asks before writing files or running commands.
+							Everything stays local and works offline. Your files are read from and written back to their original locations, so they remain readable by every other application you use.
 						</p>
 						<div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
 								Download for macOS arm64
 							</DownloadLink>
 							<a
-								href="#agent"
+								href="#product"
 								className="inline-flex items-center gap-2 text-sm font-medium text-neutral-600 transition-colors hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-neutral-100"
 							>
-								Meet the optional agent
+								See what it does
 								<ArrowIcon />
 							</a>
 						</div>
@@ -483,84 +433,10 @@ function App() {
 
 					<ul className="mt-12 grid border-y border-neutral-100 py-5 text-sm text-neutral-500 dark:border-neutral-800 dark:text-neutral-400 sm:grid-cols-2 lg:grid-cols-4">
 						<li className="py-2 lg:py-0">Files stay on disk</li>
-						<li className="py-2 lg:py-0">Agent off by default</li>
-						<li className="py-2 lg:py-0">Choose your provider</li>
-						<li className="py-2 lg:py-0">Writes require approval</li>
+						<li className="py-2 lg:py-0">Works fully offline</li>
+						<li className="py-2 lg:py-0">Six formats, edited in place</li>
+						<li className="py-2 lg:py-0">No proprietary library</li>
 					</ul>
-				</section>
-
-				<section
-					id="agent"
-					className="mt-20 scroll-mt-24 border-y border-neutral-200 bg-neutral-950 text-neutral-100 dark:border-neutral-800 md:mt-28"
-				>
-					<div className="mx-auto w-full max-w-5xl px-6 py-20 md:py-28">
-						<div className="grid items-start gap-12 lg:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] lg:gap-16">
-							<div data-scroll-reveal>
-								<p className="text-sm text-emerald-400">Optional coding agent</p>
-								<h2 className="mt-5 max-w-xl text-3xl font-bold tracking-[-0.025em] text-balance text-white md:text-[38px] md:leading-[1.1]">
-									Work with your project—not a detached chatbot.
-								</h2>
-								<p className="mt-5 max-w-xl text-[15px] leading-relaxed text-neutral-300">
-									Ask about the active project, inspect its files, or request a change from a dedicated side panel. Aladdeen keeps the session inside the project boundary and places consequential actions in front of you.
-								</p>
-								<ul className="mt-9 divide-y divide-neutral-800 border-y border-neutral-800">
-									{agentCapabilities.map((capability, index) => (
-										<li key={capability.title} className="grid grid-cols-[1.75rem_minmax(0,1fr)] gap-3 py-5">
-											<span className="pt-0.5 font-mono text-xs text-neutral-500">
-												{String(index + 1).padStart(2, "0")}
-											</span>
-											<div>
-												<h3 className="text-sm font-semibold text-white">{capability.title}</h3>
-												<p className="mt-1.5 text-sm leading-relaxed text-neutral-400">{capability.detail}</p>
-											</div>
-										</li>
-									))}
-								</ul>
-							</div>
-
-							<figure data-scroll-reveal className="lg:pt-5">
-								<div className="overflow-hidden rounded-lg border border-neutral-700 bg-neutral-900 shadow-2xl shadow-black/30">
-									<img
-										src="/screenshots/agent-project-dark.png"
-										alt="Aladdeen coding agent beside a project, showing a model selector, streamed response, and command approval"
-										width="1440"
-										height="868"
-										loading="lazy"
-										className="block h-auto w-full"
-									/>
-								</div>
-								<figcaption className="mt-3 text-xs text-neutral-500">
-									A project-aware conversation with visible tool activity and approval controls.
-								</figcaption>
-							</figure>
-						</div>
-
-						<div data-scroll-reveal className="mt-16 border-t border-neutral-800 pt-10 md:mt-20">
-							<div className="grid gap-8 md:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] md:gap-12">
-								<div>
-									<p className="text-sm text-neutral-500">Bring your provider</p>
-									<h3 className="mt-3 text-xl font-bold tracking-tight text-white">
-										Your account or API key.
-									</h3>
-								</div>
-								<div>
-									<div className="flex flex-wrap gap-2">
-										{featuredProviders.map((provider) => (
-											<span
-												key={provider}
-												className="rounded-full border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-300"
-											>
-												{provider}
-											</span>
-										))}
-									</div>
-									<p className="mt-5 max-w-2xl text-sm leading-relaxed text-neutral-400">
-										Connect supported subscription accounts or API keys, choose from featured providers, or search the broader native pi catalog. Aladdeen keeps provider-specific authentication and model metadata behind one consistent setup flow.
-									</p>
-								</div>
-							</div>
-						</div>
-					</div>
 				</section>
 
 				<section
@@ -624,30 +500,30 @@ function App() {
 						<div className="max-w-3xl">
 							<p className="text-sm text-neutral-400 dark:text-neutral-400">Privacy</p>
 							<h2 className="mt-5 text-2xl font-bold tracking-tight text-neutral-950 dark:text-neutral-100 md:text-[28px]">
-								Local-first by default. Provider-connected by choice.
+								Local by default. Offline by design.
 							</h2>
 							<p className="mt-5 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-								Aladdeen keeps the offline document workspace and the optional agent as separate trust boundaries. You decide whether a provider ever enters the picture.
+								Aladdeen has no account, no telemetry, and no cloud component. Release builds block outbound network requests outright, so your research cannot leave your Mac through the app.
 							</p>
 						</div>
 						<div className="mt-10 grid gap-px overflow-hidden rounded-lg border border-neutral-200 bg-neutral-200 dark:border-neutral-800 dark:bg-neutral-800 md:grid-cols-2">
 							<article className="bg-white p-6 dark:bg-neutral-950">
-								<p className="font-mono text-xs text-neutral-400 dark:text-neutral-500">01 · Core workspace</p>
-								<h3 className="mt-4 text-lg font-bold tracking-tight">Your documents remain local.</h3>
+								<p className="font-mono text-xs text-neutral-400 dark:text-neutral-500">01 · Your documents</p>
+								<h3 className="mt-4 text-lg font-bold tracking-tight">Read and written in place.</h3>
 								<p className="mt-3 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-									Files are read from their existing folders and saved back in place. Search, editing, previews, local assets, and export work without an account or internet connection. Only workspace metadata, such as recent files and indexes, is kept in local SQLite.
+									Files are read from their existing folders and saved back to the same path. Search, editing, previews, local assets, and export all work without an account or an internet connection. Only workspace metadata, such as recent files and indexes, is kept in local SQLite.
 								</p>
 							</article>
 							<article className="bg-white p-6 dark:bg-neutral-950">
-								<p className="font-mono text-xs text-neutral-400 dark:text-neutral-500">02 · Optional agent</p>
-								<h3 className="mt-4 text-lg font-bold tracking-tight">You choose what goes to whom.</h3>
+								<p className="font-mono text-xs text-neutral-400 dark:text-neutral-500">02 · Nothing leaves</p>
+								<h3 className="mt-4 text-lg font-bold tracking-tight">Enforced, not just promised.</h3>
 								<p className="mt-3 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
-									The agent starts only after you enable it. Prompts and the project content needed for a request go to the selected provider. Credentials are encrypted with macOS secure storage, and disabling the agent stops its provider activity.
+									Offline is enforced at the network layer: the app cancels outbound HTTP and WebSocket requests in release builds. Remote images are blocked in previews, and the renderer runs sandboxed under a strict content security policy.
 								</p>
 							</article>
 						</div>
 						<p className="mt-6 text-[15px] font-semibold leading-relaxed text-neutral-700 dark:text-neutral-300">
-							Your source files stay portable, inspectable, and under your control—with or without the agent.
+							Your source files stay portable, inspectable, and entirely under your control.
 						</p>
 					</div>
 				</section>
@@ -731,10 +607,10 @@ function App() {
 					<span className="block h-0.5 w-4 bg-violet-500" />
 					<div className="mt-6 max-w-2xl">
 						<h2 className="text-2xl font-bold tracking-tight text-neutral-950 dark:text-neutral-100 md:text-[28px]">
-							Open a file. Keep the file. Invite help when you want it.
+							Open a file. Keep the file. Leave with the file.
 						</h2>
 						<p className="mt-4 text-[15px] leading-relaxed text-neutral-600 dark:text-neutral-400">
-							Aladdeen keeps different source formats together without asking them to become anything else—and keeps AI optional instead of making it the price of entry.
+							Aladdeen keeps different source formats together without asking them to become anything else—and leaves every file exactly where you put it.
 						</p>
 						<div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-3">
 							<DownloadLink artifact={RELEASE_ARTIFACTS.arm64} primary>
@@ -747,7 +623,7 @@ function App() {
 
 			<footer className="border-t border-neutral-100 dark:border-neutral-800">
 				<div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-8 text-sm text-neutral-400 dark:text-neutral-400 sm:flex-row sm:items-center sm:justify-between">
-					<p>Aladdeen Research · Local files. Optional intelligence.</p>
+					<p>Aladdeen Research · Local files. Offline by default.</p>
 					<div className="flex items-center gap-5">
 						<a href="#privacy" className="transition-colors hover:text-neutral-900 dark:hover:text-neutral-100">Privacy</a>
 						<a href="#download" className="transition-colors hover:text-neutral-900 dark:hover:text-neutral-100">Download</a>
