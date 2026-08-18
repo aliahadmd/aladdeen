@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SettingsDialog } from '@renderer/components/SettingsDialog'
 import { useAppStore } from '@renderer/store/app-store'
+import packageMetadata from '../../package.json'
 import type { AladdeenApi, AppSettings } from '@shared/contracts'
 import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 
@@ -106,7 +107,9 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'About' }))
     expect(screen.getByRole('heading', { name: 'About' })).toBeVisible()
     expect(screen.getByRole('heading', { name: 'Aladdeen Research' })).toBeVisible()
-    expect(screen.getByText('Version 0.9.4')).toBeVisible()
+    // Read from the manifest rather than hardcoding: a release version bump should
+    // not break this test, and a stale literal here silently rots every release.
+    expect(screen.getByText(`Version ${packageMetadata.version}`)).toBeVisible()
     expect(screen.getByText(/original disk locations/i)).toBeVisible()
     expect(screen.queryByText('Quick open')).not.toBeInTheDocument()
 
