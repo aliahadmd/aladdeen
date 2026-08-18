@@ -2267,7 +2267,15 @@ body.is-resizing-sidebar * {
 }
 
 .markdown-body {
-  width: min(100% - 72px, var(--reading-column-width, 720px));
+  /* Wide blocks (tables, code, diagrams) may bleed symmetrically past the prose
+     measure up to the pane width, so a 4-column table is not forced into 720px
+     while paragraphs keep a comfortable line length. */
+  --reading-bleed: clamp(
+    0px,
+    (100cqw - var(--reading-gutter, 72px) * 2 - var(--reading-column-width, 720px)) / 2,
+    var(--reading-bleed-max, 220px)
+  );
+  width: min(100% - var(--reading-gutter, 72px), var(--reading-column-width, 720px));
   min-height: 100%;
   margin: 0 auto;
   padding: 64px 0 96px;
@@ -2275,16 +2283,27 @@ body.is-resizing-sidebar * {
   font-family: var(--reading-font, system-ui, -apple-system, sans-serif);
   font-size: var(--reading-font-size, 16px);
   line-height: var(--reading-line-height, 1.72);
-  overflow-wrap: anywhere;
+  /* `anywhere` also feeds intrinsic min-content sizing, which lets table columns
+     collapse to a couple of characters and breaks words mid-token. `break-word`
+     only breaks a word that genuinely cannot fit on its own line. */
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.markdown-body > .markdown-table-scroll,
+.markdown-body > .markdown-code-block,
+.markdown-body > .mermaid-diagram,
+.markdown-body > pre {
+  margin-inline: calc(var(--reading-bleed) * -1);
 }
 
 .is-editing .markdown-body {
-  width: min(100% - 50px, var(--reading-column-width, 720px));
+  --reading-gutter: 50px;
   padding-top: 60px;
 }
 
 .is-editing .preview-pane:has(.heading-outline) .markdown-body {
-  width: min(100% - 72px, var(--reading-column-width, 720px));
+  --reading-gutter: 72px;
 }
 
 .markdown-body > :first-child {
@@ -2436,12 +2455,16 @@ body.is-resizing-sidebar * {
 }
 
 .markdown-body code {
-  padding: .14em .34em;
-  border: 1px solid color-mix(in oklab, var(--reading-border, var(--border)) 80%, transparent);
+  padding: .13em .35em;
   border-radius: 5px;
-  background: var(--reading-code-bg, var(--surface-muted));
-  color: color-mix(in oklab, var(--accent) 68%, var(--reading-text, var(--text)));
-  font: .88em "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  background: color-mix(in oklab, var(--reading-code-bg, var(--surface-muted)) 88%, var(--accent) 12%);
+  color: color-mix(in oklab, var(--accent) 62%, var(--reading-text, var(--text)));
+  font: .875em/1.45 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* An identifier such as `dsh-context-injector` reads as one token; only break it
+     when it genuinely cannot fit, and never mid-character inside a table cell. */
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
 }
 
 .markdown-body pre {
@@ -2458,8 +2481,25 @@ body.is-resizing-sidebar * {
   border: 0;
   background: transparent;
   color: #e6e6ed;
-  font-size: 12px;
-  line-height: 1.6;
+  /* Scale with the reader's font size instead of pinning to 12px, but keep ASCII
+     diagrams and wide code from shrinking below a legible floor. */
+  font-size: max(12px, .8em);
+  line-height: 1.62;
+  white-space: pre;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
+/* highlight.js's Markdown grammar has no CommonMark left-flanking rule, so an
+   intraword underscore (op_id, BUILD_PLAN) opens an emphasis run that swallows
+   everything up to the next underscore — often hundreds of characters across many
+   lines. The theme then italicises that run and flattens its colour to #c9d1d9,
+   erasing the real highlighting inside it. Source text in a fenced block is never
+   emphasised, so drop the decoration and keep the token colours underneath. */
+.markdown-body pre :is(.hljs-emphasis, .hljs-strong) {
+  color: inherit;
+  font-style: normal;
+  font-weight: inherit;
 }
 
 .markdown-code-block {
@@ -2502,6 +2542,110 @@ body.is-resizing-sidebar * {
   box-shadow: none;
 }
 
+/* Mindmap view for fenced Markdown blocks. */
+.markdown-mindmap .mindmap-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.markdown-mindmap .mindmap-tabs {
+  display: inline-flex;
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / .06);
+}
+
+.markdown-mindmap .mindmap-tabs button[data-active='true'] {
+  background: rgb(255 255 255 / .14);
+  color: white;
+}
+
+.markdown-mindmap .mindmap-zoom {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 6px;
+  padding: 2px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / .06);
+}
+
+.markdown-mindmap .mindmap-zoom output {
+  min-width: 38px;
+  color: #b8b8c5;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.markdown-mindmap .code-block-toolbar button[disabled] {
+  opacity: .4;
+}
+
+.markdown-mindmap .code-block-toolbar button[data-active='true'] {
+  color: white;
+}
+
+.markdown-mindmap .mindmap-canvas {
+  overflow: auto;
+  padding: 4px;
+  /* Tall outlines get a scroll region rather than an unbounded figure. */
+  max-height: min(70vh, 720px);
+}
+
+.markdown-mindmap .mindmap-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.markdown-mindmap .mindmap-svg {
+  display: block;
+}
+
+.markdown-mindmap .mindmap-label {
+  fill: #e6e6ed;
+  /* Kept in sync with LABEL_FONT in MarkdownMindmap.tsx — layout wraps against it. */
+  font: 13px/1.35 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.markdown-mindmap .mindmap-link {
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: .85;
+}
+
+.markdown-mindmap .mindmap-underline {
+  stroke-width: 1.4;
+  opacity: .55;
+}
+
+.markdown-mindmap .mindmap-dot {
+  stroke: #17171f;
+  stroke-width: 1.5;
+}
+
+/* One hue per top-level branch, so a subtree reads as a unit. */
+.markdown-mindmap .mindmap-branch-0 { --mindmap-branch: #7aa2f7; }
+.markdown-mindmap .mindmap-branch-1 { --mindmap-branch: #9ece6a; }
+.markdown-mindmap .mindmap-branch-2 { --mindmap-branch: #e0af68; }
+.markdown-mindmap .mindmap-branch-3 { --mindmap-branch: #bb9af7; }
+.markdown-mindmap .mindmap-branch-4 { --mindmap-branch: #f7768e; }
+.markdown-mindmap .mindmap-branch-5 { --mindmap-branch: #2ac3de; }
+
+.markdown-mindmap :is(.mindmap-link, .mindmap-underline) {
+  stroke: var(--mindmap-branch, #7aa2f7);
+}
+
+.markdown-mindmap .mindmap-dot {
+  fill: var(--mindmap-branch, #7aa2f7);
+}
+
+.markdown-mindmap .mindmap-canvas:fullscreen,
+.markdown-mindmap:fullscreen {
+  max-height: none;
+  background: #17171f;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .markdown-code-block .code-block-toolbar button:hover {
     background: rgb(255 255 255 / .08);
@@ -2509,24 +2653,50 @@ body.is-resizing-sidebar * {
   }
 }
 
-.markdown-body table {
-  display: block;
-  width: 100%;
+/* The scroll container owns the overflow and the outer frame; the table itself stays
+   `display: table` so column sizing works and it can exceed the container and scroll. */
+.markdown-table-scroll {
   overflow-x: auto;
+  margin: 1.15em 0;
+  border: 1px solid var(--reading-border, var(--border));
+  border-radius: 10px;
+  overscroll-behavior-x: contain;
+}
+
+.markdown-table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.markdown-body table {
+  width: 100%;
+  margin: 0;
   border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
 }
 
 .markdown-body th,
 .markdown-body td {
-  padding: 7px 10px;
-  border: 1px solid var(--reading-border, var(--border));
+  padding: 9px 12px;
+  border-top: 1px solid var(--reading-border, var(--border));
+  border-left: 1px solid var(--reading-border, var(--border));
   text-align: left;
   vertical-align: top;
+}
+
+/* The container already draws the outer frame, so drop the duplicated edge borders. */
+.markdown-body :is(thead, tbody):first-child tr:first-child :is(th, td) {
+  border-top: 0;
+}
+
+.markdown-body :is(th, td):first-child {
+  border-left: 0;
 }
 
 .markdown-body th {
   background: var(--reading-code-bg, var(--surface-muted));
   font-weight: 650;
+  line-height: 1.4;
 }
 
 .markdown-body tr:nth-child(even) td {
@@ -2538,6 +2708,12 @@ body.is-resizing-sidebar * {
   margin: 2em 0;
   border: 0;
   background: var(--reading-border, var(--border));
+}
+
+/* `---` directly before a section heading otherwise stacks the rule's 2em against
+   the heading's own top margin and reads as a hole in the page. */
+.markdown-body hr + :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: .9em;
 }
 
 .markdown-body img {

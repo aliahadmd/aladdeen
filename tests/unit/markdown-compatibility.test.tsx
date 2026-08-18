@@ -155,6 +155,43 @@ Footnote.[^one]
     expect(container.querySelector('a[href="./notes.txt"]')).toBeInTheDocument()
   })
 
+  it('shows a Markdown fence as a mindmap, and its Code tab as unhighlighted source', () => {
+    // highlight.js has no CommonMark flanking rule: the `_` in op_id used to open an
+    // emphasis run that reached the `_` in BUILD_PLAN, italicising ~870 characters and
+    // discarding the heading and list tokens in between.
+    const { container } = renderMarkdown(
+      [
+        '```markdown',
+        '# Project',
+        '',
+        '## Prime directives',
+        '1. Apply by op_id, or it does not sync.',
+        '2. Never mix vector spaces.',
+        '',
+        '## Conventions',
+        '- Commit after every green criterion in BUILD_PLAN.md.',
+        '```'
+      ].join('\n')
+    )
+
+    // Preview is the default lens for an outline.
+    const figure = container.querySelector('.markdown-mindmap')
+    expect(figure).not.toBeNull()
+    expect(figure?.querySelector('.mindmap-svg')).not.toBeNull()
+    expect(within(figure as HTMLElement).getByText('Prime directives')).toBeInTheDocument()
+
+    fireEvent.click(within(figure as HTMLElement).getByRole('button', { name: /code/i }))
+
+    const code = figure?.querySelector('pre code')
+    expect(code).not.toBeNull()
+    expect(code?.querySelector('.hljs-emphasis')).toBeNull()
+    expect(code?.querySelector('.hljs-strong')).toBeNull()
+    // Plain text, so no token spans are emitted at all and the source stays intact.
+    expect(code?.querySelector('span')).toBeNull()
+    expect(code?.textContent).toContain('op_id')
+    expect(code?.textContent).toContain('BUILD_PLAN.md')
+  })
+
   it('adds automatic directionality while respecting explicit RTL', () => {
     const { container } = renderMarkdown('English paragraph.\n\n<bdo dir="rtl">العربية</bdo>')
     expect(screen.getByText('English paragraph.')).toHaveAttribute('dir', 'auto')

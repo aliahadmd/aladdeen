@@ -151,6 +151,17 @@ export function MarkdownContent({
             {children}
           </MarkdownCodeBlock>
         )
+      },
+      // A table that cannot overflow gets its columns crushed to a few characters
+      // instead of scrolling, so give every table its own scroll container.
+      // tabIndex makes the overflow keyboard-scrollable; no ARIA role is used because
+      // an unnamed region would add a nameless landmark around every table.
+      table({ children, node: _node, ...props }) {
+        return (
+          <div className="markdown-table-scroll" tabIndex={0}>
+            <table {...props}>{children}</table>
+          </div>
+        )
       }
     }),
     [documentId, interactive, onOpenExternal, onOpenRelativeDocument, theme]

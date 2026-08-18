@@ -2,6 +2,7 @@ import { Children, isValidElement, useEffect, useRef, useState, type ReactNode }
 import { Check, Copy } from 'lucide-react'
 import type { MarkdownSourceDataAttributes } from '@shared/markdown'
 import { MermaidDiagram } from './MermaidDiagram'
+import { MarkdownMindmap } from './MarkdownMindmap'
 
 interface MarkdownCodeBlockProps {
   children?: ReactNode
@@ -64,6 +65,19 @@ export function MarkdownCodeBlock({
 
   if (language === 'mermaid') {
     return <MermaidDiagram source={source} theme={theme} sourceAttributes={sourceAttributes} />
+  }
+  // A fenced Markdown block is an outline, so offer the mindmap as the default lens
+  // and keep the source one click away. MarkdownMindmap falls back to a plain code
+  // block when the content has no hierarchy to draw.
+  if (language === 'markdown' || language === 'md' || language === 'mkd') {
+    return (
+      <MarkdownMindmap
+        source={source}
+        code={children}
+        language="Markdown"
+        sourceAttributes={sourceAttributes}
+      />
+    )
   }
   if (language === 'mermaid-disabled') {
     return (
