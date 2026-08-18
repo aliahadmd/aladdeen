@@ -24,7 +24,7 @@ describe("Aladdeen landing page", () => {
 			}),
 		).toBeInTheDocument();
 		expect(
-			screen.getByText(/agent is off by default, scoped to your active project/i),
+			screen.getByText(/Everything stays local and works offline/i),
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("img", {
@@ -38,28 +38,12 @@ describe("Aladdeen landing page", () => {
 		).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
-				name: "Local-first by default. Provider-connected by choice.",
+				name: "Local by default. Offline by design.",
 			}),
 		).toBeInTheDocument();
 		expect(document.querySelector("#product")).toBeInTheDocument();
-		expect(document.querySelector("#agent")).toBeInTheDocument();
 		expect(document.querySelector("#privacy")).toBeInTheDocument();
 		expect(document.querySelector("#faq")).toBeInTheDocument();
-		expect(
-			screen.getByRole("heading", {
-				name: "Work with your project—not a detached chatbot.",
-			}),
-		).toBeInTheDocument();
-		expect(
-			screen.getByRole("img", {
-				name: /coding agent beside a project/i,
-			}),
-		).toHaveAttribute("src", "/screenshots/agent-project-dark.png");
-		expect(
-			screen.getByRole("heading", {
-				name: "Your account or API key.",
-			}),
-		).toBeInTheDocument();
 		expect(
 			screen.getByRole("heading", {
 				name: "Six formats, each with the right workspace.",
@@ -71,10 +55,37 @@ describe("Aladdeen landing page", () => {
 			}),
 		).toBeInTheDocument();
 		expect(document.querySelectorAll("#product img")).toHaveLength(0);
-		expect(screen.getByText(/agent sends your prompts and the project content needed/i)).toBeInTheDocument();
 		expect(
 			screen.queryByText(/Aladdeen must not be used in ways that harm people/),
 		).not.toBeInTheDocument();
+	});
+
+	// The desktop app ships no coding agent, so the site must not advertise one.
+	// This guards against the stale marketing copy creeping back in.
+	it("advertises no AI agent, provider, or credential functionality", () => {
+		render(<App />);
+
+		expect(document.querySelector("#agent")).toBeNull();
+		expect(document.querySelector('a[href="#agent"]')).toBeNull();
+		expect(
+			document.querySelector('img[src="/screenshots/agent-project-dark.png"]'),
+		).toBeNull();
+
+		for (const term of [
+			/coding agent/i,
+			/optional agent/i,
+			/\bAI\b/,
+			/chatbot/i,
+			/\bprompts?\b/i,
+			/API key/i,
+			/OpenRouter/i,
+			/DeepSeek/i,
+			/ChatGPT/i,
+			/Claude/i,
+			/provider/i,
+		]) {
+			expect(document.body.textContent).not.toMatch(term);
+		}
 	});
 
 	it("links only the macOS arm64 download to its versioned Worker route", () => {
