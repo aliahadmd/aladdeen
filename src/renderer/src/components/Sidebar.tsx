@@ -104,6 +104,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
   const addProject = useAppStore((state) => state.addProject)
   const removeProject = useAppStore((state) => state.removeProject)
   const openDocument = useAppStore((state) => state.openDocument)
+  const openFile = useAppStore((state) => state.openFile)
   const createFile = useAppStore((state) => state.createFile)
   const createFolder = useAppStore((state) => state.createFolder)
   const applyTrackedUpdates = useAppStore((state) => state.applyTrackedUpdates)
@@ -375,7 +376,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
                 {!project.archived && <>
                   <DropdownMenu.Sub>
                     <DropdownMenu.SubTrigger className={dropdownItemClasses()}>
-                      <FilePlus2 size={14} /> New document <ChevronRight className="ml-auto" size={13} />
+                      <FilePlus2 size={14} /> New file <ChevronRight className="ml-auto" size={13} />
                     </DropdownMenu.SubTrigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.SubContent className={dropdownContentClasses} sideOffset={4}>
@@ -522,10 +523,13 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
       )}
 
       <div className="flex shrink-0 flex-col items-stretch gap-px px-[9px] pt-[3px] pb-[10px]">
+        <button className={sidebarQuickActionClasses} onClick={() => void addProject()}><FolderOpen size={15} /> Add folder</button>
+        <button className={sidebarQuickActionClasses} onClick={() => void openFile()}><FileText size={15} /> Open file</button>
+        <div aria-hidden="true" className="mx-[3px] my-[5px] border-t border-border" />
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button className={sidebarQuickActionClasses}>
-              <FilePlus2 size={15} /> New document <ChevronDown className="ml-auto" size={13} />
+              <FilePlus2 size={15} /> New file <ChevronDown className="ml-auto" size={13} />
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -828,7 +832,7 @@ function ProjectTreeItem({
               {node.kind === 'directory' && <>
                 <DropdownMenu.Sub>
                   <DropdownMenu.SubTrigger className={dropdownItemClasses()}>
-                    <FilePlus2 size={14} /> New document <ChevronRight className="ml-auto" size={13} />
+                    <FilePlus2 size={14} /> New file <ChevronRight className="ml-auto" size={13} />
                   </DropdownMenu.SubTrigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.SubContent className={dropdownContentClasses} sideOffset={4}>
@@ -927,7 +931,7 @@ function SidebarForm({ kind, title, initialValue = '', locationLabel, submitLabe
     environment: 'New environment',
     'rename-environment': 'Rename environment',
     project: 'New folder project',
-    file: 'New document',
+    file: 'New file',
     folder: 'New subfolder'
   }
   const submit = async (): Promise<void> => {

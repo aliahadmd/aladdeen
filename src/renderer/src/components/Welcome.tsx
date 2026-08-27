@@ -30,7 +30,7 @@ export function Welcome(): React.JSX.Element {
         <div className="flex flex-wrap justify-center gap-2">
           <button className={buttonClasses({ size: 'large' })} onClick={() => void addProject()}><FolderOpen size={16} /> Add folder</button>
           <button className={buttonClasses({ variant: 'secondary', size: 'large' })} onClick={() => void openFile()}><FileText size={16} /> Open file</button>
-          <button className={buttonClasses({ variant: 'ghost', size: 'large' })} onClick={() => void createFile()}><FilePlus2 size={16} /> New document</button>
+          <button className={buttonClasses({ variant: 'ghost', size: 'large' })} onClick={() => void createFile()}><FilePlus2 size={16} /> New file</button>
         </div>
         <div className={cn(privacyNoteClasses, 'mt-[27px]')}>
           <ShieldCheck size={14} />

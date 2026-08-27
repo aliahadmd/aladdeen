@@ -1052,7 +1052,7 @@ test('keeps the environment sidebar usable at compact window sizes', async () =>
       await window.getByRole('button', { name: 'Show sidebar' }).click()
       const sheet = window.getByRole('dialog', { name: 'Environment files' })
       await expect(sheet.locator('.sheet-panel')).toBeVisible()
-      await expect(sheet.getByRole('button', { name: 'New document' })).toBeVisible()
+      await expect(sheet.getByRole('button', { name: 'New file' })).toBeVisible()
       await expect(sheet.getByRole('heading', { name: 'Projects' })).toBeVisible()
       const box = await sheet.locator('.sheet-panel').boundingBox()
       expect(box?.x).toBeGreaterThanOrEqual(0)
