@@ -1,6 +1,6 @@
 {
 	"name": "aladdeen-web",
-	"version": "0.9.5",
+	"version": "0.9.6",
 	"description": "The official website and R2-backed macOS arm64 download for the Aladdeen Research workspace.",
 	"private": true,
 	"packageManager": "pnpm@11.5.0",
