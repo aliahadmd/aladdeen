@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import * as Dialog from '@radix-ui/react-dialog'
-import { AtSign, BookOpen, Check, Command, ExternalLink, Github, Info, Mail, Minus, Palette, Plus, RotateCcw, X } from 'lucide-react'
+import { AtSign, BookOpen, Check, Command, ExternalLink, Github, Info, Mail, Minus, Palette, Plus, RotateCcw, Sparkles, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import packageMetadata from '../../../../package.json'
 import type { AppSettings } from '@shared/contracts'
@@ -20,6 +20,7 @@ import {
 import { accentOptions, themeOptions, useAppStore } from '@renderer/store/app-store'
 import { BrandMark } from './BrandMark'
 import { ThemePresetPicker } from './ThemePresetPicker'
+import { AiSettings } from './ai/AiSettings'
 
 interface SettingsDialogProps {
   open: boolean
@@ -27,7 +28,7 @@ interface SettingsDialogProps {
   onShowTutorial?(): void
 }
 
-type SettingsCategory = 'appearance' | 'reading' | 'shortcuts' | 'about'
+type SettingsCategory = 'appearance' | 'ai' | 'reading' | 'shortcuts' | 'about'
 
 interface SettingsCategoryDefinition {
   id: SettingsCategory
@@ -48,6 +49,12 @@ const SETTINGS_CATEGORIES: SettingsCategoryDefinition[] = [
     label: 'Appearance',
     description: 'Choose how Aladdeen looks on this device.',
     icon: Palette
+  },
+  {
+    id: 'ai',
+    label: 'AI',
+    description: 'Connect an AI provider for the research assistant.',
+    icon: Sparkles
   },
   {
     id: 'reading',
@@ -266,6 +273,12 @@ export function SettingsDialog({ open, onOpenChange, onShowTutorial }: SettingsD
             >
               {activeCategory === 'appearance' && (
                 <AppearanceSettings
+                  settings={settings}
+                  onUpdate={(next) => void updateSettings(next)}
+                />
+              )}
+              {activeCategory === 'ai' && (
+                <AiSettings
                   settings={settings}
                   onUpdate={(next) => void updateSettings(next)}
                 />

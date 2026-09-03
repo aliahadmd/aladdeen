@@ -28,6 +28,7 @@ Aladdeen is proprietary, closed-source software by Ali Ahad. Access is free duri
 - Light, dark, system, and accent themes
 - Native create/add, rename, reveal, Trash, missing-file relink, open-file association, and per-environment session restore
 - Sandboxed renderer with a narrow, validated IPC bridge
+- Opt-in AI research assistant docked on the right: Anthropic or any OpenAI-compatible endpoint, @-mention file context, reasoning levels, and a Plan / Ask before changes / Full access tool policy
 
 ## Development
 
@@ -72,6 +73,25 @@ publishing are intentionally not configured.
 - `Cmd+E`: toggle Markdown editing
 
 Environment, project-index, and recent-file metadata is stored in SQLite; document content is never stored there. Aladdeen does not provide cloud sync, remote resource fetching, or plugins. Your files remain portable and under your control.
+
+## AI assistant
+
+The AI assistant is opt-in and ships disabled. Nothing leaves your machine until
+you open Settings → AI, choose a provider, and store an API key.
+
+- **Providers**: Anthropic (Claude) or any OpenAI-compatible `/v1/chat/completions`
+  endpoint, including local runtimes such as Ollama or LM Studio (enable
+  "Allow local endpoints" for http/localhost addresses).
+- **Custom harness**: requests are built and streamed by Aladdeen's own
+  main-process harness — no AI SDKs, no telemetry. Only your prompt, the
+  contents of files you explicitly @-mention or the assistant reads with its
+  tools, and minimal workspace context are sent to the provider you configured.
+- **Key storage**: API keys are encrypted with the OS keychain via Electron
+  safeStorage and never reach the renderer or your documents.
+- **Tool policy**: Plan (read-only), Ask before changes (every file write needs
+  your approval), or Full access (writes apply directly, still blocked by
+  external-edit conflict detection). File writes reuse the app's atomic save
+  path, so a stale read can never silently overwrite an external change.
 
 ## DOCX editing
 

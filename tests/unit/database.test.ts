@@ -21,7 +21,7 @@ describe('application metadata database', () => {
     const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(13)
+    ).toBe(14)
     migrated.close()
 
     expect(database.getSettings()).toEqual({
@@ -31,6 +31,12 @@ describe('application metadata database', () => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
+      aiPanelWidth: 380,
+      aiPanelCollapsed: true,
+      aiProvider: 'anthropic',
+      aiModelId: 'claude-sonnet-4-5',
+      aiReasoning: 'medium',
+      aiMode: 'ask',
       ...DEFAULT_READING_SETTINGS
     })
     database.setSettings({
@@ -40,6 +46,12 @@ describe('application metadata database', () => {
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
+      aiPanelWidth: 460,
+      aiPanelCollapsed: false,
+      aiProvider: 'openai-compatible',
+      aiModelId: 'gpt-5-mini',
+      aiReasoning: 'high',
+      aiMode: 'full',
       readingFont: 'iowan',
       readingFontSize: 19,
       readingLineHeight: 'relaxed',
@@ -86,6 +98,12 @@ describe('application metadata database', () => {
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
+      aiPanelWidth: 460,
+      aiPanelCollapsed: false,
+      aiProvider: 'openai-compatible',
+      aiModelId: 'gpt-5-mini',
+      aiReasoning: 'high',
+      aiMode: 'full',
       readingFont: 'iowan',
       readingFontSize: 19,
       readingLineHeight: 'relaxed',
@@ -320,7 +338,7 @@ describe('application metadata database', () => {
     const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
     expect(
       (verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(13)
+    ).toBe(14)
     for (const table of ['environment_note_locations', 'research_notes', 'research_note_links']) {
       expect(verified.prepare(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"

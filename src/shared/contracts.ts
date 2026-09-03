@@ -1,4 +1,35 @@
 import type { ReadingSettings } from './reading'
+import type {
+  AiCredentialStatus,
+  AiEvent,
+  AiMentionedFile,
+  AiMode,
+  AiModelInfo,
+  AiProvider,
+  AiProviderProfileInfo,
+  AiReasoning,
+  AiSessionDetail,
+  AiSessionSummary
+} from './ai'
+
+export type {
+  AiChatMessage,
+  AiContentBlock,
+  AiCredentialStatus,
+  AiEvent,
+  AiMentionedFile,
+  AiMode,
+  AiModelInfo,
+  AiProvider,
+  AiProviderProfileInfo,
+  AiReasoning,
+  AiRunStatus,
+  AiSessionDetail,
+  AiSessionSummary,
+  AiToolName,
+  AiToolUseBlock,
+  AiUsageInfo
+} from './ai'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Accent = 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose'
@@ -30,6 +61,9 @@ export type ErrorCode =
   | 'PERMISSION_DENIED'
   | 'EXPORT_FAILED'
   | 'SEARCH_FAILED'
+  | 'VALIDATION_FAILED'
+  | 'RATE_LIMITED'
+  | 'BUSY'
   | 'INTERNAL'
 
 export interface AppError {
@@ -415,6 +449,12 @@ export interface AppSettings extends ReadingSettings {
   sidebarWidth: number
   sidebarCollapsed: boolean
   completedOnboardingVersion: number
+  aiPanelWidth: number
+  aiPanelCollapsed: boolean
+  aiProvider: AiProvider
+  aiModelId: string
+  aiReasoning: AiReasoning
+  aiMode: AiMode
 }
 
 export interface BootstrapData {
@@ -530,6 +570,7 @@ export interface AladdeenApi {
     update(request: UpdateProjectRequest): Promise<Result<EnvironmentSnapshot>>
     listChildren(projectId: string, parentPath: string, cursor?: number): Promise<Result<ProjectTreePage>>
     search(query: string, limit?: number): Promise<Result<IndexedFileSummary[]>>
+    listFiles(projectId: string): Promise<Result<IndexedFileSummary[]>>
   }
   search: {
     start(request: GlobalSearchRequest): Promise<Result<{ sessionId: string }>>
@@ -572,6 +613,23 @@ export interface AladdeenApi {
     get(): Promise<Result<AppSettings>>
     update(settings: AppSettings): Promise<Result<AppSettings>>
   }
+  ai: {
+    credentialStatus(): Promise<Result<AiCredentialStatus>>
+    setApiKey(provider: AiProvider, apiKey: string): Promise<Result<void>>
+    clearApiKey(provider: AiProvider): Promise<Result<void>>
+    getProfile(provider: AiProvider): Promise<Result<AiProviderProfileInfo>>
+    setProfile(provider: AiProvider, baseUrl: string, allowLocal: boolean, manualModelId: string): Promise<Result<AiProviderProfileInfo>>
+    listModels(provider: AiProvider): Promise<Result<AiModelInfo[]>>
+    listSessions(): Promise<Result<AiSessionSummary[]>>
+    getSession(sessionId: string): Promise<Result<AiSessionDetail>>
+    createSession(projectId: string | null): Promise<Result<AiSessionDetail>>
+    deleteSession(sessionId: string): Promise<Result<void>>
+    renameSession(sessionId: string, title: string): Promise<Result<void>>
+    send(sessionId: string, content: string, mentionedFiles: AiMentionedFile[]): Promise<Result<{ messageId: string }>>
+    approve(requestId: string, approved: boolean): Promise<Result<void>>
+    cancel(sessionId: string): Promise<Result<void>>
+    onEvent(callback: (event: AiEvent) => void): () => void
+  }
   export: {
     document(request: ExportRequest): Promise<Result<SaveCopyResult>>
   }
@@ -599,6 +657,7 @@ export const IPC = {
   updateProject: 'projects:update',
   listProjectChildren: 'projects:list-children',
   searchProjectFiles: 'projects:search-files',
+  listProjectFiles: 'projects:list-files',
   startGlobalSearch: 'search:start',
   cancelGlobalSearch: 'search:cancel',
   globalSearchEvent: 'search:event',
@@ -630,6 +689,21 @@ export const IPC = {
   locateTrackedFile: 'files:locate',
   getSettings: 'settings:get',
   updateSettings: 'settings:update',
+  aiCredentialStatus: 'ai:credential-status',
+  aiSetApiKey: 'ai:set-api-key',
+  aiClearApiKey: 'ai:clear-api-key',
+  aiGetProfile: 'ai:get-profile',
+  aiSetProfile: 'ai:set-profile',
+  aiListModels: 'ai:list-models',
+  aiListSessions: 'ai:list-sessions',
+  aiGetSession: 'ai:get-session',
+  aiCreateSession: 'ai:create-session',
+  aiDeleteSession: 'ai:delete-session',
+  aiRenameSession: 'ai:rename-session',
+  aiSend: 'ai:send',
+  aiApprove: 'ai:approve',
+  aiCancel: 'ai:cancel',
+  aiEvent: 'ai:event',
   exportDocument: 'export:document',
   openExternal: 'system:open-external'
 } as const

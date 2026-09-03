@@ -5,6 +5,13 @@ import {
 } from './limits'
 import { THEME_PRESETS } from './contracts'
 import {
+  AI_MODES,
+  AI_PANEL_MAX_WIDTH,
+  AI_PANEL_MIN_WIDTH,
+  AI_PROVIDERS,
+  AI_REASONING_LEVELS
+} from './ai'
+import {
   READING_COLUMN_WIDTHS,
   READING_FONTS,
   READING_FONT_SIZE_MAX,
@@ -185,11 +192,69 @@ export const settingsSchema = z.object({
   sidebarWidth: z.number().int().min(248).max(420),
   sidebarCollapsed: z.boolean(),
   completedOnboardingVersion: z.number().int().min(0).max(1_000),
+  aiPanelWidth: z.number().int().min(AI_PANEL_MIN_WIDTH).max(AI_PANEL_MAX_WIDTH),
+  aiPanelCollapsed: z.boolean(),
+  aiProvider: z.enum(AI_PROVIDERS),
+  aiModelId: z.string().trim().max(200),
+  aiReasoning: z.enum(AI_REASONING_LEVELS),
+  aiMode: z.enum(AI_MODES),
   readingFont: z.enum(READING_FONTS),
   readingFontSize: z.number().int().min(READING_FONT_SIZE_MIN).max(READING_FONT_SIZE_MAX),
   readingLineHeight: z.enum(READING_LINE_HEIGHTS),
   readingColumnWidth: z.enum(READING_COLUMN_WIDTHS),
   readingSurface: z.enum(READING_SURFACES)
+})
+
+export const aiProviderSchema = z.enum(AI_PROVIDERS)
+
+export const aiBaseUrlSchema = z
+  .string()
+  .trim()
+  .max(2_000)
+  .refine((value) => {
+    if (value === '') return true
+    try {
+      const url = new URL(value)
+      return (
+        !url.username && !url.password && !url.search && !url.hash && !/\/+$/u.test(url.pathname)
+      )
+    } catch {
+      return false
+    }
+  }, 'Enter a valid base URL without credentials, query parameters, or fragments.')
+
+export const aiSetProfileSchema = z.object({
+  provider: aiProviderSchema,
+  baseUrl: aiBaseUrlSchema,
+  allowLocal: z.boolean(),
+  manualModelId: z.string().trim().max(200)
+})
+
+export const aiSetApiKeySchema = z.object({
+  provider: aiProviderSchema,
+  apiKey: z.string().min(1).max(4_096)
+})
+
+export const aiMentionedFileSchema = z.object({
+  projectId: idSchema,
+  relativePath: relativePathSchema,
+  fileId: idSchema.optional()
+})
+
+export const aiSendSchema = z.object({
+  sessionId: idSchema,
+  content: z.string().min(1).max(200_000),
+  mentionedFiles: z.array(aiMentionedFileSchema).max(24)
+})
+
+export const aiApproveSchema = z.object({
+  requestId: idSchema,
+  approved: z.boolean()
+})
+
+export const aiRenameSessionSchema = z.object({
+  sessionId: idSchema,
+  title: z.string().trim().min(1).max(120)
 })
 
 export const exportRequestSchema = z.object({

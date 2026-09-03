@@ -29,6 +29,7 @@ import {
   Search,
   Settings2,
   SlidersHorizontal,
+  Sparkles,
   Sun,
   SwatchBook,
   Trash2,
@@ -647,14 +648,25 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
             </DropdownMenu.Content>
           </DropdownMenu.Portal>
         </DropdownMenu.Root>
-        <button
-          className={cn(sidebarFooterButtonClasses, 'ml-auto')}
-          data-aladdeen-settings-trigger
-          onClick={() => setSettingsOpen(true)}
-        >
-          <Settings2 size={15} />
-          <span>Settings</span>
-        </button>
+        <div className="ml-auto flex items-center gap-[5px]">
+          <button
+            className={sidebarFooterButtonClasses}
+            onClick={() => void updateSettings({ aiPanelCollapsed: !settings.aiPanelCollapsed })}
+            aria-pressed={!settings.aiPanelCollapsed}
+            title="AI assistant"
+          >
+            <Sparkles size={15} />
+            <span>AI</span>
+          </button>
+          <button
+            className={sidebarFooterButtonClasses}
+            data-aladdeen-settings-trigger
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings2 size={15} />
+            <span>Settings</span>
+          </button>
+        </div>
       </footer>
 
       <SidebarForm

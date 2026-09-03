@@ -127,6 +127,12 @@ describe('Eigenpal DOCX adapter', () => {
         sidebarWidth: 320,
         sidebarCollapsed: false,
         completedOnboardingVersion: 1,
+        aiPanelWidth: 380,
+        aiPanelCollapsed: true,
+        aiProvider: 'anthropic',
+        aiModelId: 'claude-sonnet-4-5',
+        aiReasoning: 'medium',
+        aiMode: 'ask',
         ...DEFAULT_READING_SETTINGS
       }
     })
