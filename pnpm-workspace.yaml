@@ -21,7 +21,7 @@ overrides:
   # a blanket override there would force an incompatible version on the other
   # consumer. Re-run the assert-* release gates after touching any of these.
   brace-expansion: 5.0.9 # GHSA-rgw5-rvv9-x895 (DoS); tree holds only 5.x
-  fast-uri: 3.1.5 # GHSA-7p8r-x3mc-p8w7 (host confusion); ajv wants ^3.0.1
+  fast-uri: 3.1.6 # GHSA-jqff-g426-hqxp, GHSA-f65p-4m7j-42xc, GHSA-fph4-wmhf-6fwf, GHSA-5jgf-p345-68v8 (host confusion/SSRF batch); ajv wants ^3.0.1
   js-yaml: 4.3.1 # GHSA-5p4m-2wfm-xmqj (quadratic CPU); builder-util wants ^4.1.0
   tar: 7.5.21
   # undici resolves at both 6.27.0 and 7.28.0; only the 7.x line is affected by

@@ -4,6 +4,7 @@ overrides:
   # the lowest patched version in the major line its consumer already accepts, and
   # each package resolves at a single major here, so plain overrides are safe.
   brace-expansion: 5.0.9 # GHSA-rgw5-rvv9-x895 (DoS)
+  browserslist: 4.28.7 # GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g (memory growth / prototype write)
   js-yaml: 4.3.1 # GHSA-5p4m-2wfm-xmqj (quadratic CPU)
   nanoid: 3.3.18 # GHSA-2v37-7h3g-55p8 (infinite loop)
   undici: 7.29.0 # GHSA-4cwx-7wf7-3272 (cross-user disclosure)
