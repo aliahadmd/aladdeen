@@ -215,9 +215,8 @@ export const aiBaseUrlSchema = z
     if (value === '') return true
     try {
       const url = new URL(value)
-      return (
-        !url.username && !url.password && !url.search && !url.hash && !/\/+$/u.test(url.pathname)
-      )
+      // Trailing slashes are tolerated; normalization strips them.
+      return !url.username && !url.password && !url.search && !url.hash
     } catch {
       return false
     }

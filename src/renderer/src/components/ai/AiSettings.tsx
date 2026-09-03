@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { Check, Eye, EyeOff, Loader2, RefreshCw, X } from 'lucide-react'
 import type { AiCredentialStatus, AiModelInfo, AiProvider, AiProviderProfileInfo } from '@shared/contracts'
 import { AI_MODES, AI_MODE_DESCRIPTIONS, AI_REASONING_LEVELS } from '@shared/ai'
@@ -184,7 +185,7 @@ export function AiSettings({
                   ? 'border-transparent bg-accent-soft text-accent'
                   : 'border-transparent bg-accent text-accent-contrast hover:brightness-110'
               )}
-              onClick={() => void saveEndpoint().catch((error: Error) => console.error(error.message))}
+              onClick={() => void saveEndpoint().catch((error: Error) => toast.error(error.message))}
             >
               {endpointSaved ? 'Saved ✓' : 'Save endpoint'}
             </button>
@@ -225,7 +226,7 @@ export function AiSettings({
             <button
               type="button"
               className="grid h-9 place-items-center rounded-[7px] border border-transparent bg-accent px-3 text-[12px] font-semibold text-accent-contrast transition-[filter] hover:brightness-110 active:scale-[.97]"
-              onClick={() => void saveApiKey().catch((error: Error) => console.error(error.message))}
+              onClick={() => void saveApiKey().catch((error: Error) => toast.error(error.message))}
             >
               {savingKey ? <Loader2 size={14} className="animate-spin" /> : 'Save key'}
             </button>
@@ -234,7 +235,7 @@ export function AiSettings({
             <button
               type="button"
               className="grid h-9 place-items-center rounded-[7px] border border-border bg-surface px-3 text-[12px] font-semibold text-foreground-soft transition-colors hover:bg-surface-hover hover:text-foreground"
-              onClick={() => void clearApiKey().catch((error: Error) => console.error(error.message))}
+              onClick={() => void clearApiKey().catch((error: Error) => toast.error(error.message))}
             >
               Remove
             </button>
