@@ -110,6 +110,16 @@ function translateAnthropicBlock(block: AiContentBlock): Record<string, unknown>
   }
 }
 
+// OpenAI-compatible servers disagree about whether the base URL includes the
+// /v1 prefix (DeepSeek documents the bare domain, the OpenAI SDK convention
+// includes /v1). Accept both: a base ending in /v<N> is used verbatim, a bare
+// base gets /v1/<path> with the un-prefixed path as a fallback candidate.
+export function openAiEndpointCandidates(baseUrl: string, path: string): string[] {
+  const base = baseUrl.replace(/\/+$/u, '')
+  if (/\/v\d+$/u.test(base)) return [`${base}/${path}`]
+  return [`${base}/v1/${path}`, `${base}/${path}`]
+}
+
 export function buildOpenAiCompatibleRequest(
   request: AiProviderRequest,
   baseUrl: string,
@@ -169,8 +179,9 @@ export function buildOpenAiCompatibleRequest(
   }
   const includeReasoningEffort = options.includeReasoningEffort ?? supportsReasoningEffort(request.model)
   if (includeReasoningEffort) body.reasoning_effort = REASONING_EFFORT[request.reasoning]
+  const [chatUrl] = openAiEndpointCandidates(baseUrl, 'chat/completions')
   return {
-    url: `${baseUrl}/v1/chat/completions`,
+    url: chatUrl ?? `${baseUrl}/v1/chat/completions`,
     headers: {
       'content-type': 'application/json',
       authorization: `Bearer ${apiKey}`

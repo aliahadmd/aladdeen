@@ -7,7 +7,7 @@ import type { AppSettings } from '@shared/contracts'
 
 const PROVIDER_OPTIONS: Array<{ value: AiProvider; label: string; hint: string }> = [
   { value: 'anthropic', label: 'Anthropic', hint: 'Claude models with an Anthropic API key.' },
-  { value: 'openai-compatible', label: 'OpenAI-compatible', hint: 'Any /v1/chat/completions endpoint — OpenAI, OpenRouter, Ollama, LM Studio.' }
+  { value: 'openai-compatible', label: 'OpenAI', hint: 'Any OpenAI-style /chat/completions endpoint — OpenAI, DeepSeek, OpenRouter, Ollama, LM Studio.' }
 ]
 
 export function AiSettings({
@@ -22,6 +22,8 @@ export function AiSettings({
   const [apiKeyDraft, setApiKeyDraft] = useState('')
   const [showApiKey, setShowApiKey] = useState(false)
   const [savingKey, setSavingKey] = useState(false)
+  const [baseUrlDraft, setBaseUrlDraft] = useState('')
+  const [endpointSaved, setEndpointSaved] = useState(false)
   const [models, setModels] = useState<AiModelInfo[]>([])
   const [modelsError, setModelsError] = useState<string | null>(null)
   const [loadingModels, setLoadingModels] = useState(false)
@@ -101,6 +103,20 @@ export function AiSettings({
       .finally(() => setLoadingModels(false))
   }
 
+  // Keep the draft in sync with the persisted profile (loaded async, or when
+  // the provider switches) until the user starts editing.
+  const profileBaseUrl = profile?.baseUrl
+  useEffect(() => {
+    setBaseUrlDraft(profileBaseUrl ?? '')
+  }, [provider, profileBaseUrl])
+
+  const saveEndpoint = async (): Promise<void> => {
+    await saveProfile({ baseUrl: baseUrlDraft.trim() })
+    setEndpointSaved(true)
+    window.setTimeout(() => setEndpointSaved(false), 2500)
+    refreshModels()
+  }
+
   const hasKey = credential?.hasApiKey[provider] === true
 
   return (
@@ -144,19 +160,35 @@ export function AiSettings({
               type="url"
               className="h-9 rounded-[7px] border border-border bg-surface-elevated px-3 text-[13px] text-foreground outline-none transition-colors placeholder:text-foreground-muted focus:border-accent"
               placeholder="https://api.openai.com"
-              defaultValue={profile?.baseUrl ?? ''}
-              onBlur={(event) => void saveProfile({ baseUrl: event.target.value.trim() })}
+              value={baseUrlDraft}
+              onChange={(event) => setBaseUrlDraft(event.target.value)}
             />
           </label>
-          <label className="flex items-center gap-2 text-[12px] text-foreground-soft">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-[var(--accent)]"
-              checked={profile?.allowLocal === true}
-              onChange={(event) => void saveProfile({ allowLocal: event.target.checked })}
-            />
-            Allow local endpoints (http://localhost, LAN addresses)
-          </label>
+          <div className="flex items-center justify-between gap-3">
+            <label className="flex items-center gap-2 text-[12px] text-foreground-soft">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-[var(--accent)]"
+                checked={profile?.allowLocal === true}
+                onChange={(event) => {
+                  void saveProfile({ allowLocal: event.target.checked }).then(() => refreshModels())
+                }}
+              />
+              Allow local endpoints (http://localhost, LAN addresses)
+            </label>
+            <button
+              type="button"
+              className={cn(
+                'grid h-8 shrink-0 place-items-center rounded-[7px] border px-3 text-[12px] font-semibold transition-[filter,background-color] active:scale-[.97]',
+                endpointSaved
+                  ? 'border-transparent bg-accent-soft text-accent'
+                  : 'border-transparent bg-accent text-accent-contrast hover:brightness-110'
+              )}
+              onClick={() => void saveEndpoint().catch((error: Error) => console.error(error.message))}
+            >
+              {endpointSaved ? 'Saved ✓' : 'Save endpoint'}
+            </button>
+          </div>
         </section>
       )}
 

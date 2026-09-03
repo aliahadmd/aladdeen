@@ -1,7 +1,7 @@
 import { ANTHROPIC_DEFAULT_BASE_URL, ANTHROPIC_API_VERSION, ANTHROPIC_DEFAULT_MODEL_ID } from '@shared/ai'
 import type { AiModelInfo, AiProvider } from '@shared/ai'
 import { DesktopError } from '@main/errors'
-import { extractProviderErrorMessage } from './providers'
+import { extractProviderErrorMessage, openAiEndpointCandidates } from './providers'
 
 interface AnthropicModelRow {
   id: string
@@ -41,15 +41,26 @@ export async function fetchProviderModels(
       label: row.display_name ?? labelFromId(row.id)
     }))
   }
-  const response = await fetch(`${baseUrl}/v1/models`, {
-    headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
-    signal
-  })
-  if (!response.ok) throw extractProviderErrorMessage(response.status, await response.text())
-  const payload = (await response.json()) as { data?: OpenAiModelRow[] }
-  return (payload.data ?? [])
-    .filter((row) => typeof row.id === 'string' && row.id !== '')
-    .map((row) => ({ provider, id: row.id, label: labelFromId(row.id) }))
+  const candidates = openAiEndpointCandidates(baseUrl, 'models')
+  let lastStatus = 0
+  let lastPayload = ''
+  for (const url of candidates) {
+    const response = await fetch(url, {
+      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : {},
+      signal
+    })
+    if (response.ok) {
+      const payload = (await response.json()) as { data?: OpenAiModelRow[] }
+      return (payload.data ?? [])
+        .filter((row) => typeof row.id === 'string' && row.id !== '')
+        .map((row) => ({ provider, id: row.id, label: labelFromId(row.id) }))
+    }
+    lastStatus = response.status
+    lastPayload = await response.text()
+    // Some bare-base servers only implement the un-prefixed /models route.
+    if (response.status !== 404) break
+  }
+  throw extractProviderErrorMessage(lastStatus, lastPayload)
 }
 
 export function fallbackModels(provider: AiProvider, manualModelId: string): AiModelInfo[] {

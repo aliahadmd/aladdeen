@@ -5,6 +5,7 @@ import {
   createAnthropicFrameHandler,
   createOpenAiFrameHandler,
   mapReasoningEffort,
+  openAiEndpointCandidates,
   parseSseFrame,
   readSseFrames
 } from '@main/services/ai/providers'
@@ -74,6 +75,23 @@ describe('ai providers', () => {
     // 'test-model' is not a known reasoning model, so effort is omitted.
     expect(body.reasoning_effort).toBeUndefined()
     expect(mapReasoningEffort('max')).toBe('high')
+  })
+
+  it('joins endpoint URLs tolerating bases with or without a /v1 suffix', () => {
+    expect(openAiEndpointCandidates('https://api.deepseek.com', 'models')).toEqual([
+      'https://api.deepseek.com/v1/models',
+      'https://api.deepseek.com/models'
+    ])
+    expect(openAiEndpointCandidates('https://api.example.com/', 'chat/completions')).toEqual([
+      'https://api.example.com/v1/chat/completions',
+      'https://api.example.com/chat/completions'
+    ])
+    expect(openAiEndpointCandidates('https://api.example.com/v1', 'models')).toEqual([
+      'https://api.example.com/v1/models'
+    ])
+    expect(openAiEndpointCandidates('https://127.0.0.1:11434/v1/', 'models')).toEqual([
+      'https://127.0.0.1:11434/v1/models'
+    ])
   })
 
   it('parses SSE frames including split chunks and multi-line data', async () => {
