@@ -11,7 +11,6 @@ import {
 } from 'electron'
 import { z, type ZodType } from 'zod'
 import { asResult, DesktopError } from '@main/errors'
-import type { AiService } from '@main/services/ai/service'
 import type { AppDatabase } from '@main/services/database'
 import type { ExportService } from '@main/services/export'
 import type { GlobalSearchService } from '@main/services/global-search'
@@ -19,12 +18,6 @@ import type { WorkspaceService } from '@main/services/workspace'
 import { IPC, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { defaultNameForKind, DOCUMENT_EXTENSIONS, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import {
-  aiApproveSchema,
-  aiProviderSchema,
-  aiRenameSessionSchema,
-  aiSendSchema,
-  aiSetApiKeySchema,
-  aiSetProfileSchema,
   createEntrySchema,
   createStandaloneDocumentSchema,
   documentContentSchema,
@@ -49,7 +42,6 @@ interface IpcDependencies {
   workspace: WorkspaceService
   exports: ExportService
   search: GlobalSearchService
-  ai: AiService
   getWindow: () => BrowserWindow | null
   getPendingOpenRequest: () => OpenFileRequest | undefined
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
@@ -79,7 +71,6 @@ export function registerIpc({
   workspace,
   exports,
   search,
-  ai,
   getWindow,
   getPendingOpenRequest,
   acceptSystemOpenFile,
@@ -192,10 +183,6 @@ export function registerIpc({
       limit: z.number().int().min(1).max(100).optional()
     }), input)
     return workspace.searchProjectFiles(request.query, request.limit)
-  })
-  handle(IPC.listProjectFiles, async (_event, input) => {
-    const request = parse(z.object({ projectId: idSchema }), input)
-    return workspace.listProjectFiles(request.projectId)
   })
   handle(IPC.startGlobalSearch, async (_event, input) => search.start(parse(globalSearchRequestSchema, input)))
   handle(IPC.cancelGlobalSearch, async (_event, input) => search.cancel(parse(idSchema, input)))
@@ -324,46 +311,6 @@ export function registerIpc({
     nativeTheme.themeSource = settings.theme
     return settings
   })
-
-  handle(IPC.aiCredentialStatus, async () => ai.credentialStatus())
-  handle(IPC.aiSetApiKey, async (_event, input) => {
-    const request = parse(aiSetApiKeySchema, input)
-    ai.setApiKey(request.provider, request.apiKey)
-  })
-  handle(IPC.aiClearApiKey, async (_event, input) => {
-    ai.clearApiKey(parse(aiProviderSchema, input))
-  })
-  handle(IPC.aiGetProfile, async (_event, input) => ai.getProfile(parse(aiProviderSchema, input)))
-  handle(IPC.aiSetProfile, async (_event, input) => {
-    const request = parse(aiSetProfileSchema, input)
-    return ai.setProfile(request.provider, request.baseUrl, request.allowLocal, request.manualModelId)
-  })
-  handle(IPC.aiListModels, async (_event, input) => ai.listModels(parse(aiProviderSchema, input)))
-  handle(IPC.aiListSessions, async () => ai.listSessions())
-  handle(IPC.aiGetSession, async (_event, input) => ai.getSession(parse(idSchema, input)))
-  handle(IPC.aiCreateSession, async (_event, input) => {
-    const request = parse(z.object({ projectId: idSchema.nullable() }), input)
-    return ai.createSession(request.projectId)
-  })
-  handle(IPC.aiDeleteSession, async (_event, input) => {
-    ai.deleteSession(parse(idSchema, input))
-  })
-  handle(IPC.aiRenameSession, async (_event, input) => {
-    const request = parse(aiRenameSessionSchema, input)
-    ai.renameSession(request.sessionId, request.title)
-  })
-  handle(IPC.aiSend, async (_event, input) => {
-    const request = parse(aiSendSchema, input)
-    return ai.send(request.sessionId, request.content, request.mentionedFiles)
-  })
-  handle(IPC.aiApprove, async (_event, input) => {
-    const request = parse(aiApproveSchema, input)
-    ai.approve(request.requestId, request.approved)
-  })
-  handle(IPC.aiCancel, async (_event, input) => {
-    ai.cancel(parse(idSchema, input))
-  })
-
   handle(IPC.exportDocument, async (_event, input) => exports.exportDocument(parse(exportRequestSchema, input)))
   handle(IPC.openExternal, async (_event, input) => shell.openExternal(parse(externalUrlSchema, input)))
 

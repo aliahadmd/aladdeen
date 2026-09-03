@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import {
   IPC,
-  type AiEvent,
   type CloseRequest,
   type EnvironmentEvent,
   type GlobalSearchEvent,
@@ -39,8 +38,7 @@ const api: AladdeenApi = {
     update: (request) => ipcRenderer.invoke(IPC.updateProject, request),
     listChildren: (projectId, parentPath, cursor) =>
       ipcRenderer.invoke(IPC.listProjectChildren, { projectId, parentPath, cursor }),
-    search: (query, limit) => ipcRenderer.invoke(IPC.searchProjectFiles, { query, limit }),
-    listFiles: (projectId) => ipcRenderer.invoke(IPC.listProjectFiles, { projectId })
+    search: (query, limit) => ipcRenderer.invoke(IPC.searchProjectFiles, { query, limit })
   },
   search: {
     start: (request) => ipcRenderer.invoke(IPC.startGlobalSearch, request),
@@ -127,29 +125,6 @@ const api: AladdeenApi = {
   settings: {
     get: () => ipcRenderer.invoke(IPC.getSettings),
     update: (settings) => ipcRenderer.invoke(IPC.updateSettings, settings)
-  },
-  ai: {
-    credentialStatus: () => ipcRenderer.invoke(IPC.aiCredentialStatus),
-    setApiKey: (provider, apiKey) => ipcRenderer.invoke(IPC.aiSetApiKey, { provider, apiKey }),
-    clearApiKey: (provider) => ipcRenderer.invoke(IPC.aiClearApiKey, provider),
-    getProfile: (provider) => ipcRenderer.invoke(IPC.aiGetProfile, provider),
-    setProfile: (provider, baseUrl, allowLocal, manualModelId) =>
-      ipcRenderer.invoke(IPC.aiSetProfile, { provider, baseUrl, allowLocal, manualModelId }),
-    listModels: (provider) => ipcRenderer.invoke(IPC.aiListModels, provider),
-    listSessions: () => ipcRenderer.invoke(IPC.aiListSessions),
-    getSession: (sessionId) => ipcRenderer.invoke(IPC.aiGetSession, sessionId),
-    createSession: (projectId) => ipcRenderer.invoke(IPC.aiCreateSession, { projectId }),
-    deleteSession: (sessionId) => ipcRenderer.invoke(IPC.aiDeleteSession, sessionId),
-    renameSession: (sessionId, title) => ipcRenderer.invoke(IPC.aiRenameSession, { sessionId, title }),
-    send: (sessionId, content, mentionedFiles) =>
-      ipcRenderer.invoke(IPC.aiSend, { sessionId, content, mentionedFiles }),
-    approve: (requestId, approved) => ipcRenderer.invoke(IPC.aiApprove, { requestId, approved }),
-    cancel: (sessionId) => ipcRenderer.invoke(IPC.aiCancel, sessionId),
-    onEvent: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, aiEvent: AiEvent): void => callback(aiEvent)
-      ipcRenderer.on(IPC.aiEvent, listener)
-      return () => ipcRenderer.removeListener(IPC.aiEvent, listener)
-    }
   },
   export: {
     document: (request) => ipcRenderer.invoke(IPC.exportDocument, request)

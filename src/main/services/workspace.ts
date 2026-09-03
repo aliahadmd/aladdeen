@@ -342,18 +342,6 @@ export class WorkspaceService {
       }))
   }
 
-  listProjectFiles(projectId: string): IndexedFileSummary[] {
-    const project = this.requireProject(projectId)
-    return this.database.listProjectIndex(projectId).map((file) => ({
-      projectId,
-      projectName: project.name,
-      name: file.name,
-      relativePath: file.relativePath,
-      location: `${project.name} › ${file.relativePath}`,
-      documentKind: file.documentKind
-    }))
-  }
-
   async createProject(parentPath: string, requestedName: string): Promise<EnvironmentSnapshot> {
     const name = validateEntryName(requestedName)
     const parent = await realpath(parentPath)

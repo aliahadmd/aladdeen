@@ -21,7 +21,6 @@ import type {
   TrackedFileSummary,
   UpdateProjectRequest
 } from '@shared/contracts'
-import { AI_PANEL_DEFAULT_WIDTH, ANTHROPIC_DEFAULT_MODEL_ID } from '@shared/ai'
 import { isTextDocumentKind, MAX_DROPPED_DOCUMENTS } from '@shared/documents'
 import { findNearestLiteralMatch, matchesLiteral } from '@shared/search'
 import { DEFAULT_READING_SETTINGS } from '@shared/reading'
@@ -136,12 +135,6 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
     sidebarWidth: 320,
     sidebarCollapsed: false,
     completedOnboardingVersion: 0,
-    aiPanelWidth: AI_PANEL_DEFAULT_WIDTH,
-    aiPanelCollapsed: true,
-    aiProvider: 'anthropic',
-    aiModelId: ANTHROPIC_DEFAULT_MODEL_ID,
-    aiReasoning: 'medium',
-    aiMode: 'ask',
     ...DEFAULT_READING_SETTINGS
   }
 })
@@ -480,12 +473,6 @@ export const useAppStore = create<AppState>((set, get) => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
-      aiPanelWidth: AI_PANEL_DEFAULT_WIDTH,
-      aiPanelCollapsed: true,
-      aiProvider: 'anthropic',
-      aiModelId: ANTHROPIC_DEFAULT_MODEL_ID,
-      aiReasoning: 'medium',
-      aiMode: 'ask',
       ...DEFAULT_READING_SETTINGS
     },
     persistedSettings: {
@@ -495,12 +482,6 @@ export const useAppStore = create<AppState>((set, get) => {
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
-      aiPanelWidth: AI_PANEL_DEFAULT_WIDTH,
-      aiPanelCollapsed: true,
-      aiProvider: 'anthropic',
-      aiModelId: ANTHROPIC_DEFAULT_MODEL_ID,
-      aiReasoning: 'medium',
-      aiMode: 'ask',
       ...DEFAULT_READING_SETTINGS
     },
     editing: false,

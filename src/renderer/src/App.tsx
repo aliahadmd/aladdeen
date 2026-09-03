@@ -13,7 +13,6 @@ import { GlobalSearchDialog } from './components/GlobalSearchDialog'
 import { OnboardingExperience } from './components/OnboardingExperience'
 import { QuickOpenDialog } from './components/QuickOpenDialog'
 import { Sidebar } from './components/Sidebar'
-import { AiPanel } from './components/ai/AiPanel'
 import { TabBar } from './components/TabBar'
 import { useEffectiveDarkMode } from './hooks/use-effective-dark-mode'
 import { useEdgeResizer } from './hooks/use-edge-resizer'
@@ -24,9 +23,6 @@ import { useAppStore } from './store/app-store'
 const SIDEBAR_MIN_WIDTH = 248
 const SIDEBAR_DEFAULT_WIDTH = 320
 const SIDEBAR_MAX_WIDTH = 420
-const AI_PANEL_MIN_WIDTH = 300
-const AI_PANEL_DEFAULT_WIDTH = 380
-const AI_PANEL_MAX_WIDTH = 560
 
 export default function App(): React.JSX.Element {
   const bootStatus = useAppStore((state) => state.bootStatus)
@@ -64,18 +60,6 @@ export default function App(): React.JSX.Element {
     cssVariable: '--sidebar-width',
     bodyClass: 'is-resizing-sidebar',
     onCommit: (sidebarWidth) => void updateSettings({ sidebarWidth })
-  })
-  const aiPanelVisible = !settings.aiPanelCollapsed
-  const aiPanelResize = useEdgeResizer({
-    side: 'right',
-    width: settings.aiPanelWidth,
-    min: AI_PANEL_MIN_WIDTH,
-    max: AI_PANEL_MAX_WIDTH,
-    defaultWidth: AI_PANEL_DEFAULT_WIDTH,
-    cssVariable: '--ai-panel-width',
-    bodyClass: 'is-resizing-ai-panel',
-    active: aiPanelVisible,
-    onCommit: (aiPanelWidth) => void updateSettings({ aiPanelWidth })
   })
 
   useEffect(() => {
@@ -303,9 +287,7 @@ export default function App(): React.JSX.Element {
         aria-busy={documentTransitioning}
         className={cn(
           'workspace-grid relative grid min-h-0 min-w-0 grid-cols-[var(--sidebar-width)_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
-          settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]',
-          aiPanelVisible && 'grid-cols-[var(--sidebar-width)_minmax(0,1fr)_var(--ai-panel-width)] max-[959px]:grid-cols-[minmax(0,1fr)]',
-          aiPanelVisible && settings.sidebarCollapsed && 'grid-cols-[0_minmax(0,1fr)_var(--ai-panel-width)] max-[959px]:grid-cols-[minmax(0,1fr)]'
+          settings.sidebarCollapsed && 'sidebar-collapsed grid-cols-[0_minmax(0,1fr)] max-[959px]:grid-cols-[minmax(0,1fr)]'
         )}
       >
         <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><Sidebar onShowTutorial={() => setTutorialReplayOpen(true)} /></div>
@@ -338,29 +320,6 @@ export default function App(): React.JSX.Element {
             <PanelLeftOpen size={17} />
           </button>
         </main>
-        {aiPanelVisible && (
-          <div className="min-h-0 min-w-0 overflow-hidden max-[959px]:hidden"><AiPanel /></div>
-        )}
-        {aiPanelVisible && (
-          <div
-            className={cn(
-              "ai-panel-resizer absolute inset-y-0 right-[calc(var(--ai-panel-width)-3px)] z-40 w-[6px] touch-none cursor-col-resize outline-0 after:absolute after:inset-y-0 after:right-0.5 after:w-px after:bg-transparent after:content-[''] hover:after:bg-accent focus-visible:after:bg-accent max-[959px]:hidden"
-            )}
-            role="separator"
-            aria-label="Resize AI panel"
-            aria-orientation="vertical"
-            aria-valuemin={AI_PANEL_MIN_WIDTH}
-            aria-valuemax={AI_PANEL_MAX_WIDTH}
-            aria-valuenow={settings.aiPanelWidth}
-            tabIndex={0}
-            onDoubleClick={aiPanelResize.reset}
-            onKeyDown={aiPanelResize.onKeyDown}
-            onPointerDown={aiPanelResize.onPointerDown}
-            onPointerMove={aiPanelResize.onPointerMove}
-            onPointerUp={aiPanelResize.onPointerEnd}
-            onPointerCancel={aiPanelResize.onPointerEnd}
-          />
-        )}
       </div>
 
       {sidebarOpen && (

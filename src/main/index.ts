@@ -14,7 +14,6 @@ import {
   type MenuItemConstructorOptions
 } from 'electron'
 import { AppDatabase } from '@main/services/database'
-import { AiService } from '@main/services/ai/service'
 import { ExportService } from '@main/services/export'
 import { GlobalSearchService } from '@main/services/global-search'
 import { resolveUserDataPolicy } from '@main/services/user-data-policy'
@@ -53,7 +52,6 @@ let mainWindow: BrowserWindow | null = null
 let database: AppDatabase | null = null
 let workspace: WorkspaceService | null = null
 let globalSearch: GlobalSearchService | null = null
-let aiService: AiService | null = null
 let pendingSystemFile: string | null = null
 let pendingOpenRequest: OpenFileRequest | undefined
 let quitting = false
@@ -112,13 +110,11 @@ void app.whenReady().then(async () => {
   })
   globalSearch = new GlobalSearchService(database, workspace, () => mainWindow)
   const exportService = new ExportService(workspace, () => mainWindow)
-  aiService = new AiService(database, workspace, () => mainWindow)
   registerIpc({
     database,
     workspace,
     exports: exportService,
     search: globalSearch,
-    ai: aiService,
     getWindow: () => mainWindow,
     getPendingOpenRequest: () => pendingOpenRequest,
     acceptSystemOpenFile,
@@ -536,7 +532,6 @@ async function finishQuit(): Promise<void> {
   quitting = true
   if (!servicesClosed) {
     servicesClosed = true
-    aiService?.dispose()
     globalSearch?.close()
     await workspace?.close()
     database?.close()

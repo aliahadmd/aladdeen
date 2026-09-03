@@ -14,12 +14,6 @@ const defaultSettings: AppSettings = {
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 1,
-  aiPanelWidth: 380,
-  aiPanelCollapsed: true,
-  aiProvider: 'anthropic',
-  aiModelId: 'claude-sonnet-4-5',
-  aiReasoning: 'medium',
-  aiMode: 'ask',
   ...DEFAULT_READING_SETTINGS
 }
 
@@ -110,10 +104,6 @@ describe('settings dialog', () => {
     fireEvent.click(appearanceTab)
     appearanceTab.focus()
     fireEvent.keyDown(appearanceTab, { key: 'ArrowDown' })
-
-    const aiTab = screen.getByRole('tab', { name: 'AI' })
-    expect(aiTab).toHaveFocus()
-    fireEvent.keyDown(aiTab, { key: 'ArrowDown' })
 
     const readingTab = screen.getByRole('tab', { name: 'Reading' })
     expect(readingTab).toHaveFocus()

@@ -3,23 +3,13 @@ import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { DesktopError } from '@main/errors'
-import {
-  AI_MODES,
-  AI_PANEL_DEFAULT_WIDTH,
-  AI_PANEL_MAX_WIDTH,
-  AI_PANEL_MIN_WIDTH,
-  AI_PROVIDERS,
-  AI_REASONING_LEVELS,
-  ANTHROPIC_DEFAULT_MODEL_ID
-} from '@shared/ai'
-import { THEME_PRESETS } from '@shared/contracts'
-import type { AiChatMessage, AiProvider, AiSessionDetail, AiSessionSummary } from '@shared/ai'
 import type {
   AppSettings,
   DocumentKind,
   EnvironmentSummary,
   WorkspaceTreeNode
 } from '@shared/contracts'
+import { THEME_PRESETS } from '@shared/contracts'
 import {
   ALL_PROJECT_DOCUMENT_KINDS,
   DEFAULT_PROJECT_DOCUMENT_KINDS,
@@ -43,12 +33,6 @@ const DEFAULT_SETTINGS: AppSettings = {
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 0,
-  aiPanelWidth: AI_PANEL_DEFAULT_WIDTH,
-  aiPanelCollapsed: true,
-  aiProvider: 'anthropic',
-  aiModelId: ANTHROPIC_DEFAULT_MODEL_ID,
-  aiReasoning: 'medium',
-  aiMode: 'ask',
   ...DEFAULT_READING_SETTINGS
 }
 
@@ -58,7 +42,7 @@ const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
 // and the coding agent). Keep those migration numbers reserved and migrate the
 // leftover metadata away instead of treating a user's existing profile as a
 // database from an unknown future release.
-const CURRENT_DATABASE_VERSION = 14
+const CURRENT_DATABASE_VERSION = 13
 
 function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
   if (existsSync(destination)) return
@@ -475,41 +459,6 @@ export class AppDatabase {
       `)
     }
 
-    if (row.user_version < 14) {
-      // IF NOT EXISTS keeps the step idempotent for profiles restored from a
-      // newer backup whose user_version was rewound by an older release.
-      this.db.exec(`
-        BEGIN;
-        CREATE TABLE IF NOT EXISTS ai_secrets (
-          provider TEXT PRIMARY KEY,
-          ciphertext BLOB NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS ai_provider_profiles (
-          provider TEXT PRIMARY KEY,
-          base_url TEXT NOT NULL,
-          allow_local INTEGER NOT NULL,
-          manual_model_id TEXT NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS ai_sessions (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          project_id TEXT,
-          created_at INTEGER NOT NULL,
-          updated_at INTEGER NOT NULL
-        ) STRICT;
-        CREATE TABLE IF NOT EXISTS ai_messages (
-          id TEXT PRIMARY KEY,
-          session_id TEXT NOT NULL REFERENCES ai_sessions(id) ON DELETE CASCADE,
-          role TEXT NOT NULL,
-          blocks TEXT NOT NULL,
-          created_at INTEGER NOT NULL
-        ) STRICT;
-        CREATE INDEX IF NOT EXISTS ai_messages_session_idx ON ai_messages(session_id, created_at);
-        PRAGMA user_version = 14;
-        COMMIT;
-      `)
-    }
-
     this.repairLegacyWorkspaceHistory()
   }
 
@@ -606,27 +555,6 @@ export class AppDatabase {
       if (row.key === 'theme_preset' && (THEME_PRESETS as readonly string[]).includes(row.value)) {
         settings.themePreset = row.value as AppSettings['themePreset']
       }
-      if (row.key === 'ai_panel_width') {
-        const width = Number(row.value)
-        if (Number.isInteger(width) && width >= AI_PANEL_MIN_WIDTH && width <= AI_PANEL_MAX_WIDTH) {
-          settings.aiPanelWidth = width
-        }
-      }
-      if (row.key === 'ai_panel_collapsed' && ['true', 'false'].includes(row.value)) {
-        settings.aiPanelCollapsed = row.value === 'true'
-      }
-      if (row.key === 'ai_provider' && (AI_PROVIDERS as readonly string[]).includes(row.value)) {
-        settings.aiProvider = row.value as AppSettings['aiProvider']
-      }
-      if (row.key === 'ai_model_id' && row.value.length > 0 && row.value.length <= 200) {
-        settings.aiModelId = row.value
-      }
-      if (row.key === 'ai_reasoning' && (AI_REASONING_LEVELS as readonly string[]).includes(row.value)) {
-        settings.aiReasoning = row.value as AppSettings['aiReasoning']
-      }
-      if (row.key === 'ai_mode' && (AI_MODES as readonly string[]).includes(row.value)) {
-        settings.aiMode = row.value as AppSettings['aiMode']
-      }
       if (row.key === 'sidebar_width') {
         const width = Number(row.value)
         if (Number.isInteger(width) && width >= 248 && width <= 420) settings.sidebarWidth = width
@@ -668,12 +596,6 @@ export class AppDatabase {
       this.setSetting('theme', settings.theme)
       this.setSetting('accent', settings.accent)
       this.setSetting('theme_preset', settings.themePreset)
-      this.setSetting('ai_panel_width', String(settings.aiPanelWidth))
-      this.setSetting('ai_panel_collapsed', String(settings.aiPanelCollapsed))
-      this.setSetting('ai_provider', settings.aiProvider)
-      this.setSetting('ai_model_id', settings.aiModelId)
-      this.setSetting('ai_reasoning', settings.aiReasoning)
-      this.setSetting('ai_mode', settings.aiMode)
       this.setSetting('sidebar_width', String(settings.sidebarWidth))
       this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
       this.setSetting('completed_onboarding_version', String(settings.completedOnboardingVersion))
@@ -695,121 +617,6 @@ export class AppDatabase {
       .prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
       .run(key, value, Date.now())
-  }
-
-  getAiSecretCiphertext(provider: AiProvider): Buffer | null {
-    const row = this.db
-      .prepare('SELECT ciphertext FROM ai_secrets WHERE provider = ?')
-      .get(provider) as { ciphertext: Buffer } | undefined
-    return row ? Buffer.from(row.ciphertext) : null
-  }
-
-  setAiSecretCiphertext(provider: AiProvider, ciphertext: Buffer): void {
-    this.db
-      .prepare(`INSERT INTO ai_secrets (provider, ciphertext) VALUES (?, ?)
-        ON CONFLICT(provider) DO UPDATE SET ciphertext = excluded.ciphertext`)
-      .run(provider, ciphertext)
-  }
-
-  clearAiSecret(provider: AiProvider): void {
-    this.db.prepare('DELETE FROM ai_secrets WHERE provider = ?').run(provider)
-  }
-
-  getAiProfile(provider: AiProvider): { baseUrl: string; allowLocal: boolean; manualModelId: string } {
-    const row = this.db
-      .prepare('SELECT base_url, allow_local, manual_model_id FROM ai_provider_profiles WHERE provider = ?')
-      .get(provider) as { base_url: string; allow_local: number; manual_model_id: string } | undefined
-    if (!row) return { baseUrl: '', allowLocal: false, manualModelId: '' }
-    return {
-      baseUrl: row.base_url,
-      allowLocal: row.allow_local === 1,
-      manualModelId: row.manual_model_id
-    }
-  }
-
-  setAiProfile(provider: AiProvider, baseUrl: string, allowLocal: boolean, manualModelId: string): void {
-    this.db
-      .prepare(`INSERT INTO ai_provider_profiles (provider, base_url, allow_local, manual_model_id)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(provider) DO UPDATE SET
-          base_url = excluded.base_url,
-          allow_local = excluded.allow_local,
-          manual_model_id = excluded.manual_model_id`)
-      .run(provider, baseUrl, allowLocal ? 1 : 0, manualModelId)
-  }
-
-  listAiSessions(): AiSessionSummary[] {
-    return this.db
-      .prepare('SELECT id, title, project_id, created_at, updated_at FROM ai_sessions ORDER BY updated_at DESC')
-      .all()
-      .map((row) => this.mapAiSessionRow(row as Record<string, unknown>))
-  }
-
-  createAiSession(id: string, title: string, projectId: string | null): AiSessionSummary {
-    const now = Date.now()
-    this.db
-      .prepare('INSERT INTO ai_sessions (id, title, project_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
-      .run(id, title, projectId, now, now)
-    return { id, title, projectId, createdAt: now, updatedAt: now }
-  }
-
-  getAiSession(id: string): AiSessionDetail | null {
-    const row = this.db
-      .prepare('SELECT id, title, project_id, created_at, updated_at FROM ai_sessions WHERE id = ?')
-      .get(id) as Record<string, unknown> | undefined
-    if (!row) return null
-    const messages = this.db
-      .prepare('SELECT id, role, blocks, created_at FROM ai_messages WHERE session_id = ? ORDER BY created_at ASC, rowid ASC')
-      .all(id)
-      .map((message) => {
-        const record = message as { id: string; role: string; blocks: string; created_at: number }
-        return {
-          id: record.id,
-          role: record.role as AiChatMessage['role'],
-          blocks: JSON.parse(record.blocks) as AiChatMessage['blocks'],
-          createdAt: record.created_at
-        }
-      })
-    return { ...this.mapAiSessionRow(row), messages }
-  }
-
-  appendAiMessage(sessionId: string, message: AiChatMessage): void {
-    this.db
-      .prepare('INSERT INTO ai_messages (id, session_id, role, blocks, created_at) VALUES (?, ?, ?, ?, ?)')
-      .run(message.id, sessionId, message.role, JSON.stringify(message.blocks), message.createdAt)
-    this.db
-      .prepare('UPDATE ai_sessions SET updated_at = ? WHERE id = ?')
-      .run(Date.now(), sessionId)
-  }
-
-  replaceAiMessage(sessionId: string, messageId: string, blocks: AiChatMessage['blocks']): void {
-    this.db
-      .prepare('UPDATE ai_messages SET blocks = ? WHERE id = ? AND session_id = ?')
-      .run(JSON.stringify(blocks), messageId, sessionId)
-    this.db
-      .prepare('UPDATE ai_sessions SET updated_at = ? WHERE id = ?')
-      .run(Date.now(), sessionId)
-  }
-
-  renameAiSession(id: string, title: string): void {
-    this.db
-      .prepare('UPDATE ai_sessions SET title = ?, updated_at = ? WHERE id = ?')
-      .run(title, Date.now(), id)
-  }
-
-  deleteAiSession(id: string): void {
-    this.db.prepare('PRAGMA foreign_keys = ON').run()
-    this.db.prepare('DELETE FROM ai_sessions WHERE id = ?').run(id)
-  }
-
-  private mapAiSessionRow(row: Record<string, unknown>): AiSessionSummary {
-    return {
-      id: row.id as string,
-      title: row.title as string,
-      projectId: (row.project_id as string | null) ?? null,
-      createdAt: row.created_at as number,
-      updatedAt: row.updated_at as number
-    }
   }
 
   listEnvironments(): EnvironmentSummary[] {
