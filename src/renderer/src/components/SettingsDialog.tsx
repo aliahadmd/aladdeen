@@ -19,6 +19,7 @@ import {
 } from '@renderer/lib/ui-styles'
 import { accentOptions, themeOptions, useAppStore } from '@renderer/store/app-store'
 import { BrandMark } from './BrandMark'
+import { ThemePresetPicker } from './ThemePresetPicker'
 
 interface SettingsDialogProps {
   open: boolean
@@ -545,6 +546,17 @@ function AppearanceSettings({
         </div>
       </section>
 
+      <section className="grid gap-3 py-4" aria-labelledby="theme-preset-setting-label">
+        <div>
+          <h3 className="m-0 text-[13px] font-[620] text-foreground" id="theme-preset-setting-label">Theme preset</h3>
+          <p className="mt-1 mb-0 text-[12px] leading-[1.45] text-foreground-muted">Popular palettes — the mode above picks light or dark. Selecting one applies its accent.</p>
+        </div>
+        <ThemePresetPicker
+          value={settings.themePreset}
+          onSelect={(preset) => onUpdate({ themePreset: preset, accent: 'indigo' })}
+        />
+      </section>
+
       <section className="grid min-h-[102px] grid-cols-[minmax(110px,1fr)_auto] items-center gap-5 py-4 max-[520px]:grid-cols-1 max-[520px]:gap-3" aria-labelledby="accent-setting-label">
         <div>
           <h3 className="m-0 text-[13px] font-[620] text-foreground" id="accent-setting-label">Accent color</h3>
@@ -565,7 +577,7 @@ function AppearanceSettings({
             >
               <span
                 className="grid h-6 w-6 place-items-center rounded-full border-2 border-[rgb(255_255_255/.8)] text-white shadow-[0_0_0_1px_rgb(0_0_0/.12)]"
-                style={{ backgroundColor: `var(--accent-${option.value})` }}
+                style={{ backgroundColor: option.value === 'indigo' ? 'var(--accent)' : `var(--accent-${option.value})` }}
               >
                 {settings.accent === option.value && <Check size={12} />}
               </span>

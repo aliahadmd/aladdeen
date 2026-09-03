@@ -15,6 +15,7 @@ import type {
   PreviewSourceTarget,
   ProjectImportSelection,
   ThemeMode,
+  ThemePreset,
   TextDocumentSnapshot,
   TextOpenDocument,
   TrackedFileSummary,
@@ -130,6 +131,7 @@ let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settin
   value: {
     theme: 'system',
     accent: 'indigo',
+    themePreset: 'aladdeen',
     sidebarWidth: 320,
     sidebarCollapsed: false,
     completedOnboardingVersion: 0,
@@ -467,6 +469,7 @@ export const useAppStore = create<AppState>((set, get) => {
     settings: {
       theme: 'system',
       accent: 'indigo',
+      themePreset: 'aladdeen',
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
@@ -475,6 +478,7 @@ export const useAppStore = create<AppState>((set, get) => {
     persistedSettings: {
       theme: 'system',
       accent: 'indigo',
+      themePreset: 'aladdeen',
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
@@ -1285,11 +1289,22 @@ export const themeOptions: Array<{ value: ThemeMode; label: string }> = [
 ]
 
 export const accentOptions: Array<{ value: Accent; label: string }> = [
-  { value: 'indigo', label: 'Indigo' },
+  { value: 'indigo', label: 'Default' },
   { value: 'blue', label: 'Blue' },
   { value: 'emerald', label: 'Emerald' },
   { value: 'amber', label: 'Amber' },
   { value: 'rose', label: 'Rose' }
+]
+
+export const themePresetOptions: Array<{ value: ThemePreset; label: string; description: string }> = [
+  { value: 'aladdeen', label: 'Aladdeen', description: 'The classic look — calm indigo accents' },
+  { value: 'mono', label: 'Mono', description: 'Clean grayscale — minimal and focused' },
+  { value: 'catppuccin', label: 'Catppuccin', description: 'Soothing pastels — Latte and Macchiato' },
+  { value: 'everforest', label: 'Everforest', description: 'Warm, low-contrast forest greens' },
+  { value: 'solarized', label: 'Solarized', description: 'Fixed-contrast light and dark' },
+  { value: 'nord', label: 'Nord', description: 'Cool blues of the polar night' },
+  { value: 'rosepine', label: 'Rosé Pine', description: 'Muted elegance — Main and Dawn' },
+  { value: 'gruvbox', label: 'Gruvbox', description: 'Retro groove — warm and earthy' }
 ]
 
 async function mapWithConcurrency<T, R>(

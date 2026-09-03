@@ -24,6 +24,7 @@ Aladdeen is proprietary, closed-source software by Ali Ahad. Access is free duri
 - Debounced atomic autosave with external-change conflict recovery
 - GFM tables, task lists, fenced code highlighting, and local images
 - Finder drag-and-drop that opens original documents in tab order
+- Theme presets (Mono, Catppuccin, Everforest, Solarized, Nord, Rosé Pine, Gruvbox) each with light and dark variants
 - Light, dark, system, and accent themes
 - Native create/add, rename, reveal, Trash, missing-file relink, open-file association, and per-environment session restore
 - Sandboxed renderer with a narrow, validated IPC bridge

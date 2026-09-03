@@ -138,7 +138,8 @@ export default function App(): React.JSX.Element {
     document.documentElement.classList.toggle('dark', dark)
     document.documentElement.dataset.theme = dark ? 'dark' : 'light'
     document.documentElement.dataset.accent = settings.accent
-  }, [dark, settings.accent])
+    document.documentElement.dataset.themePreset = settings.themePreset
+  }, [dark, settings.accent, settings.themePreset])
 
   useEffect(() => {
     if (!environment || settings.completedOnboardingVersion >= CURRENT_ONBOARDING_VERSION) return

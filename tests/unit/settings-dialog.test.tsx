@@ -10,6 +10,7 @@ import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 const defaultSettings: AppSettings = {
   theme: 'system',
   accent: 'indigo',
+  themePreset: 'aladdeen',
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 1,
@@ -63,6 +64,21 @@ describe('settings dialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Rose accent' }))
     await waitFor(() => {
       expect(update).toHaveBeenLastCalledWith({ ...defaultSettings, theme: 'dark', accent: 'rose' })
+    })
+  })
+
+  it('applies a theme preset together with its default accent', async () => {
+    render(<SettingsDialog open onOpenChange={vi.fn()} />)
+
+    const catppuccin = screen.getByRole('button', { name: 'Catppuccin theme' })
+    expect(catppuccin).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Aladdeen theme' })).toHaveAttribute('aria-pressed', 'true')
+
+    fireEvent.click(catppuccin)
+    await waitFor(() => {
+      expect(update).toHaveBeenLastCalledWith({ ...defaultSettings, themePreset: 'catppuccin', accent: 'indigo' })
+      expect(screen.getByRole('button', { name: 'Catppuccin theme' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'Aladdeen theme' })).toHaveAttribute('aria-pressed', 'false')
     })
   })
 

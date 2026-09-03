@@ -8,3 +8,7 @@ playwright-report
 .DS_Store
 *.log
 .qoder/
+.kiro/
+.v2c/
+.video_agent/
+.zcode/

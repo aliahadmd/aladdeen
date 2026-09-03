@@ -5,6 +5,7 @@ import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 const baseSettings = {
   theme: 'system' as const,
   accent: 'indigo' as const,
+  themePreset: 'aladdeen' as const,
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 1,

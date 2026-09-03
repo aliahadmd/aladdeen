@@ -10,6 +10,7 @@ const fileId = '11111111-1111-4111-8111-111111111111'
 const settings: AppSettings = {
   theme: 'system',
   accent: 'indigo',
+  themePreset: 'aladdeen',
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 1,

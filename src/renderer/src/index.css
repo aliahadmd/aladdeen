@@ -26,7 +26,11 @@
   --ease-fluid-in-out: var(--ease-in-out);
 }
 
-:root {
+/* Base palettes. The attribute variants exist so theme-preset preview cards
+   (any element carrying data-theme-preset='aladdeen') get the same tokens as
+   the app root instead of inheriting whatever preset is active. */
+:root,
+[data-theme-preset='aladdeen'] {
   color-scheme: light;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -84,7 +88,8 @@
   --accent-muted: #f1b8c9;
 }
 
-:root.dark {
+:root.dark,
+[data-theme-preset='aladdeen'].dark {
   color-scheme: dark;
   --bg: #17171a;
   --surface: #1d1d21;
@@ -102,6 +107,304 @@
   --danger-soft: #3d2527;
   --warning: #e3a144;
   --success: #64c59a;
+}
+
+/* Theme presets. Light blocks use (0,1,0) selectors so the base dark ramp
+   above still wins in dark mode; dark blocks are (0,2,0) so they win over it.
+   Neither sets --accent-soft/--accent-muted in dark: the color-mix recompute
+   in the base dark block derives them from whatever accent ends up active.
+   Every block matches any element carrying data-theme-preset, so the picker
+   cards in Settings preview with the exact tokens the app will use. */
+
+[data-theme-preset='mono'] {
+  --bg: #f4f4f5;
+  --surface: #fafafa;
+  --surface-elevated: #ffffff;
+  --surface-muted: #ececee;
+  --surface-hover: #e4e4e7;
+  --border: #e1e1e4;
+  --border-strong: #cfcfd4;
+  --text: #1b1b1f;
+  --text-soft: #606067;
+  --text-muted: #8f8f96;
+  --accent: #66666f;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='mono'].dark {
+  --bg: #141416;
+  --surface: #1a1a1d;
+  --surface-elevated: #212124;
+  --surface-muted: #262629;
+  --surface-hover: #2c2c30;
+  --border: #2c2c30;
+  --border-strong: #39393e;
+  --text: #e9e9ec;
+  --text-soft: #ababb2;
+  --text-muted: #76767e;
+  --accent: #7c7c86;
+}
+
+[data-theme-preset='catppuccin'] {
+  --bg: #e6e9ef;
+  --surface: #eff1f5;
+  --surface-elevated: #ffffff;
+  --surface-muted: #dce0e8;
+  --surface-hover: #d0d5e0;
+  --border: #ccd0da;
+  --border-strong: #bcc0cc;
+  --text: #4c4f69;
+  --text-soft: #5c5f77;
+  --text-muted: #8c8fa1;
+  --accent: #8839ef;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='catppuccin'].dark {
+  --bg: #181926;
+  --surface: #1e2030;
+  --surface-elevated: #24273a;
+  --surface-muted: #2b2d40;
+  --surface-hover: #363a4f;
+  --border: #2f3248;
+  --border-strong: #494d64;
+  --text: #cad3f5;
+  --text-soft: #b8c0e0;
+  --text-muted: #8087a2;
+  --accent: #c6a0f6;
+  --accent-contrast: #24273a;
+}
+
+[data-theme-preset='everforest'] {
+  --bg: #f4f0d9;
+  --surface: #fdf6e3;
+  --surface-elevated: #fefaf0;
+  --surface-muted: #ede5cb;
+  --surface-hover: #e6dcc0;
+  --border: #e2d8bd;
+  --border-strong: #d0c5a5;
+  --text: #465150;
+  --text-soft: #5c6a72;
+  --text-muted: #909a91;
+  --accent: #8da101;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='everforest'].dark {
+  --bg: #2d353b;
+  --surface: #343f44;
+  --surface-elevated: #3d484d;
+  --surface-muted: #414b50;
+  --surface-hover: #475258;
+  --border: #414b50;
+  --border-strong: #4f585e;
+  --text: #d3c6aa;
+  --text-soft: #9da9a0;
+  --text-muted: #7a8478;
+  --accent: #a7c080;
+  --accent-contrast: #2d353b;
+}
+
+[data-theme-preset='solarized'] {
+  --bg: #eee8d5;
+  --surface: #fdf6e3;
+  --surface-elevated: #fffbef;
+  --surface-muted: #e7dfc8;
+  --surface-hover: #e0d7bc;
+  --border: #ddd4b8;
+  --border-strong: #c6bc9e;
+  --text: #4a5b64;
+  --text-soft: #657b83;
+  --text-muted: #93a1a1;
+  --accent: #268bd2;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='solarized'].dark {
+  --bg: #002b36;
+  --surface: #073642;
+  --surface-elevated: #0e4553;
+  --surface-muted: #124a57;
+  --surface-hover: #17505d;
+  --border: #104653;
+  --border-strong: #1d5a67;
+  --text: #eee8d5;
+  --text-soft: #93a1a1;
+  --text-muted: #657b83;
+  --accent: #268bd2;
+}
+
+[data-theme-preset='nord'] {
+  --bg: #e5e9f0;
+  --surface: #eceff4;
+  --surface-elevated: #f9fafc;
+  --surface-muted: #dde3ec;
+  --surface-hover: #d5dce7;
+  --border: #d2d9e4;
+  --border-strong: #c0c9d6;
+  --text: #2e3440;
+  --text-soft: #434c5e;
+  --text-muted: #7b86a1;
+  --accent: #5e81ac;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='nord'].dark {
+  --bg: #2e3440;
+  --surface: #3b4252;
+  --surface-elevated: #434c5e;
+  --surface-muted: #474f63;
+  --surface-hover: #4c566a;
+  --border: #474f63;
+  --border-strong: #566077;
+  --text: #eceff4;
+  --text-soft: #d8dee9;
+  --text-muted: #7e8aa4;
+  --accent: #5e81ac;
+}
+
+[data-theme-preset='rosepine'] {
+  --bg: #f2e9e1;
+  --surface: #faf4ed;
+  --surface-elevated: #fffaf3;
+  --surface-muted: #ece2d8;
+  --surface-hover: #e5d9cd;
+  --border: #e3d8cd;
+  --border-strong: #d5c8bb;
+  --text: #575279;
+  --text-soft: #797593;
+  --text-muted: #9893a5;
+  --accent: #d7827e;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='rosepine'].dark {
+  --bg: #191724;
+  --surface: #1f1d2e;
+  --surface-elevated: #26233a;
+  --surface-muted: #2a283e;
+  --surface-hover: #403d52;
+  --border: #302d46;
+  --border-strong: #403d52;
+  --text: #e0def4;
+  --text-soft: #908caa;
+  --text-muted: #6e6a86;
+  --accent: #ebbcba;
+  --accent-contrast: #191724;
+}
+
+[data-theme-preset='gruvbox'] {
+  --bg: #ebdbb2;
+  --surface: #fbf1c7;
+  --surface-elevated: #fdf6d8;
+  --surface-muted: #e6d9ad;
+  --surface-hover: #ded0a0;
+  --border: #dccfa2;
+  --border-strong: #c8b78a;
+  --text: #3c3836;
+  --text-soft: #504945;
+  --text-muted: #7c6f64;
+  --accent: #b57614;
+  --accent-soft: color-mix(in oklab, var(--accent) 15%, #ffffff);
+  --accent-muted: color-mix(in oklab, var(--accent) 45%, #ffffff);
+}
+
+[data-theme-preset='gruvbox'].dark {
+  --bg: #282828;
+  --surface: #32302f;
+  --surface-elevated: #3c3836;
+  --surface-muted: #413d39;
+  --surface-hover: #48443f;
+  --border: #413d39;
+  --border-strong: #4c4742;
+  --text: #ebdbb2;
+  --text-soft: #d5c4a1;
+  --text-muted: #a89984;
+  --accent: #d79921;
+  --accent-contrast: #282828;
+}
+
+/* An explicit accent choice beats a preset's signature accent in either mode,
+   and resets the text-on-accent color the preset may have darkened. The
+   doubled :root raises specificity above the preset dark blocks. */
+:root:root[data-accent='blue'] {
+  --accent: var(--accent-blue);
+  --accent-contrast: #ffffff;
+}
+
+:root:root[data-accent='emerald'] {
+  --accent: var(--accent-emerald);
+  --accent-contrast: #ffffff;
+}
+
+:root:root[data-accent='amber'] {
+  --accent: var(--accent-amber);
+  --accent-contrast: #ffffff;
+}
+
+:root:root[data-accent='rose'] {
+  --accent: var(--accent-rose);
+  --accent-contrast: #ffffff;
+}
+
+/* Theme preset picker — live previews rendered from the palette blocks above. */
+.theme-preset-preview {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  height: 88px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.theme-preset-preview-sidebar {
+  background: var(--surface-muted);
+  border-right: 1px solid var(--border);
+}
+
+.theme-preset-preview-body {
+  position: relative;
+  padding: 14px 14px 0;
+}
+
+.theme-preset-preview-bar {
+  display: block;
+  height: 8px;
+  width: 58%;
+  border-radius: 999px;
+  background: var(--text-muted);
+  opacity: 0.5;
+}
+
+.theme-preset-preview-bar-strong {
+  height: 9px;
+  width: 42%;
+  background: var(--text);
+  opacity: 0.8;
+}
+
+.theme-preset-preview-bar + .theme-preset-preview-bar {
+  margin-top: 9px;
+  width: 74%;
+  opacity: 0.38;
+}
+
+.theme-preset-preview-pill {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  width: 46px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: 0.9;
 }
 
 * {

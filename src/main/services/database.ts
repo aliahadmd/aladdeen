@@ -9,6 +9,7 @@ import type {
   EnvironmentSummary,
   WorkspaceTreeNode
 } from '@shared/contracts'
+import { THEME_PRESETS } from '@shared/contracts'
 import {
   ALL_PROJECT_DOCUMENT_KINDS,
   DEFAULT_PROJECT_DOCUMENT_KINDS,
@@ -28,6 +29,7 @@ import {
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   accent: 'indigo',
+  themePreset: 'aladdeen',
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 0,
@@ -550,6 +552,9 @@ export class AppDatabase {
     for (const row of rows) {
       if (row.key === 'theme' && ['light', 'dark', 'system'].includes(row.value)) settings.theme = row.value as AppSettings['theme']
       if (row.key === 'accent' && ['indigo', 'blue', 'emerald', 'amber', 'rose'].includes(row.value)) settings.accent = row.value as AppSettings['accent']
+      if (row.key === 'theme_preset' && (THEME_PRESETS as readonly string[]).includes(row.value)) {
+        settings.themePreset = row.value as AppSettings['themePreset']
+      }
       if (row.key === 'sidebar_width') {
         const width = Number(row.value)
         if (Number.isInteger(width) && width >= 248 && width <= 420) settings.sidebarWidth = width
@@ -590,6 +595,7 @@ export class AppDatabase {
     try {
       this.setSetting('theme', settings.theme)
       this.setSetting('accent', settings.accent)
+      this.setSetting('theme_preset', settings.themePreset)
       this.setSetting('sidebar_width', String(settings.sidebarWidth))
       this.setSetting('sidebar_collapsed', String(settings.sidebarCollapsed))
       this.setSetting('completed_onboarding_version', String(settings.completedOnboardingVersion))

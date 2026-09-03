@@ -2,6 +2,17 @@ import type { ReadingSettings } from './reading'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Accent = 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose'
+export const THEME_PRESETS = [
+  'aladdeen',
+  'mono',
+  'catppuccin',
+  'everforest',
+  'solarized',
+  'nord',
+  'rosepine',
+  'gruvbox'
+] as const
+export type ThemePreset = (typeof THEME_PRESETS)[number]
 export type SaveStatus = 'editing' | 'saving' | 'saved' | 'conflict' | 'error'
 export type DocumentKind = 'markdown' | 'html' | 'docx' | 'pdf' | 'xlsx' | 'pptx'
 export type TextDocumentKind = Extract<DocumentKind, 'markdown' | 'html'>
@@ -400,6 +411,7 @@ export interface DocumentCapabilitiesByKind {
 export interface AppSettings extends ReadingSettings {
   theme: ThemeMode
   accent: Accent
+  themePreset: ThemePreset
   sidebarWidth: number
   sidebarCollapsed: boolean
   completedOnboardingVersion: number

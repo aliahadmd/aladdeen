@@ -3,6 +3,7 @@ import {
   MAX_DOCUMENT_BYTES,
   MAX_SEARCH_DOCUMENT_BYTES
 } from './limits'
+import { THEME_PRESETS } from './contracts'
 import {
   READING_COLUMN_WIDTHS,
   READING_FONTS,
@@ -180,6 +181,7 @@ export const updateProjectSchema = z.object({
 export const settingsSchema = z.object({
   theme: z.enum(['light', 'dark', 'system']),
   accent: z.enum(['indigo', 'blue', 'emerald', 'amber', 'rose']),
+  themePreset: z.enum(THEME_PRESETS),
   sidebarWidth: z.number().int().min(248).max(420),
   sidebarCollapsed: z.boolean(),
   completedOnboardingVersion: z.number().int().min(0).max(1_000),

@@ -27,6 +27,7 @@ describe('application metadata database', () => {
     expect(database.getSettings()).toEqual({
       theme: 'system',
       accent: 'indigo',
+      themePreset: 'aladdeen',
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
@@ -35,6 +36,7 @@ describe('application metadata database', () => {
     database.setSettings({
       theme: 'dark',
       accent: 'rose',
+      themePreset: 'catppuccin',
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
@@ -80,6 +82,7 @@ describe('application metadata database', () => {
     expect(database.getSettings()).toEqual({
       theme: 'dark',
       accent: 'rose',
+      themePreset: 'catppuccin',
       sidebarWidth: 368,
       sidebarCollapsed: true,
       completedOnboardingVersion: 1,
@@ -143,10 +146,11 @@ describe('application metadata database', () => {
     insert.run('reading_line_height', 'extra-relaxed', Date.now())
     insert.run('reading_column_width', 'unlimited', Date.now())
     insert.run('reading_surface', 'custom', Date.now())
+    insert.run('theme_preset', 'tokyo-night', Date.now())
     raw.close()
 
     const reopened = new AppDatabase(directory)
-    expect(reopened.getSettings()).toMatchObject(DEFAULT_READING_SETTINGS)
+    expect(reopened.getSettings()).toMatchObject({ ...DEFAULT_READING_SETTINGS, themePreset: 'aladdeen' })
     reopened.close()
   })
 
