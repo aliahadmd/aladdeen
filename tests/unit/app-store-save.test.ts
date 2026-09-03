@@ -69,6 +69,44 @@ function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
   return { promise, resolve }
 }
 
+describe('manual save behavior', () => {
+  const save = vi.fn()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    Object.defineProperty(window, 'aladdeen', {
+      configurable: true,
+      value: { document: { save } } as unknown as AladdeenApi
+    })
+    save.mockResolvedValue({ ok: true, value: revision(2) })
+    useAppStore.setState({
+      documents: [document('original', 'original')],
+      activeFileId: fileId,
+      conflictFileIds: []
+    })
+  })
+
+  afterEach(() => {
+    cleanupDocumentRuntime(fileId)
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  it('keeps edits unsaved until an explicit save', async () => {
+    useAppStore.getState().updateContent(fileId, 'typed but not saved')
+
+    // Edits must not schedule or trigger any write, even after autosave-style delays.
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(save).not.toHaveBeenCalled()
+    expect(useAppStore.getState().documents[0]?.status).toBe('editing')
+
+    // The explicit save (Cmd+S or the Save button) writes and clears the dirty flag.
+    await useAppStore.getState().saveDocument(fileId)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().documents[0]?.status).toBe('saved')
+  })
+})
+
 describe('document save serialization', () => {
   const save = vi.fn()
 

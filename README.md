@@ -21,7 +21,7 @@ Aladdeen is proprietary, closed-source software by Ali Ahad. Access is free duri
 - Bulk-linked project folders with all-files or selective indexing, exclusions, groups, favorites, and archive/pause controls
 - Lazy searchable project trees, persistent recent files, cross-project Quick Open, and mixed-project draggable tabs
 - Cancellable environment-wide search across every supported document format
-- Debounced atomic autosave with external-change conflict recovery
+- Manual save (⌘S or the save button) with external-change conflict recovery
 - GFM tables, task lists, fenced code highlighting, and local images
 - Finder drag-and-drop that opens original documents in tab order
 - Theme presets (Mono, Catppuccin, Everforest, Solarized, Nord, Rosé Pine, Gruvbox) each with light and dark variants
@@ -68,7 +68,7 @@ publishing are intentionally not configured.
 - `Cmd+Shift+O`: add an existing folder project
 - `Cmd+P`: search every indexed project file
 - `Cmd+Shift+F`: search document contents in the active environment
-- `Cmd+S`: flush autosave now
+- `Cmd+S`: save the current document
 - `Cmd+E`: toggle Markdown editing
 
 Environment, project-index, and recent-file metadata is stored in SQLite; document content is never stored there. Aladdeen does not provide cloud sync, remote resource fetching, or plugins. Your files remain portable and under your control.

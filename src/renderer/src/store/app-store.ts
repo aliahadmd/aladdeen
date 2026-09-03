@@ -111,8 +111,6 @@ interface AppState {
   setDocumentTransitioning(value: boolean): void
 }
 
-const saveTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const autosaveStartedAt = new Map<string, number>()
 const saveOperations = new Map<string, Promise<boolean>>()
 const editorViewports = new Map<string, EditorViewport>()
 const previewScrollPositions = new Map<string, number>()
@@ -122,10 +120,6 @@ let initializePromise: Promise<void> | null = null
 let environmentRequestId = 0
 let settingsRequestId = 0
 let documentMutationVersion = 0
-const TEXT_AUTOSAVE_DELAY_MS = 500
-const TEXT_AUTOSAVE_MAX_WAIT_MS = 5_000
-const BINARY_AUTOSAVE_DELAY_MS = 1_500
-const BINARY_AUTOSAVE_MAX_WAIT_MS = 10_000
 let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settings.update>>> = Promise.resolve({
   ok: true,
   value: {
@@ -164,21 +158,6 @@ async function waitForDocumentRuntime(
     runtime = getDocumentRuntime(fileId)
   }
   return runtime
-}
-
-function scheduleAutosave(
-  fileId: string,
-  delayMs: number,
-  maxWaitMs: number,
-  getState: () => AppState
-): void {
-  const startedAt = autosaveStartedAt.get(fileId) ?? Date.now()
-  autosaveStartedAt.set(fileId, startedAt)
-  const remaining = Math.max(0, maxWaitMs - (Date.now() - startedAt))
-  saveTimers.set(fileId, setTimeout(
-    () => void getState().saveDocument(fileId),
-    Math.min(delayMs, remaining)
-  ))
 }
 
 function openDocumentFromSnapshot(snapshot: DocumentSnapshot): OpenDocument {
@@ -251,10 +230,6 @@ export const useAppStore = create<AppState>((set, get) => {
     force = false,
     saveAs = false
   ): Promise<boolean> => {
-    const timer = saveTimers.get(fileId)
-    if (timer) clearTimeout(timer)
-    saveTimers.delete(fileId)
-    autosaveStartedAt.delete(fileId)
     const document = get().documents.find((candidate) => candidate.id === fileId)
     if (!document || (!isDocumentDirty(document) && !force && !saveAs)) return true
     if (document.deleted && !force) {
@@ -361,10 +336,6 @@ export const useAppStore = create<AppState>((set, get) => {
             })()
           : item)
       }))
-      const latest = get().documents.find((candidate) => candidate.id === fileId)
-      if (latest && !isTextOpenDocument(latest) && latest.binaryDirty) {
-        scheduleAutosave(fileId, BINARY_AUTOSAVE_DELAY_MS, BINARY_AUTOSAVE_MAX_WAIT_MS, get)
-      }
       if (binarySaveAs) await get().refreshEnvironment()
       return true
     }
@@ -421,9 +392,6 @@ export const useAppStore = create<AppState>((set, get) => {
           error: undefined,
           deleted: false
         } : item) }))
-    }
-    if (hasNewerEdits) {
-      scheduleAutosave(fileId, TEXT_AUTOSAVE_DELAY_MS, TEXT_AUTOSAVE_MAX_WAIT_MS, get)
     }
     if (saveAs) await get().refreshEnvironment()
     return true
@@ -595,9 +563,6 @@ export const useAppStore = create<AppState>((set, get) => {
         }
         if (result.value) await get().loadEnvironment(result.value)
         else {
-          saveTimers.forEach((timer) => clearTimeout(timer))
-          saveTimers.clear()
-          autosaveStartedAt.clear()
           set({
             environment: null,
             documents: [],
@@ -637,9 +602,6 @@ export const useAppStore = create<AppState>((set, get) => {
           void window.aladdeen.document.releaseSession(document.session.id)
         }
       }
-      saveTimers.forEach((timer) => clearTimeout(timer))
-      saveTimers.clear()
-      autosaveStartedAt.clear()
       saveOperations.clear()
       editorViewports.clear()
       previewScrollPositions.clear()
@@ -895,9 +857,6 @@ export const useAppStore = create<AppState>((set, get) => {
           ? { ...document, content, status: 'editing', error: undefined }
           : document)
       }))
-      const current = saveTimers.get(fileId)
-      if (current) clearTimeout(current)
-      scheduleAutosave(fileId, TEXT_AUTOSAVE_DELAY_MS, TEXT_AUTOSAVE_MAX_WAIT_MS, get)
     },
 
     markBinaryDirty(fileId, dirty = true) {
@@ -915,19 +874,6 @@ export const useAppStore = create<AppState>((set, get) => {
             : document
         )
       }))
-      const current = saveTimers.get(fileId)
-      if (current) clearTimeout(current)
-      if (!dirty) autosaveStartedAt.delete(fileId)
-      const document = get().documents.find((candidate) => candidate.id === fileId)
-      if (
-        dirty &&
-        document &&
-        !isTextOpenDocument(document) &&
-        !(document.documentKind === 'pdf' && (document.session.signed || document.session.restricted)) &&
-        getDocumentRuntime(fileId)?.autosaveAllowed?.() !== false
-      ) {
-        scheduleAutosave(fileId, BINARY_AUTOSAVE_DELAY_MS, BINARY_AUTOSAVE_MAX_WAIT_MS, get)
-      }
     },
 
     updateEditorView(fileId, scrollTop, selection) {
@@ -989,10 +935,6 @@ export const useAppStore = create<AppState>((set, get) => {
       const document = get().documents.find((candidate) => candidate.id === fileId)
       if (!document) return
       if (!discard && isDocumentDirty(document) && !(await get().saveDocument(fileId))) return
-      const timer = saveTimers.get(fileId)
-      if (timer) clearTimeout(timer)
-      saveTimers.delete(fileId)
-      autosaveStartedAt.delete(fileId)
       cleanupDocumentRuntime(fileId)
       if (!isTextOpenDocument(document)) {
         await window.aladdeen.document.releaseSession(document.session.id)

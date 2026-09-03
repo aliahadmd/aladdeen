@@ -1,5 +1,5 @@
 import { Component, Suspense, useDeferredValue, useMemo, type ErrorInfo, type ReactNode } from 'react'
-import { AlertCircle, CheckCircle2, CloudOff, LoaderCircle, PencilLine } from 'lucide-react'
+import { AlertCircle, CheckCircle2, CloudOff, LoaderCircle, Save } from 'lucide-react'
 import { DocumentAdapterRegistry } from '@renderer/document-adapters/registry'
 import { cn } from '@renderer/lib/cn'
 import { useAppStore } from '@renderer/store/app-store'
@@ -9,6 +9,7 @@ import { Welcome } from './Welcome'
 
 export function DocumentView(): React.JSX.Element {
   const activeFileId = useAppStore((state) => state.activeFileId)
+  const saveDocument = useAppStore((state) => state.saveDocument)
   const document = useAppStore((state) => (
     state.documents.find((candidate) => candidate.id === activeFileId)
   ))
@@ -30,7 +31,7 @@ export function DocumentView(): React.JSX.Element {
       </div>
 
       <footer className="flex min-w-0 select-none items-center justify-between border-t border-border bg-surface px-[10px] text-[9px] text-foreground-muted">
-        <SaveStatus status={document.status} error={document.error} />
+        <SaveStatus status={document.status} error={document.error} onSave={() => void saveDocument(document.id)} />
         <DocumentFacts document={document} />
       </footer>
     </section>
@@ -139,7 +140,7 @@ function formatBytes(value: number): string {
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function SaveStatus({ status, error }: { status: string; error?: string }): React.JSX.Element {
+function SaveStatus({ status, error, onSave }: { status: string; error?: string; onSave(): void }): React.JSX.Element {
   const classes = cn(
     'flex shrink-0 items-center gap-[5px]',
     status === 'saved' && 'text-success',
@@ -155,9 +156,14 @@ function SaveStatus({ status, error }: { status: string; error?: string }): Reac
   }
   if (status === 'editing') {
     return (
-      <span className={classes}>
-        <PencilLine size={13} /> Editing
-      </span>
+      <button
+        type="button"
+        className={cn(classes, 'cursor-pointer rounded-[5px] border-0 bg-transparent px-[5px] py-[2px] font-semibold text-accent transition-colors hover:bg-accent-soft')}
+        onClick={onSave}
+        title="Save (⌘S)"
+      >
+        <Save size={13} /> Unsaved — Save
+      </button>
     )
   }
   if (status === 'conflict') {

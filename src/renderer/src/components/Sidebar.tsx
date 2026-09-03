@@ -899,6 +899,14 @@ function TrackedFileRow({ file, active, onOpen, onLocate, onRemove, onTrash }: {
         <span className="tracked-file-copy block min-w-0 flex-1"><strong className="block overflow-hidden text-[12px] font-[580] leading-[17px] text-ellipsis whitespace-nowrap text-inherit">{displayName}</strong><small className="block overflow-hidden text-[10px] leading-[15px] text-ellipsis whitespace-nowrap text-foreground-muted">{displayLocation}</small></span>
         {file.missing && <span className="shrink-0 rounded-[5px] bg-danger-soft px-[5px] py-0.5 text-[8px] font-bold text-danger">Missing</span>}
       </button>
+      <button
+        className={rowMoreClasses}
+        title="Remove from list (the file stays on disk)"
+        aria-label={`Remove ${file.name} from the list`}
+        onClick={onRemove}
+      >
+        <X size={13} />
+      </button>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild><button className={rowMoreClasses} aria-label={`Actions for ${file.name}`}><MoreHorizontal size={13} /></button></DropdownMenu.Trigger>
         <DropdownMenu.Portal>
