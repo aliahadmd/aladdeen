@@ -35,7 +35,7 @@ function namespaceWorkbookSheetElements(bytes: Uint8Array): Uint8Array {
   return zipSync(archive)
 }
 
-test('opens, edits, autosaves, and reopens a local XLSX workbook', async () => {
+test('opens, edits, saves, and reopens a local XLSX workbook', async () => {
   test.setTimeout(90_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-profile-'))
   const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-workspace-'))
@@ -66,6 +66,7 @@ test('opens, edits, autosaves, and reopens a local XLSX workbook', async () => {
     await canvas.click({ position: { x: 85, y: 38 }, force: true })
     await window.keyboard.insertText('Updated budget')
     await window.keyboard.press('Enter')
+    await window.keyboard.press('ControlOrMeta+S')
 
     await expect(documentFooter).toContainText('Saved', { timeout: 20_000 })
     await expect.poll(async () => {
@@ -90,7 +91,7 @@ test('opens, edits, autosaves, and reopens a local XLSX workbook', async () => {
   }
 })
 
-test('requires one compatibility copy and preserves unknown XLSX parts on later autosaves', async () => {
+test('requires one compatibility copy and preserves unknown XLSX parts on later saves', async () => {
   test.setTimeout(90_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-profile-'))
   const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-workspace-'))
@@ -126,6 +127,7 @@ test('requires one compatibility copy and preserves unknown XLSX parts on later 
     await canvas.click({ position: { x: 85, y: 38 }, force: true })
     await window.keyboard.insertText('Copy edit')
     await window.keyboard.press('Enter')
+    await window.keyboard.press('ControlOrMeta+S')
     await expect.poll(async () => {
       const saved = await loadWorkbook(fromBuffer(await readFile(copyPath)))
       const sheet = saved.sheets.find((candidate) => candidate.kind === 'worksheet')
@@ -142,7 +144,7 @@ test('requires one compatibility copy and preserves unknown XLSX parts on later 
   }
 })
 
-test('opens, edits, autosaves, presents, and reopens a local PPTX without outbound requests', async () => {
+test('opens, edits, saves, presents, and reopens a local PPTX without outbound requests', async () => {
   test.setTimeout(90_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pptx-profile-'))
   const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pptx-workspace-'))
@@ -277,6 +279,7 @@ test('opens, edits, autosaves, presents, and reopens a local PPTX without outbou
     await inlineEditor.press('ControlOrMeta+A')
     await window.keyboard.insertText('Updated briefing')
     await inlineEditor.press('Escape')
+    await window.keyboard.press('ControlOrMeta+S')
 
     const documentFooter = window.locator('footer').filter({ hasText: 'PPTX' })
     await expect(documentFooter).toContainText('Saved', { timeout: 20_000 })
@@ -353,7 +356,7 @@ async function presentationTexts(path: string): Promise<string[]> {
   }
 }
 
-test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', async () => {
+test('opens, scrolls, edits, saves, and reopens a DOCX through Eigenpal', async () => {
   test.setTimeout(60_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-profile-'))
   const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-workspace-'))
@@ -395,7 +398,8 @@ test('opens, scrolls, edits, autosaves, and reopens a DOCX through Eigenpal', as
     await window.keyboard.insertText(' updated in Aladdeen')
     await window.keyboard.press('Tab')
     await expect(editor).toContainText('updated in Aladdeen')
-    await expect(window.getByText('Editing', { exact: true }).first()).toBeVisible()
+    await expect(window.getByRole('button', { name: /Unsaved/ }).first()).toBeVisible()
+    await window.keyboard.press('ControlOrMeta+S')
     const documentFooter = window.locator('footer').filter({ hasText: 'DOCX' })
     await expect(documentFooter).toContainText('Saved', { timeout: 15_000 })
     await expect.poll(async () => {
@@ -529,6 +533,7 @@ test('opens and edits a dropped HTML document in place with contained local asse
     await editor.click()
     await window.keyboard.press('ControlOrMeta+A')
     await window.keyboard.insertText('<main><h1>Edited field notes</h1><p>Saved as HTML.</p></main>')
+    await window.keyboard.press('ControlOrMeta+S')
     await expect.poll(async () => readFile(htmlPath, 'utf8')).toContain('Edited field notes')
     await window.getByRole('button', { name: 'Preview' }).click()
     await expect(preview.getByRole('heading', { name: 'Edited field notes' })).toBeVisible()
@@ -774,7 +779,7 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
   }
 })
 
-test('opens, previews, edits, and autosaves a Markdown file', async () => {
+test('opens, previews, edits, and manually saves a Markdown file', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
   const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-workspace-'))
   const markdownPath = join(workspace, 'hello.md')
@@ -810,6 +815,9 @@ test('opens, previews, edits, and autosaves a Markdown file', async () => {
       '# Edited offline\n\nAutosave keeps this on disk.\n\n## Ignored subsection\n\n# Final chapter\n\nDone.'
     )
     await expect(window.getByRole('heading', { name: 'Edited offline' })).toBeVisible()
+    await expect(window.getByRole('button', { name: /Unsaved — Save/ })).toBeVisible()
+    await expect.poll(async () => readFile(markdownPath, 'utf8')).not.toContain('Autosave keeps this on disk.')
+    await window.keyboard.press('ControlOrMeta+S')
     await expect.poll(async () => readFile(markdownPath, 'utf8')).toContain('Autosave keeps this on disk.')
 
     await window.locator('.preview-pane').getByText('Done.').click()
