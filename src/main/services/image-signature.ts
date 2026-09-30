@@ -7,12 +7,11 @@ export type DocxImageType = 'png' | 'jpg' | 'gif'
  *
  * `imageSize` dispatches on magic bytes, not on the filename, so an extension check
  * alone does not decide which decoder runs: a file named `cover.png` whose bytes are
- * ICNS, JXL, or HEIF is routed to those decoders instead. Two open advisories
- * (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq) make them loop forever on crafted
- * input, and no patched release exists yet — 2.0.2 is the latest published and the
- * fix is only in the unreleased 2.0.3. The DOCX export path supports PNG, JPEG, and
- * GIF only, so verifying the signature keeps every other decoder unreachable
- * regardless of upstream.
+ * ICNS, JXL, or HEIF is routed to those decoders instead. Those decoders have
+ * looped forever on crafted input (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq, fixed
+ * in image-size 2.0.3). The DOCX export path supports PNG, JPEG, and GIF only, so
+ * verifying the signature keeps every other decoder unreachable regardless of
+ * future upstream parser bugs.
  *
  * This runs in the main process, where an infinite loop would hang the app and block
  * the close-time save of open documents, so the guard matters beyond tidiness.
