@@ -1,4 +1,5 @@
 import { writeFile } from 'node:fs/promises'
+import writeFileAtomic from 'write-file-atomic'
 import { basename, extname, join } from 'node:path'
 import {
   app,
@@ -37,55 +38,19 @@ import {
   prepareMarkdownSource
 } from '@shared/markdown'
 import type { WorkspaceService } from './workspace'
+import { imageBytesMatchDeclaredType } from './image-signature'
 import { MAX_DOCUMENT_BYTES } from '@shared/limits'
+import { localReferenceToPath } from '@shared/path'
 
 const mainBundleDirectory = import.meta.dirname
 
-export type DocxImageType = 'png' | 'jpg' | 'gif'
+// Regions that use US Letter paper; everywhere else defaults to A4.
+const LETTER_PAPER_REGIONS = new Set(['US', 'CA', 'MX', 'PH', 'CL', 'CO', 'VE', 'CR', 'GT', 'PA', 'DO', 'SV', 'NI', 'PR', 'BZ'])
 
-/**
- * Confirms an image buffer really is the format its file extension claims.
- *
- * `imageSize` dispatches on magic bytes, not on the filename, so an extension check
- * alone does not decide which decoder runs: a file named `cover.png` whose bytes are
- * ICNS, JXL, or HEIF is routed to those decoders instead. Two open advisories
- * (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq) make them loop forever on crafted
- * input, and no patched release exists yet — 2.0.2 is the latest published and the
- * fix is only in the unreleased 2.0.3. The DOCX export path supports PNG, JPEG, and
- * GIF only, so verifying the signature keeps every other decoder unreachable
- * regardless of upstream.
- *
- * This runs in the main process, where an infinite loop would hang the app and skip
- * the close-time autosave flush, so the guard matters beyond tidiness.
- */
-export function imageBytesMatchDeclaredType(data: Uint8Array, type: DocxImageType): boolean {
-  if (type === 'png') {
-    return (
-      data.length > 8 &&
-      data[0] === 0x89 &&
-      data[1] === 0x50 &&
-      data[2] === 0x4e &&
-      data[3] === 0x47 &&
-      data[4] === 0x0d &&
-      data[5] === 0x0a &&
-      data[6] === 0x1a &&
-      data[7] === 0x0a
-    )
-  }
-  if (type === 'jpg') {
-    return data.length > 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff
-  }
-  // GIF87a or GIF89a
-  return (
-    data.length > 6 &&
-    data[0] === 0x47 &&
-    data[1] === 0x49 &&
-    data[2] === 0x46 &&
-    data[3] === 0x38 &&
-    (data[4] === 0x37 || data[4] === 0x39) &&
-    data[5] === 0x61
-  )
+function defaultPaperSize(): 'A4' | 'Letter' {
+  return LETTER_PAPER_REGIONS.has(app.getLocaleCountryCode().toUpperCase()) ? 'Letter' : 'A4'
 }
+
 const EXPORT_LOAD_TIMEOUT_MS = 15_000
 const EXPORT_RENDER_TIMEOUT_MS = 45_000
 const EXPORT_PRINT_TIMEOUT_MS = 30_000
@@ -113,17 +78,24 @@ export class ExportService {
   async saveCopy(fileId: string, content: string): Promise<SaveCopyResult> {
     this.assertContentSize(content)
     const sourcePath = this.workspace.getTrackedFilePath(fileId)
-    const suggestedName = basename(sourcePath, extname(sourcePath)) + '-copy.md'
+    const kind = this.workspace.getTrackedDocumentKind(fileId)
+    if (kind !== 'markdown' && kind !== 'html') {
+      throw new DesktopError('INVALID_FILE', 'Binary documents save copies through their own editor.')
+    }
+    const extension = extname(sourcePath) || (kind === 'html' ? '.html' : '.md')
     const result = await this.showSaveDialog({
       title: 'Save a copy',
-      defaultPath: suggestedName,
-      filters: [{ name: 'Markdown', extensions: ['md', 'markdown'] }]
+      defaultPath: `${basename(sourcePath, extname(sourcePath))}-copy${extension}`,
+      filters: [kind === 'html'
+        ? { name: 'HTML document', extensions: ['html', 'htm'] }
+        : { name: 'Markdown', extensions: ['md', 'markdown'] }]
     })
     if (result.canceled || !result.filePath) throw new DesktopError('CANCELLED', 'Save copy was cancelled.')
-    await writeFile(result.filePath, content, { encoding: 'utf8', flag: 'wx' }).catch(async (error: NodeJS.ErrnoException) => {
-      if (error.code !== 'EEXIST') throw error
-      await writeFile(result.filePath!, content, 'utf8')
-    })
+    if (result.filePath === sourcePath) {
+      throw new DesktopError('INVALID_PATH', 'Choose a different location for the copy.')
+    }
+    // The save dialog already confirmed any replacement.
+    await writeFileAtomic(result.filePath, content, { encoding: 'utf8', fsync: true })
     return { path: result.filePath }
   }
 
@@ -186,7 +158,7 @@ export class ExportService {
         'The PDF export content did not finish rendering.'
       )
       const buffer = await withTimeout(printWindow.webContents.printToPDF({
-        pageSize: 'A4',
+        pageSize: defaultPaperSize(),
         landscape: false,
         printBackground: true,
         displayHeaderFooter: false,
@@ -261,7 +233,8 @@ export class ExportService {
           {
             properties: {
               page: {
-                size: { width: 11906, height: 16838 },
+                // Twips: A4 is 210 × 297 mm, Letter is 8.5 × 11 in.
+                size: defaultPaperSize() === 'Letter' ? { width: 12240, height: 15840 } : { width: 11906, height: 16838 },
                 margin: { top: 1020, right: 965, bottom: 1134, left: 965 }
               }
             },
@@ -629,12 +602,13 @@ export class ExportService {
 
   private async imageToDocx(target: string, alt: string, fileId: string): Promise<ParagraphChild> {
     if (!target || /^(https?:|data:|file:)/i.test(target)) return new TextRun({ text: `[Image: ${alt}]`, italics: true, color: '666675' })
-    const extension = extname(target.split(/[?#]/)[0] ?? '').toLowerCase()
+    const path = localReferenceToPath(target)
+    const extension = extname(path).toLowerCase()
     const type = extension === '.jpg' || extension === '.jpeg' ? 'jpg' : extension === '.png' ? 'png' : extension === '.gif' ? 'gif' : null
     if (!type) return new TextRun({ text: `[Image: ${alt}]`, italics: true, color: '666675' })
 
     try {
-      const { data } = await this.workspace.readAsset(fileId, target)
+      const { data } = await this.workspace.readAsset(fileId, path)
       if (!imageBytesMatchDeclaredType(data, type)) {
         return new TextRun({ text: `[Image unavailable: ${alt}]`, italics: true, color: '666675' })
       }

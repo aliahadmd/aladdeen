@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
   ChevronLeft,
   ChevronRight,
@@ -32,6 +33,7 @@ import {
   recordDocumentTransaction,
   registerDocumentRuntime
 } from './runtime'
+import { displayPointMapper, normalizeRotation, toStandardFontText } from './pdf-annotation-geometry'
 
 type PdfMode = 'read' | 'annotate' | 'pages'
 type AnnotationTool = 'highlight' | 'freeText' | 'ink' | 'stamp' | 'signature'
@@ -381,6 +383,9 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
     annotationTool: AnnotationTool,
     text?: string
   ): void => {
+    if (text && text !== toStandardFontText(text)) {
+      toast.warning('Some characters in this annotation are not supported by the PDF’s standard font and will be saved as “?”.')
+    }
     rememberEdit()
     setAnnotations((current) => [...current, {
       id: crypto.randomUUID(),
@@ -645,13 +650,8 @@ async function applyPdfChanges(
   const { degrees, PDFDocument, rgb, StandardFonts } = await import('pdf-lib')
   const document = await PDFDocument.load(source, { updateMetadata: false })
   const font = await document.embedFont(StandardFonts.Helvetica)
-  for (const [rawIndex, change] of Object.entries(changes)) {
-    const index = Number(rawIndex)
-    if (!Number.isInteger(index) || index < 0 || index >= document.getPageCount()) continue
-    const page = document.getPage(index)
-    if (change.deleted) continue
-    if (change.rotation !== undefined) page.setRotation(degrees(change.rotation))
-  }
+  // Annotations were placed on the page as displayed, i.e. with its original
+  // rotation, so map them before applying any pending rotation below.
   for (const annotation of annotations) {
     if (
       !Number.isInteger(annotation.pageIndex) ||
@@ -660,21 +660,35 @@ async function applyPdfChanges(
     ) continue
     const page = document.getPage(annotation.pageIndex)
     if (changes[annotation.pageIndex]?.deleted) continue
-    const x = annotation.xRatio * page.getWidth()
-    const y = (1 - annotation.yRatio) * page.getHeight()
+    const rotation = normalizeRotation(page.getRotation().angle)
+    const at = displayPointMapper(page.getCropBox(), rotation, annotation.xRatio, annotation.yRatio)
+    const upright = degrees(rotation)
     if (annotation.tool === 'highlight') {
-      page.drawRectangle({ x, y: y - 12, width: 120, height: 18, color: rgb(1, 0.85, 0.2), opacity: 0.35 })
+      const origin = at(0, 12)
+      page.drawRectangle({ ...origin, width: 120, height: 18, rotate: upright, color: rgb(1, 0.85, 0.2), opacity: 0.35 })
     } else if (annotation.tool === 'ink') {
-      page.drawLine({ start: { x: x - 24, y }, end: { x: x + 36, y: y + 12 }, thickness: 2, color: rgb(0.82, 0.12, 0.28), opacity: 0.9 })
+      page.drawLine({ start: at(-24, 0), end: at(36, -12), thickness: 2, color: rgb(0.82, 0.12, 0.28), opacity: 0.9 })
     } else {
-      const text = annotation.text ?? annotation.tool
+      // Standard fonts only encode WinAnsi; unsupported characters would make
+      // pdf-lib throw and fail the whole save.
+      const text = toStandardFontText(annotation.text ?? annotation.tool)
       page.drawText(text, {
-        x,
-        y,
+        ...at(0, 0),
+        rotate: upright,
         size: annotation.tool === 'signature' ? 16 : 11,
         font,
         color: annotation.tool === 'stamp' ? rgb(0.75, 0.05, 0.12) : rgb(0.08, 0.2, 0.58)
       })
+    }
+  }
+  for (const [rawIndex, change] of Object.entries(changes)) {
+    const index = Number(rawIndex)
+    if (!Number.isInteger(index) || index < 0 || index >= document.getPageCount()) continue
+    const page = document.getPage(index)
+    if (change.deleted) continue
+    // The viewer's rotation is relative to how the page already displays.
+    if (change.rotation !== undefined) {
+      page.setRotation(degrees(normalizeRotation(page.getRotation().angle + change.rotation)))
     }
   }
   const deleted = Object.entries(changes)

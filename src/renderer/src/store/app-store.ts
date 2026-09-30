@@ -48,7 +48,7 @@ interface AppState {
   mobilePane: MobilePane
   sidebarOpen: boolean
   conflictFileIds: string[]
-  pendingOpenRequest?: OpenFileRequest
+  pendingOpenRequests: OpenFileRequest[]
   projectImportOpen: boolean
   globalSearchOpen: boolean
   documentTransitioning: boolean
@@ -120,6 +120,7 @@ let initializePromise: Promise<void> | null = null
 let environmentRequestId = 0
 let settingsRequestId = 0
 let documentMutationVersion = 0
+let documentLoadGeneration = 0
 let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settings.update>>> = Promise.resolve({
   ok: true,
   value: {
@@ -168,7 +169,7 @@ function openDocumentFromSnapshot(snapshot: DocumentSnapshot): OpenDocument {
   }
   return isTextSnapshot(snapshot)
     ? { ...snapshot, ...state, savedContent: snapshot.content }
-    : { ...snapshot, ...state, binaryDirty: false, adapterRevision: 0 }
+    : { ...snapshot, ...state, binaryDirty: false, adapterRevision: 0, loadGeneration: ++documentLoadGeneration }
 }
 
 function mergeTrackedMetadata(documents: OpenDocument[], snapshot: EnvironmentSnapshot): OpenDocument[] {
@@ -397,6 +398,42 @@ export const useAppStore = create<AppState>((set, get) => {
     return true
   }
 
+  // Writes the adapter's current bytes to a user-chosen file without moving the
+  // open document there, for conflict and close recovery.
+  const saveBinaryCopy = async (document: OpenDocument): Promise<boolean> => {
+    if (isTextOpenDocument(document)) return false
+    const runtime = getDocumentRuntime(document.id)
+    if (!runtime) {
+      toast.error('The document editor is not ready to save a copy.')
+      return false
+    }
+    let data: ArrayBuffer
+    try {
+      data = await runtime.serialize(document.adapterRevision)
+    } catch (error) {
+      runtime.completeSave?.(false, document.adapterRevision)
+      toast.error(error instanceof Error ? error.message : 'The document could not be serialized.')
+      return false
+    }
+    let result
+    try {
+      result = await window.aladdeen.document.saveBinary({
+        fileId: document.id,
+        expectedRevision: document.revision,
+        force: true,
+        copy: true
+      }, data)
+    } finally {
+      // The edits went to a separate file; the open document stays uncommitted.
+      runtime.completeSave?.(false, document.adapterRevision)
+    }
+    if (!result.ok) {
+      withoutCancelled(result.error)
+      return false
+    }
+    return true
+  }
+
   const activateDocument = async (fileId: string): Promise<boolean> => {
     const state = get()
     if (state.activeFileId === fileId) return true
@@ -456,6 +493,7 @@ export const useAppStore = create<AppState>((set, get) => {
     mobilePane: 'preview',
     sidebarOpen: false,
     conflictFileIds: [],
+    pendingOpenRequests: [],
     projectImportOpen: false,
     globalSearchOpen: false,
     documentTransitioning: false,
@@ -476,11 +514,11 @@ export const useAppStore = create<AppState>((set, get) => {
           set({
             settings: result.value.settings,
             persistedSettings: result.value.settings,
-            pendingOpenRequest: result.value.pendingOpenRequest
+            pendingOpenRequests: result.value.pendingOpenRequests
           })
-          if (result.value.environment) await get().loadEnvironment(result.value.environment)
-          if (result.value.environment && result.value.pendingOpenRequest) {
-            await get().acceptSystemOpenFile(result.value.pendingOpenRequest)
+          if (result.value.environment) {
+            await get().loadEnvironment(result.value.environment)
+            for (const request of result.value.pendingOpenRequests) await get().acceptSystemOpenFile(request)
           }
           set({ bootStatus: 'ready' })
         } catch (error) {
@@ -506,7 +544,7 @@ export const useAppStore = create<AppState>((set, get) => {
             withoutCancelled(result.error)
             return false
           }
-        } else if (!(await get().saveDocumentAs(document.id))) {
+        } else if (!(await saveBinaryCopy(document))) {
           return false
         }
       }
@@ -529,8 +567,7 @@ export const useAppStore = create<AppState>((set, get) => {
           return false
         }
         await get().loadEnvironment(result.value)
-        const pending = get().pendingOpenRequest
-        if (pending) await get().acceptSystemOpenFile(pending)
+        for (const pending of get().pendingOpenRequests) await get().acceptSystemOpenFile(pending)
         return true
       } finally {
         set({ documentTransitioning: false })
@@ -809,9 +846,12 @@ export const useAppStore = create<AppState>((set, get) => {
 
     revealPreviewSource(fileId, target) {
       const state = get()
-      if (!state.editing || state.activeFileId !== fileId) return
+      if (state.activeFileId !== fileId) return
       const document = state.documents.find((candidate) => candidate.id === fileId)
       if (!document || !isTextOpenDocument(document)) return
+      // Markdown shows its source only in edit mode; HTML manages its own
+      // source/preview/split panes.
+      if (document.documentKind === 'markdown' && !state.editing) return
       const from = Math.min(Math.max(Math.trunc(target.from), 0), document.content.length)
       const to = Math.min(Math.max(Math.trunc(target.to), from), document.content.length)
       editorRevealId += 1
@@ -1064,7 +1104,11 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async acceptSystemOpenFile(request) {
       if (!get().environment) {
-        set({ pendingOpenRequest: request })
+        set((state) => ({
+          pendingOpenRequests: state.pendingOpenRequests.some((pending) => pending.token === request.token)
+            ? state.pendingOpenRequests
+            : [...state.pendingOpenRequests, request]
+        }))
         return
       }
       set({ documentTransitioning: true })
@@ -1074,8 +1118,11 @@ export const useAppStore = create<AppState>((set, get) => {
           return
         }
         const result = await window.aladdeen.document.acceptOpenFile(request.token)
+        // The token is single-use either way, so it leaves the queue now.
+        set((state) => ({
+          pendingOpenRequests: state.pendingOpenRequests.filter((pending) => pending.token !== request.token)
+        }))
         if (!result.ok) return withoutCancelled(result.error)
-        set({ pendingOpenRequest: undefined })
         await ingestDocument(result.value)
       } finally {
         set({ documentTransitioning: false })
@@ -1098,27 +1145,7 @@ export const useAppStore = create<AppState>((set, get) => {
           if (!copy.ok) return withoutCancelled(copy.error)
           toast.success('A copy of your changes was saved.')
         } else {
-          const runtime = getDocumentRuntime(fileId)
-          if (!runtime) {
-            toast.error('The document editor is not ready to save a copy.')
-            return
-          }
-          let data: ArrayBuffer
-          try {
-            data = await runtime.serialize(document.adapterRevision)
-          } catch (error) {
-            runtime.completeSave?.(false, document.adapterRevision)
-            toast.error(error instanceof Error ? error.message : 'The document could not be serialized.')
-            return
-          }
-          const copy = await window.aladdeen.document.saveBinary({
-              fileId,
-              expectedRevision: document.revision,
-              force: true,
-              saveAs: true
-            }, data)
-          runtime.completeSave?.(copy.ok, document.adapterRevision)
-          if (!copy.ok) return withoutCancelled(copy.error)
+          if (!(await saveBinaryCopy(document))) return
           toast.success('A copy of your document was saved.')
         }
       }

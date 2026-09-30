@@ -10,6 +10,7 @@ import {
   net,
   nativeTheme,
   protocol,
+  screen,
   session,
   type MenuItemConstructorOptions
 } from 'electron'
@@ -18,7 +19,7 @@ import { ExportService } from '@main/services/export'
 import { GlobalSearchService } from '@main/services/global-search'
 import { resolveUserDataPolicy } from '@main/services/user-data-policy'
 import { WorkspaceService } from '@main/services/workspace'
-import { registerIpc } from '@main/ipc'
+import { hasOpenFileDialog, registerIpc } from '@main/ipc'
 import { IPC, type CloseReason, type DocumentSnapshot, type OpenFileRequest } from '@shared/contracts'
 import { documentKindFromName, isSupportedDocumentName } from '@shared/documents'
 
@@ -32,6 +33,19 @@ const productionRendererCsp = [
   "connect-src 'self' aladdeen-document: aladdeen-asset:",
   "worker-src 'self' blob:",
   "frame-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'"
+].join('; ')
+const productionExportCsp = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: aladdeen-asset:",
+  "font-src 'self' data:",
+  "connect-src 'none'",
+  "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -52,8 +66,8 @@ let mainWindow: BrowserWindow | null = null
 let database: AppDatabase | null = null
 let workspace: WorkspaceService | null = null
 let globalSearch: GlobalSearchService | null = null
-let pendingSystemFile: string | null = null
-let pendingOpenRequest: OpenFileRequest | undefined
+const pendingSystemFiles: string[] = []
+const pendingOpenRequests: OpenFileRequest[] = []
 let quitting = false
 let allowWindowClose = false
 let allowApplicationQuit = false
@@ -94,7 +108,7 @@ app.on('second-instance', (_event, argv) => {
 app.on('open-file', (event, filePath) => {
   event.preventDefault()
   if (app.isReady()) void openSystemFile(filePath)
-  else pendingSystemFile = filePath
+  else pendingSystemFiles.push(filePath)
 })
 
 void app.whenReady().then(async () => {
@@ -116,16 +130,17 @@ void app.whenReady().then(async () => {
     exports: exportService,
     search: globalSearch,
     getWindow: () => mainWindow,
-    getPendingOpenRequest: () => pendingOpenRequest,
+    getPendingOpenRequests: () => [...pendingOpenRequests],
     acceptSystemOpenFile,
     completeClose
   })
   registerAssetProtocol(workspace)
   registerDocumentProtocol(workspace)
   configureSessionSecurity()
-  const fileToOpen = pendingSystemFile ?? initialSystemPath
-  pendingSystemFile = null
-  if (fileToOpen) await openSystemFile(fileToOpen)
+  // Finder delivers each selected file as its own open-file event before the
+  // app is ready; open all of them, in order.
+  const filesToOpen = [...(initialSystemPath ? [initialSystemPath] : []), ...pendingSystemFiles.splice(0)]
+  for (const filePath of filesToOpen) await openSystemFile(filePath)
 
   createWindow()
   installMenu()
@@ -139,11 +154,23 @@ void app.whenReady().then(async () => {
   app.exit(1)
 })
 
+function isVisibleOnSomeDisplay(bounds: { x: number; y: number; width: number; height: number }): boolean {
+  // Require a usable strip of the window (including its title bar) to land on
+  // a connected display, so a window saved on an unplugged monitor reappears.
+  return screen.getAllDisplays().some(({ workArea }) => {
+    const overlapWidth = Math.min(bounds.x + bounds.width, workArea.x + workArea.width) - Math.max(bounds.x, workArea.x)
+    const overlapHeight = Math.min(bounds.y + bounds.height, workArea.y + workArea.height) - Math.max(bounds.y, workArea.y)
+    return overlapWidth >= 120 && overlapHeight >= 40
+  })
+}
+
 function createWindow(): void {
   const state = database?.getWindowState()
+  const restorePosition = state?.x !== undefined && state.y !== undefined &&
+    isVisibleOnSomeDisplay({ x: state.x, y: state.y, width: state.width, height: state.height })
   mainWindow = new BrowserWindow({
-    x: state?.x,
-    y: state?.y,
+    x: restorePosition ? state?.x : undefined,
+    y: restorePosition ? state?.y : undefined,
     width: state?.width ?? 1280,
     height: state?.height ?? 800,
     minWidth: 640,
@@ -247,14 +274,19 @@ function configureSessionSecurity(): void {
   })
   if (app.isPackaged) {
     session.defaultSession.webRequest.onHeadersReceived({ urls: ['file://*'] }, (details, callback) => {
-      if (!details.url.endsWith('/index.html')) {
+      const policy = details.url.endsWith('/index.html')
+        ? productionRendererCsp
+        : details.url.endsWith('/export.html')
+          ? productionExportCsp
+          : null
+      if (!policy) {
         callback({})
         return
       }
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          'Content-Security-Policy': [productionRendererCsp]
+          'Content-Security-Policy': [policy]
         }
       })
     })
@@ -314,9 +346,10 @@ async function openSystemFile(filePath: string): Promise<void> {
     const now = Date.now()
     for (const [candidate, request] of systemOpenTokens) if (request.expiresAt < now) systemOpenTokens.delete(candidate)
     systemOpenTokens.set(token, { path: filePath, expiresAt: now + 3_600_000 })
-    pendingOpenRequest = { token, name: filePath.split(/[\\/]/).pop() ?? 'Document' }
+    const request: OpenFileRequest = { token, name: filePath.split(/[\\/]/).pop() ?? 'Document' }
+    pendingOpenRequests.push(request)
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoadingMainFrame()) {
-      mainWindow.webContents.send(IPC.systemOpenFileRequest, pendingOpenRequest)
+      mainWindow.webContents.send(IPC.systemOpenFileRequest, request)
     }
   } catch {
     // Ignore paths removed between the OS event and application readiness.
@@ -326,8 +359,9 @@ async function openSystemFile(filePath: string): Promise<void> {
 async function acceptSystemOpenFile(token: string): Promise<DocumentSnapshot> {
   const request = systemOpenTokens.get(token)
   systemOpenTokens.delete(token)
+  const pendingIndex = pendingOpenRequests.findIndex((pending) => pending.token === token)
+  if (pendingIndex !== -1) pendingOpenRequests.splice(pendingIndex, 1)
   if (!request || request.expiresAt < Date.now()) throw new Error('The file-open request expired. Open the file again.')
-  pendingOpenRequest = undefined
   if (!workspace) throw new Error('Aladdeen is not ready.')
   return workspace.openAbsoluteDocument(request.path)
 }
@@ -496,6 +530,11 @@ async function handleCloseTimeout(requestId: string): Promise<void> {
   const request = pendingClose
   const window = mainWindow
   if (!request || request.id !== requestId || !window || window.isDestroyed()) return
+  if (hasOpenFileDialog()) {
+    // The close flow is waiting on the user in a Save As panel, not stuck.
+    request.timeout = setTimeout(() => void handleCloseTimeout(requestId), 15_000)
+    return
+  }
   const result = await dialog.showMessageBox(window, {
     type: 'warning',
     title: 'Aladdeen could not confirm your saves',

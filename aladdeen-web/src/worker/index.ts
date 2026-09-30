@@ -114,8 +114,14 @@ app.on(
 			!request.headers.has("Range") &&
 			!request.headers.has("If-None-Match") &&
 			!request.headers.has("If-Modified-Since");
+		// Every URL variant (any ?build= value, extra query strings) serves the
+		// same object, so cache it under one canonical key.
+		const cacheKey = new Request(
+			new URL(artifact.downloadPath, request.url).toString(),
+			{ method: "GET" },
+		);
 		if (cacheable) {
-			const cached = await caches.default.match(request);
+			const cached = await caches.default.match(cacheKey);
 			if (cached) return cached;
 		}
 		const options: R2GetOptions = { onlyIf: request.headers };
@@ -124,7 +130,17 @@ app.on(
 			options.range = request.headers;
 		}
 
-		const object = await c.env.DOWNLOADS.get(artifact.r2Key, options);
+		let object: R2Object | R2ObjectBody | null;
+		try {
+			object = await c.env.DOWNLOADS.get(artifact.r2Key, options);
+		} catch (error) {
+			if (!options.range) throw error;
+			// R2 rejects unsatisfiable ranges; answer with 416 rather than 500.
+			return new Response(null, {
+				status: 416,
+				headers: { "Content-Range": `bytes */${artifact.byteSize}` },
+			});
+		}
 
 		if (!object) {
 			console.error(
@@ -141,7 +157,7 @@ app.on(
 			!releaseObjectMatchesManifest(object, artifact)
 		) {
 			console.error(JSON.stringify({
-				message: "Release object size does not match the signed manifest",
+				message: "Release object size does not match the release manifest",
 				key: artifact.r2Key,
 				actualSize: object.size,
 				expectedSize: artifact.byteSize,
@@ -176,7 +192,7 @@ app.on(
 
 		headers.set("Content-Length", String(object.size));
 		const response = new Response(object.body, { status: 200, headers });
-		if (cacheable) c.executionCtx.waitUntil(caches.default.put(request, response.clone()));
+		if (cacheable) c.executionCtx.waitUntil(caches.default.put(cacheKey, response.clone()));
 		return response;
 	},
 );

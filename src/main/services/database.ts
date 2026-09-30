@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 }
 
 const DATABASE_FILENAME = 'aladdeen.sqlite'
+// Database filename used under the app's previous product name.
 const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
 // Versions 7, 11, and 12 were briefly used by removed features (Research Notes
 // and the coding agent). Keep those migration numbers reserved and migrate the
@@ -825,6 +826,66 @@ export class AppDatabase {
       .run(files.length, Date.now(), projectId)
   }
 
+  /**
+   * Adds or refreshes one indexed file without rescanning the project,
+   * keeping ancestor directory counts and the project file count in step.
+   */
+  upsertProjectIndexFile(projectId: string, file: ProjectIndexFileRecord): void {
+    this.db.exec('BEGIN')
+    try {
+      const existing = this.db
+        .prepare('SELECT 1 FROM project_index_files WHERE project_id = ? AND relative_path = ?')
+        .get(projectId, file.relativePath)
+      this.db.prepare(`INSERT INTO project_index_files
+        (project_id, relative_path, parent_path, name, mtime_ms, size, document_kind)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(project_id, relative_path) DO UPDATE SET
+          parent_path = excluded.parent_path,
+          name = excluded.name,
+          mtime_ms = excluded.mtime_ms,
+          size = excluded.size,
+          document_kind = excluded.document_kind`)
+        .run(projectId, file.relativePath, file.parentPath, file.name, file.mtimeMs, file.size, file.documentKind)
+      if (!existing) {
+        const increment = this.db.prepare(`INSERT INTO project_index_directories
+          (project_id, relative_path, parent_path, name, descendant_count) VALUES (?, ?, ?, ?, 1)
+          ON CONFLICT(project_id, relative_path) DO UPDATE SET descendant_count = descendant_count + 1`)
+        for (const directory of ancestorDirectories(file.relativePath)) {
+          increment.run(projectId, directory.relativePath, directory.parentPath, directory.name)
+        }
+        this.db.prepare('UPDATE environment_projects SET file_count = file_count + 1 WHERE id = ?').run(projectId)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  removeProjectIndexFile(projectId: string, relativePath: string): void {
+    this.db.exec('BEGIN')
+    try {
+      const removed = this.db
+        .prepare('DELETE FROM project_index_files WHERE project_id = ? AND relative_path = ?')
+        .run(projectId, relativePath)
+      if (removed.changes > 0) {
+        const decrement = this.db.prepare(`UPDATE project_index_directories
+          SET descendant_count = descendant_count - 1 WHERE project_id = ? AND relative_path = ?`)
+        const prune = this.db.prepare(`DELETE FROM project_index_directories
+          WHERE project_id = ? AND relative_path = ? AND descendant_count <= 0`)
+        for (const directory of ancestorDirectories(relativePath)) {
+          decrement.run(projectId, directory.relativePath)
+          prune.run(projectId, directory.relativePath)
+        }
+        this.db.prepare('UPDATE environment_projects SET file_count = MAX(0, file_count - 1) WHERE id = ?').run(projectId)
+      }
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
   private insertProjectDirectories(projectId: string, files: ProjectIndexFileRecord[]): void {
     const directories = new Map<string, { parentPath: string; name: string; descendantCount: number }>()
     for (const file of files) {
@@ -1148,6 +1209,17 @@ export class AppDatabase {
   close(): void {
     this.db.close()
   }
+}
+
+function ancestorDirectories(relativePath: string): Array<{ relativePath: string; parentPath: string; name: string }> {
+  const directories: Array<{ relativePath: string; parentPath: string; name: string }> = []
+  let parentPath = ''
+  for (const name of relativePath.split('/').slice(0, -1)) {
+    const directoryPath = parentPath ? `${parentPath}/${name}` : name
+    directories.push({ relativePath: directoryPath, parentPath, name })
+    parentPath = directoryPath
+  }
+  return directories
 }
 
 function parseStringArray(value?: string): string[] {

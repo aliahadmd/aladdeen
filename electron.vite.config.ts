@@ -32,7 +32,16 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src/renderer'),
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        // The dev server needs localhost in the meta CSP; production builds do not.
+        name: 'aladdeen-strip-dev-csp',
+        apply: 'build',
+        transformIndexHtml: (html) => html.replace(' ws://localhost:* http://localhost:*', '')
+      }
+    ],
     optimizeDeps: {
       // Every dependency graph reached only through the lazily loaded
       // document viewers. Pre-bundling them at dev-server start keeps the

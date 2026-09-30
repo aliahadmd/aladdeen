@@ -56,6 +56,7 @@ function binaryDocument(adapterRevision = 1, kind: 'docx' | 'xlsx' | 'pptx' = 'd
     },
     binaryDirty: true,
     adapterRevision,
+    loadGeneration: 1,
     status: 'editing',
     editorScrollTop: 0,
     editorSelection: 0,

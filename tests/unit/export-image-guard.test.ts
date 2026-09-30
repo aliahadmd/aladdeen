@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { imageBytesMatchDeclaredType } from '@main/services/export'
+import { imageBytesMatchDeclaredType } from '@main/services/image-signature'
 
 const PNG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]
 const JPEG = [0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]

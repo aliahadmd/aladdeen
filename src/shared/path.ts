@@ -30,7 +30,24 @@ export function resolveRelativePath(fromFile: string, target: string): string | 
   return resolved.join('/')
 }
 
+/**
+ * Turns a relative URL reference from Markdown or HTML (`my%20pic.png?v=2`)
+ * into the relative file path it names (`my pic.png`). Markdown renderers
+ * percent-encode spaces and non-ASCII characters, so the reference must be
+ * decoded before it can match a file on disk.
+ */
+export function localReferenceToPath(target: string): string {
+  const withoutSuffix = target.split(/[?#]/)[0] ?? ''
+  try {
+    return decodeURIComponent(withoutSuffix)
+  } catch {
+    return withoutSuffix
+  }
+}
+
 export function toAssetUrl(fileId: string, target: string): string | null {
   if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) return null
-  return `aladdeen-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(target)}`
+  const path = localReferenceToPath(target)
+  if (!path) return null
+  return `aladdeen-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(path)}`
 }

@@ -18,8 +18,8 @@
   --success: #21865b;
 }
 
+/* Paper size comes from the main process (A4 or Letter by system region). */
 @page {
-  size: A4 portrait;
   margin: 18mm 17mm 20mm;
 }
 

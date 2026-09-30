@@ -78,7 +78,7 @@ const FOCUSABLE_SELECTOR = [
 
 export function OnboardingExperience({ mode, onClose }: OnboardingExperienceProps): React.JSX.Element {
   const createEnvironment = useAppStore((state) => state.createEnvironment)
-  const pending = useAppStore((state) => state.pendingOpenRequest)
+  const pending = useAppStore((state) => state.pendingOpenRequests)
   const [stepIndex, setStepIndex] = useState(0)
   const [showSetup, setShowSetup] = useState(mode === 'setup')
   const [name, setName] = useState('Personal')
@@ -238,9 +238,10 @@ export function OnboardingExperience({ mode, onClose }: OnboardingExperienceProp
               An Environment brings project folders and independent documents together without moving anything on disk.
             </p>
             <div className="onboarding-setup-card w-full max-w-[430px] rounded-[14px] border border-[var(--onboarding-border)] bg-[var(--onboarding-panel)] p-5 text-left shadow-[0_18px_55px_rgb(25_24_38/.08)] backdrop-blur-[16px] max-[640px]:p-4">
-              {pending && (
+              {pending[0] && (
                 <div className="mb-4 rounded-lg border border-accent-muted bg-accent-soft px-3 py-2.5 text-[12px] leading-[1.45] text-foreground-soft">
-                  After setup, we’ll open <strong className="text-foreground">{pending.name}</strong>.
+                  After setup, we’ll open <strong className="text-foreground">{pending[0].name}</strong>
+                  {pending.length > 1 && ` and ${pending.length - 1} more document${pending.length === 2 ? '' : 's'}`}.
                 </div>
               )}
               <label htmlFor="onboarding-environment-name" className="mb-1.5 block text-[12px] font-[650] text-foreground-soft">

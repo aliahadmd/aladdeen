@@ -61,7 +61,8 @@ import {
   inspectPptxBuffer,
   inspectPptxPackage,
   inspectXlsxBuffer,
-  inspectXlsxPackage
+  inspectXlsxPackage,
+  type PptxPackageInspection
 } from './zip-guard'
 
 const LOCAL_ASSET_MIME_TYPES: Record<string, string> = {
@@ -78,6 +79,7 @@ const LOCAL_ASSET_MIME_TYPES: Record<string, string> = {
 }
 const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.hg', '.svn', '.cache', 'node_modules', 'dist', 'build', 'out'])
 const MAX_SCOPE_PREVIEW_FILES = 50_000
+const MAX_CACHED_PACKAGE_INSPECTIONS = 32
 const PROJECT_TREE_PAGE_SIZE = 250
 
 interface ProjectCandidate {
@@ -103,9 +105,20 @@ export class WorkspaceService {
   private readonly projectWatchers = new Map<string, FSWatcher>()
   private standaloneWatcher: FSWatcher | null = null
   private readonly suppressedWrites = new Map<string, number>()
+  // SHA-256 of the bytes Aladdeen last wrote to each path. A watcher event
+  // whose file still hashes to this value is our own write even when it
+  // arrives after the short timing window (slow or network volumes).
+  private readonly internalWriteHashes = new Map<string, string>()
   private readonly projectCandidates = new Map<string, ProjectCandidate>()
   private readonly reindexTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private activationQueue: Promise<void> = Promise.resolve()
+  // Full OOXML inspection inflates every part synchronously. Opening a file
+  // and each later session fetch all validate it, so remember the verdict for
+  // an unchanged file instead of repeating the work.
+  private readonly packageInspections = new Map<string, {
+    key: string
+    inspection: Awaited<ReturnType<typeof inspectDocxPackage>> | Awaited<ReturnType<typeof inspectXlsxPackage>> | PptxPackageInspection
+  }>()
   private readonly binarySessions = new Map<string, {
     fileId: string
     environmentId: string
@@ -471,7 +484,7 @@ export class WorkspaceService {
         throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
       }
     }
-    this.suppressInternalWrite(safePath)
+    this.suppressInternalWrite(safePath, sha256(nextBuffer))
     try {
       await writeFileAtomic(safePath, nextBuffer, { fsync: true })
     } catch (error) {
@@ -518,7 +531,7 @@ export class WorkspaceService {
     const hasBom = request.expectedRevision.hasBom ?? false
     const nextBuffer = encodeMarkdown(request.content, lineEnding, hasBom)
     this.assertDocumentSize(nextBuffer.byteLength, tracked.documentKind)
-    this.suppressInternalWrite(targetPath)
+    this.suppressInternalWrite(targetPath, sha256(nextBuffer))
     try {
       await writeFileAtomic(targetPath, nextBuffer, { fsync: true })
     } catch (error) {
@@ -567,18 +580,20 @@ export class WorkspaceService {
       if (duplicate && duplicate.id !== tracked.id) {
         throw new DesktopError('ALREADY_EXISTS', 'That destination is already open in this environment.')
       }
+      if (request.copy && targetPath === sourcePath) {
+        throw new DesktopError('INVALID_PATH', 'Choose a different location for the copy.')
+      }
     }
     if (!destinationPath) {
-      const current = await readFile(sourcePath)
-      if (!request.force && sha256(current) !== request.expectedRevision.sha256) {
+      if (!request.force && await sha256File(sourcePath) !== request.expectedRevision.sha256) {
         throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
       }
       await this.resolveTrackedDocumentPath(tracked)
     }
 
-    this.suppressInternalWrite(targetPath)
+    const dataView = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
+    this.suppressInternalWrite(targetPath, sha256(dataView))
     try {
-      const dataView = Buffer.from(data.buffer, data.byteOffset, data.byteLength)
       await writeFileAtomic(targetPath, dataView, { fsync: true })
     } catch (error) {
       this.suppressedWrites.delete(targetPath)
@@ -591,7 +606,10 @@ export class WorkspaceService {
       size: savedStats.size,
       sha256: await sha256File(targetPath)
     }
-    if (destinationPath) {
+    if (destinationPath && request.copy) {
+      // A copy leaves the tracked document pointing at its original file.
+      await this.refreshProjectIndexes([this.findContainingProject(targetPath)?.id])
+    } else if (destinationPath) {
       const project = this.findContainingProject(targetPath)
       this.database.updateTrackedFile(tracked.id, targetPath, project?.id, tracked.documentKind)
       await this.restartStandaloneWatcher()
@@ -655,16 +673,31 @@ export class WorkspaceService {
       throw new DesktopError('INVALID_FILE', 'Use a Markdown, HTML, DOCX, PDF, XLSX, or PPTX filename.')
     }
     const renamedKind = sourceStats.isFile() ? documentKindFromName(name) : undefined
+    const sourceKind = sourceStats.isFile() ? documentKindFromName(source) : undefined
+    if (
+      renamedKind && sourceKind && renamedKind !== sourceKind &&
+      !(isTextDocumentKind(renamedKind) && isTextDocumentKind(sourceKind))
+    ) {
+      // Renaming never converts content. Markdown and HTML are both plain text,
+      // but any other change would leave, for example, Markdown text inside a
+      // file named .docx that no editor can open.
+      throw new DesktopError('INVALID_FILE', 'Renaming cannot change a document’s format. Keep its current file extension.')
+    }
     if (renamedKind && !project.enabledDocumentKinds.includes(renamedKind)) {
       throw new DesktopError('INVALID_FILE', 'Enable this document type in Project settings before using that extension.')
     }
     const target = await resolveNewPath(project.path, toPosixPath(relative(project.path, dirname(source))), name)
-    try {
-      await access(target)
+    if (target === source) {
+      throw new DesktopError('ALREADY_EXISTS', 'That item already has this name.')
+    }
+    const existing = await stat(target).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    // On a case-insensitive volume, `Readme.md` → `README.md` finds the source
+    // itself; only a different file is a real name collision.
+    if (existing && (existing.ino !== sourceStats.ino || existing.dev !== sourceStats.dev)) {
       throw new DesktopError('ALREADY_EXISTS', 'An item with that name already exists.')
-    } catch (error) {
-      if (error instanceof DesktopError) throw error
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     const environmentId = this.requireEnvironment()
     const changes = this.database.listTrackedFiles(environmentId)
@@ -714,8 +747,17 @@ export class WorkspaceService {
     }
   }
 
-  getProjectEntryPath(projectId: string, relativePath: string): Promise<string> {
-    return resolveExistingPath(this.requireProject(projectId).path, relativePath)
+  async getProjectEntryPath(
+    projectId: string,
+    relativePath: string,
+    options: { allowRoot?: boolean } = {}
+  ): Promise<string> {
+    const project = this.requireProject(projectId)
+    const fullPath = await resolveExistingPath(project.path, relativePath)
+    if (options.allowRoot === false && fullPath === project.path) {
+      throw new DesktopError('INVALID_PATH', 'Remove the project instead of moving its folder to the Trash.')
+    }
+    return fullPath
   }
 
   async markPathMissing(projectId: string, relativePath: string): Promise<void> {
@@ -790,12 +832,17 @@ export class WorkspaceService {
 
   async locateTrackedFile(fileId: string, replacementPath: string): Promise<DocumentSnapshot> {
     const tracked = this.requireTrackedFile(fileId)
+    if ((await lstat(replacementPath)).isSymbolicLink()) {
+      throw new DesktopError('INVALID_PATH', 'Symbolic-link documents are not available.')
+    }
     const canonical = await realpath(replacementPath)
     const fileStats = await stat(canonical)
     const documentKind = documentKindFromName(canonical)
     if (!fileStats.isFile() || !documentKind) {
-      throw new DesktopError('INVALID_FILE', 'Choose a Markdown, HTML, DOCX, PDF, or XLSX document.')
+      throw new DesktopError('INVALID_FILE', 'Choose a Markdown, HTML, DOCX, PDF, XLSX, or PPTX document.')
     }
+    this.assertDocumentSize(fileStats.size, documentKind)
+    await this.validateDocumentSignature(canonical, documentKind)
     const duplicate = this.database.findTrackedFile(this.requireEnvironment(), canonical)
     if (duplicate && duplicate.id !== fileId) {
       throw new DesktopError('ALREADY_EXISTS', 'That document is already tracked in this environment.')
@@ -813,7 +860,9 @@ export class WorkspaceService {
     const documentPath = await this.resolveTrackedDocumentPath(tracked)
     const project = tracked.projectId ? this.database.getProject(tracked.projectId) : null
     const authorityRoot = project?.path ?? dirname(documentPath)
-    const candidate = resolve(dirname(documentPath), target.split(/[?#]/)[0] ?? '')
+    // `target` is already a decoded relative file path (see localReferenceToPath),
+    // so `?` and `#` here are literal filename characters.
+    const candidate = resolve(dirname(documentPath), target)
     if (!isPathInside(authorityRoot, candidate)) throw new DesktopError('INVALID_PATH', 'That asset points outside the allowed folder.')
     const canonical = await resolveExistingPath(authorityRoot, toPosixPath(relative(authorityRoot, candidate)))
     const mimeType = LOCAL_ASSET_MIME_TYPES[extname(canonical).toLowerCase()]
@@ -825,6 +874,7 @@ export class WorkspaceService {
 
   async close(): Promise<void> {
     this.binarySessions.clear()
+    this.packageInspections.clear()
     await this.stopWatchers()
   }
 
@@ -897,7 +947,7 @@ export class WorkspaceService {
     }
 
     const session = this.createBinarySession(tracked.id, tracked.environmentId, documentKind)
-    const presentationInspection = documentKind === 'pptx' ? await inspectPptxPackage(safePath) : undefined
+    const presentationInspection = documentKind === 'pptx' ? await this.inspectPptx(safePath) : undefined
     return {
       ...base,
       documentKind,
@@ -988,7 +1038,7 @@ export class WorkspaceService {
   ): Promise<void> {
     if (documentKind === 'docx') {
       try {
-        await inspectDocxPackage(path)
+        await this.inspectPackage(path, 'docx')
       } catch (error) {
         throw new DesktopError(
           'INVALID_FILE',
@@ -1000,7 +1050,7 @@ export class WorkspaceService {
     }
     if (documentKind === 'xlsx') {
       try {
-        await inspectXlsxPackage(path)
+        await this.inspectPackage(path, 'xlsx')
       } catch (error) {
         throw new DesktopError(
           'INVALID_FILE',
@@ -1012,7 +1062,7 @@ export class WorkspaceService {
     }
     if (documentKind === 'pptx') {
       try {
-        await inspectPptxPackage(path)
+        await this.inspectPackage(path, 'pptx')
       } catch (error) {
         throw new DesktopError(
           'INVALID_FILE',
@@ -1051,6 +1101,30 @@ export class WorkspaceService {
     } finally {
       await handle.close()
     }
+  }
+
+  private async inspectPptx(path: string): Promise<PptxPackageInspection> {
+    return await this.inspectPackage(path, 'pptx') as PptxPackageInspection
+  }
+
+  private async inspectPackage(path: string, documentKind: 'docx' | 'xlsx' | 'pptx'): Promise<unknown> {
+    const fileStats = await stat(path)
+    const key = `${documentKind}:${fileStats.dev}:${fileStats.ino}:${fileStats.size}:${fileStats.mtimeMs}`
+    const cached = this.packageInspections.get(path)
+    if (cached?.key === key) return cached.inspection
+    const inspection = documentKind === 'docx'
+      ? await inspectDocxPackage(path)
+      : documentKind === 'xlsx'
+        ? await inspectXlsxPackage(path)
+        : await inspectPptxPackage(path)
+    this.packageInspections.delete(path)
+    this.packageInspections.set(path, { key, inspection })
+    while (this.packageInspections.size > MAX_CACHED_PACKAGE_INSPECTIONS) {
+      const oldest = this.packageInspections.keys().next().value
+      if (oldest === undefined) break
+      this.packageInspections.delete(oldest)
+    }
+    return inspection
   }
 
   private validateBinaryBuffer(
@@ -1140,7 +1214,8 @@ export class WorkspaceService {
     await writeFile(target, await Packer.toBuffer(document), { flag: 'wx' })
   }
 
-  private suppressInternalWrite(path: string): void {
+  private suppressInternalWrite(path: string, contentHash?: string): void {
+    if (contentHash) this.internalWriteHashes.set(path, contentHash)
     const until = Date.now() + 2_000
     this.suppressedWrites.set(path, until)
     const timer = setTimeout(() => {
@@ -1319,7 +1394,9 @@ export class WorkspaceService {
         return !documentKind || !policy.includes(normalized, documentKind)
       }
     })
-    watcher.on('all', (eventName, fullPath) => this.handleProjectEvent(project, eventName, fullPath))
+    watcher.on('all', (eventName, fullPath) => {
+      void this.handleProjectEvent(project, eventName, fullPath).catch(() => this.scheduleProjectReindex(project))
+    })
     this.projectWatchers.set(project.id, watcher)
   }
 
@@ -1346,22 +1423,25 @@ export class WorkspaceService {
       followSymlinks: false,
       awaitWriteFinish: { stabilityThreshold: 180, pollInterval: 40 }
     })
-    watcher.on('all', (eventName, fullPath) => {
+    watcher.on('all', (eventName, fullPath) => void (async () => {
       if (!watchedEnvironmentId || this.environmentId !== watchedEnvironmentId) return
       const file = exactFilesByPath.get(fullPath)
       if (!file) return
-      if (this.consumeSuppressed(fullPath)) return
+      if (await this.isOwnWrite(fullPath, eventName)) return
+      if (this.environmentId !== watchedEnvironmentId) return
       const type: EnvironmentEvent['type'] =
         eventName.startsWith('unlink') ? 'removed' : eventName === 'add' ? 'added' : 'changed'
       if (type === 'removed') this.database.setTrackedFileMissing(file.id, true)
       else this.database.setTrackedFileMissing(file.id, false)
       this.onEvent({ type, fileId: file.id, isDirectory: false })
-    })
+    })().catch(() => undefined))
     this.standaloneWatcher = watcher
   }
 
-  private handleProjectEvent(project: ProjectRecord, eventName: string, fullPath: string): void {
-    if (project.environmentId !== this.environmentId || !isPathInside(project.path, fullPath) || this.consumeSuppressed(fullPath)) return
+  private async handleProjectEvent(project: ProjectRecord, eventName: string, fullPath: string): Promise<void> {
+    if (project.environmentId !== this.environmentId || !isPathInside(project.path, fullPath)) return
+    if (await this.isOwnWrite(fullPath, eventName)) return
+    if (project.environmentId !== this.environmentId) return
     const isDirectory = eventName === 'addDir' || eventName === 'unlinkDir'
     const relativePath = toPosixPath(relative(project.path, fullPath))
     const documentKind = documentKindFromName(fullPath)
@@ -1371,7 +1451,41 @@ export class WorkspaceService {
     if (file && type === 'removed') this.database.setTrackedFileMissing(file.id, true)
     if (file && type === 'added') this.database.setTrackedFileMissing(file.id, false)
     this.onEvent({ type, projectId: project.id, fileId: file?.id, relativePath, isDirectory })
-    if (type !== 'changed' || isDirectory) this.scheduleProjectReindex(project)
+    if (type === 'changed') return
+    if (isDirectory || !documentKind) {
+      this.scheduleProjectReindex(project)
+      return
+    }
+    // A single file appearing or disappearing updates its own index row
+    // instead of rescanning the whole project.
+    if (type === 'removed') {
+      this.database.removeProjectIndexFile(project.id, relativePath)
+    } else {
+      const fileStats = await stat(fullPath)
+      if (!fileStats.isFile()) return
+      const parentPath = toPosixPath(dirname(relativePath))
+      this.database.upsertProjectIndexFile(project.id, {
+        projectId: project.id,
+        relativePath,
+        parentPath: parentPath === '.' ? '' : parentPath,
+        name: basename(fullPath),
+        mtimeMs: fileStats.mtimeMs,
+        size: fileStats.size,
+        documentKind
+      })
+    }
+    this.onEvent({ type: 'tree-changed', projectId: project.id, isDirectory: true })
+  }
+
+  private async isOwnWrite(fullPath: string, eventName: string): Promise<boolean> {
+    if (this.consumeSuppressed(fullPath)) return true
+    const expected = this.internalWriteHashes.get(fullPath)
+    if (!expected || eventName.startsWith('unlink')) return false
+    const actual = await sha256File(fullPath).catch(() => null)
+    if (actual === expected) return true
+    // The file now differs from what we wrote: from here on it is external.
+    this.internalWriteHashes.delete(fullPath)
+    return false
   }
 
   private scheduleProjectReindex(project: ProjectRecord, delay = 220): void {
@@ -1395,6 +1509,7 @@ export class WorkspaceService {
   }
 
   private async stopWatchers(): Promise<void> {
+    this.internalWriteHashes.clear()
     for (const timer of this.reindexTimers.values()) clearTimeout(timer)
     this.reindexTimers.clear()
     await Promise.all([...this.projectWatchers.values()].map((watcher) => watcher.close()))
@@ -1439,7 +1554,10 @@ function globMatcher(pattern: string): RegExp {
     .replaceAll('?', '[^/]')
     .replaceAll('\u0000', '(?:.*/)?')
     .replaceAll('\u0001', '.*')
-  const prefix = pattern.endsWith('/') ? source : `${source}(?:/.*)?`
+  // `drafts/` names a folder: it matches the folder itself (tested as
+  // `drafts/`) and everything below it. Other patterns match the path itself
+  // or anything below it.
+  const prefix = pattern.endsWith('/') ? `${source}.*` : `${source}(?:/.*)?`
   return new RegExp(`^${prefix}$`, 'i')
 }
 

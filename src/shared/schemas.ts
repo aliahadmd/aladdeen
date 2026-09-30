@@ -205,7 +205,8 @@ export const saveBinaryDocumentSchema = z.object({
   expectedRevision: fileRevisionSchema,
   byteLength: z.number().int().positive().max(512 * 1024 * 1024),
   force: z.boolean().optional(),
-  saveAs: z.boolean().optional()
+  saveAs: z.boolean().optional(),
+  copy: z.boolean().optional()
 })
 
 export const externalUrlSchema = z

@@ -103,7 +103,8 @@ function docxDocument(): OpenDocument {
     editorScrollTop: 0,
     editorSelection: 0,
     binaryDirty: false,
-    adapterRevision: 0
+    adapterRevision: 0,
+    loadGeneration: 1
   }
 }
 

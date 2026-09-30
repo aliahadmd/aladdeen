@@ -1,5 +1,6 @@
 import DOMPurify from 'dompurify'
 import { parse, serialize, type ParserError } from 'parse5'
+import { toAssetUrl } from '@shared/path'
 
 interface Parse5Location {
   startOffset: number
@@ -35,7 +36,7 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
       if (/^on/i.test(attribute.name)) element.removeAttribute(attribute.name)
     }
   }
-  for (const anchor of document.querySelectorAll<HTMLAnchorElement>('a[href]')) {
+  for (const anchor of document.querySelectorAll<HTMLAnchorElement | HTMLAreaElement>('a[href], area[href]')) {
     anchor.dataset.aladdeenBlockedLink = anchor.href
     anchor.removeAttribute('href')
   }
@@ -102,5 +103,5 @@ function localAssetUrl(fileId: string, value: string): string | null {
   ) {
     return trimmed.startsWith('data:image/') ? trimmed : null
   }
-  return `aladdeen-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(trimmed)}`
+  return toAssetUrl(fileId, trimmed)
 }

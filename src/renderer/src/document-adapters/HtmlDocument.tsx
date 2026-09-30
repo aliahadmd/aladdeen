@@ -35,6 +35,9 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
   const dark = useEffectiveDarkMode()
   const htmlContent = document.documentKind === 'html' ? document.content : ''
   const [mode, setMode] = useState<HtmlMode>(compact ? 'preview' : 'split')
+  const modeRef = useRef(mode)
+  modeRef.current = mode
+  const [editorGeneration, setEditorGeneration] = useState(0)
   const [previewSource, setPreviewSource] = useState(htmlContent)
   const iframe = useRef<HTMLIFrameElement>(null)
   const editorView = useRef<EditorView | null>(null)
@@ -57,7 +60,7 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
     })
     editorView.current.focus()
     consumeEditorReveal(document.id, reveal.id)
-  }, [consumeEditorReveal, document.editorReveal, document.id])
+  }, [consumeEditorReveal, document.editorReveal, document.id, editorGeneration])
 
   const preview = useMemo(
     () => prepareHtmlPreview(previewSource, document.id),
@@ -75,7 +78,12 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         height="100%"
         theme={dark ? oneDark : 'light'}
         extensions={extensions}
-        onCreateEditor={(view) => { editorView.current = view }}
+        onCreateEditor={(view) => {
+          editorView.current = view
+          // A reveal requested while the source pane was hidden runs once the
+          // editor exists.
+          setEditorGeneration((generation) => generation + 1)
+        }}
         onUpdate={(update: ViewUpdate) => {
           if (update.view !== editorView.current) editorView.current = update.view
         }}
@@ -100,7 +108,10 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         ref={iframe}
         title={`Preview of ${document.name}`}
         className="h-full w-full border-0 bg-surface-elevated"
-        sandbox=""
+        // Same origin lets this component read the sanitized preview for
+        // scroll restore and click-to-source. Scripts stay disabled: there is
+        // no allow-scripts, and the preview's own CSP forbids them.
+        sandbox="allow-same-origin"
         srcDoc={preview}
         onLoad={() => {
           const frameDocument = iframe.current?.contentDocument
@@ -111,7 +122,7 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
             previewScroll.current = frameWindow.scrollY
           }, { passive: true })
           frameDocument.addEventListener('click', (event) => {
-            if (mode === 'preview' || frameWindow.getSelection()?.toString()) return
+            if (modeRef.current === 'preview' || frameWindow.getSelection()?.toString()) return
             const target = event.target as HTMLElement | null
             if (!target?.closest || target.closest('a,button,input,summary')) return
             const mapped = target.closest<HTMLElement>('[data-aladdeen-source-start]')

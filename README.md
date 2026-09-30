@@ -97,6 +97,6 @@ PPTX editing is fully offline and lazily loads the Apache-2.0
 [`pptx-viewer`](https://github.com/ChristopherVR/pptx-viewer) stack. Aladdeen
 keeps the viewer behind an internal JSON-safe presentation API, disables its
 cloud, collaboration, export, recording, and built-in AI surfaces, and owns all
-autosave through the existing atomic binary-document path. Exact-pinned release
+saving through the existing atomic binary-document path. Exact-pinned release
 checks qualify edit/save/reopen behavior and byte-for-byte preservation of
 untouched OOXML parts before packaging.

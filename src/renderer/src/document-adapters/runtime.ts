@@ -20,7 +20,6 @@ export interface BinaryDocumentRuntime {
   focus?(): void
   spreadsheet?: SpreadsheetDocumentApi
   presentation?: PresentationDocumentApi
-  autosaveAllowed?(): boolean
   requiresSaveAs?(): boolean
   readOnly?(): boolean
   cleanup(): void

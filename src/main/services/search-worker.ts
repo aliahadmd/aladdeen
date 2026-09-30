@@ -187,6 +187,15 @@ export interface SourceOffsetSegment {
 }
 
 async function readCandidate(candidate: SearchWorkerCandidate): Promise<ExtractedSearchContent | null> {
+  try {
+    return await readCandidateContent(candidate)
+  } catch {
+    // One unreadable document is skipped rather than failing the whole search.
+    return null
+  }
+}
+
+async function readCandidateContent(candidate: SearchWorkerCandidate): Promise<ExtractedSearchContent | null> {
   if (candidate.contentOverride !== undefined) {
     if (candidate.contentOverride.kind === 'spreadsheet') {
       return candidate.documentKind === 'xlsx'
@@ -715,16 +724,27 @@ async function withinDeadline<T>(promise: Promise<T>, deadline: number, message:
   }
 }
 
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/&#(\d+);/g, (_match, code: string) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([\da-f]+);/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replaceAll('&nbsp;', '\u00a0')
-    .replaceAll('&amp;', '&')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: '\u00a0',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'"
+}
+
+export function decodeHtmlEntities(value: string): string {
+  // One pass, so decoded text is never decoded again (`&amp;lt;` stays `&lt;`).
+  return value.replace(/&(?:#(\d+)|#x([\da-f]+)|(nbsp|amp|lt|gt|quot|apos));/gi, (match, decimal?: string, hex?: string, named?: string) => {
+    if (named) return NAMED_ENTITIES[named.toLowerCase()] ?? match
+    const codePoint = decimal !== undefined ? Number(decimal) : Number.parseInt(hex ?? '', 16)
+    // Out-of-range and surrogate code points decode to U+FFFD, as browsers do,
+    // instead of throwing and failing the whole search.
+    if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+      return '\ufffd'
+    }
+    return String.fromCodePoint(codePoint)
+  })
 }
 
 function post(event: SearchWorkerEvent): void {

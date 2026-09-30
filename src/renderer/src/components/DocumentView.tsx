@@ -23,7 +23,10 @@ export function DocumentView(): React.JSX.Element {
     <section className="document-workspace relative grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_27px] bg-surface-elevated">
       {document.documentKind === 'markdown' && <DocumentActions />}
       <div className="document-main h-full min-h-0 min-w-0">
-        <DocumentAdapterBoundary key={document.id} document={document}>
+        <DocumentAdapterBoundary
+          key={'loadGeneration' in document ? `${document.id}:${document.loadGeneration}` : document.id}
+          document={document}
+        >
           <Suspense fallback={<AdapterLoading document={document} />}>
             <Adapter document={document} />
           </Suspense>

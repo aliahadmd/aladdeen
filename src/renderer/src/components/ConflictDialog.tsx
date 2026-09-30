@@ -30,7 +30,7 @@ export function ConflictDialog(): React.JSX.Element {
           </div>
           <AlertDialog.Title className={dialogTitleClasses}>{document?.name ?? 'This file'} changed on disk</AlertDialog.Title>
           <AlertDialog.Description className={dialogDescriptionClasses}>
-            Aladdeen paused autosave so neither version is lost. Choose which copy should become the active document.
+            Aladdeen kept your unsaved edits separate so neither version is lost. Choose which copy should become the active document.
             {conflictFileIds.length > 1 && ` ${conflictFileIds.length - 1} more conflicted ${conflictFileIds.length === 2 ? 'document is' : 'documents are'} waiting.`}
           </AlertDialog.Description>
           <div className="mt-[18px] grid gap-[7px]">

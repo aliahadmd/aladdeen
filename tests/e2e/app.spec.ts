@@ -91,6 +91,50 @@ test('opens, edits, saves, and reopens a local XLSX workbook', async () => {
   }
 })
 
+test('rebuilds the XLSX editor when the workbook changes on disk', async () => {
+  test.setTimeout(90_000)
+  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-reload-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-reload-workspace-'))
+  const xlsxPath = join(workspace, 'plan.xlsx')
+  const workbookWithSheet = async (sheetName: string, value: string): Promise<Uint8Array> => {
+    const workbook = createWorkbook()
+    setCell(addWorksheet(workbook, sheetName), 1, 1, value)
+    return namespaceWorkbookSheetElements(await workbookToBytes(workbook))
+  }
+  await writeFile(xlsxPath, await workbookWithSheet('Budget', 'Original'))
+  const application = await electron.launch({ args: ['.', xlsxPath, `--user-data-dir=${userData}`] })
+
+  try {
+    const window = await application.firstWindow()
+    await createFirstEnvironment(window)
+    const editor = window.locator('.aladdeen-xlsx-host')
+    await expect(editor.getByText('Budget', { exact: true })).toBeVisible({ timeout: 30_000 })
+
+    await writeFile(xlsxPath, await workbookWithSheet('Forecast', 'Changed elsewhere'))
+    await expect(window.getByText('plan.xlsx was updated from disk.')).toBeVisible({ timeout: 20_000 })
+    await expect(editor.getByText('Forecast', { exact: true })).toBeVisible({ timeout: 30_000 })
+
+    // The rebuilt editor is live: it accepts edits and saves them.
+    const canvas = editor.locator('canvas[id^="univer-sheet-main-canvas_"]')
+    await expect(canvas).toBeVisible()
+    await canvas.click({ position: { x: 85, y: 38 }, force: true })
+    await window.keyboard.insertText('Edited after reload')
+    await window.keyboard.press('Enter')
+    await window.keyboard.press('ControlOrMeta+S')
+    await expect.poll(async () => {
+      const saved = await loadWorkbook(fromBuffer(await readFile(xlsxPath)))
+      const sheet = saved.sheets.find((candidate) => candidate.kind === 'worksheet')
+      return sheet?.kind === 'worksheet' ? getCell(sheet.sheet, 1, 1)?.value : undefined
+    }, { timeout: 20_000 }).toBe('Edited after reload')
+  } finally {
+    await closeElectron(application)
+    await Promise.all([
+      rm(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }),
+      rm(workspace, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+    ])
+  }
+})
+
 test('requires one compatibility copy and preserves unknown XLSX parts on later saves', async () => {
   test.setTimeout(90_000)
   const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-profile-'))
@@ -527,6 +571,11 @@ test('opens and edits a dropped HTML document in place with contained local asse
     await expect.poll(() => preview.locator('img').evaluate(
       (image: HTMLImageElement) => image.complete && image.naturalWidth > 0
     )).toBe(true)
+
+    // In split view, clicking rendered content reveals its source line. This
+    // needs the sandboxed preview to stay readable by the app (no scripts).
+    await preview.getByText('Opened directly and completely offline.').click()
+    await expect(window.locator('.html-source-editor .cm-activeLine')).toContainText('Opened directly and completely offline.')
 
     await window.getByRole('button', { name: 'Source' }).click()
     const editor = window.locator('.html-source-editor .cm-content')

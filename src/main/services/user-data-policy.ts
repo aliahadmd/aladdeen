@@ -1,6 +1,8 @@
 import { join } from 'node:path'
 
 const DEVELOPMENT_USER_DATA_DIRECTORY = 'aladdeen-dev'
+// Profile directory of the app's previous product name; its database is
+// migrated on first launch (see restorePreviousDatabase).
 const PREVIOUS_APPLICATION_DIRECTORY = ['Fl', 'uid', 'MD'].join('')
 
 export interface UserDataPolicy {

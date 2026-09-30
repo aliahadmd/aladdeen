@@ -434,7 +434,6 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
               redo: () => viewer?.redo(),
               focus: () => host.current?.focus(),
               presentation,
-              autosaveAllowed: () => !localRequiresSaveAs && localCompatibility.level !== 'read-only',
               requiresSaveAs: () => localRequiresSaveAs,
               readOnly: () => localCompatibility.level === 'read-only',
               cleanup

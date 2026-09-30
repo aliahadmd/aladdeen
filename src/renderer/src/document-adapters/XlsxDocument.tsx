@@ -157,7 +157,6 @@ export function XlsxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
           redo: () => { void univerAPI.redo() },
           focus: () => host.current?.focus(),
           spreadsheet,
-          autosaveAllowed: () => !localRequiresSaveAs && loaded.compatibility.level !== 'read-only',
           requiresSaveAs: () => localRequiresSaveAs,
           readOnly: () => loaded.compatibility.level === 'read-only',
           cleanup

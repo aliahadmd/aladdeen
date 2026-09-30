@@ -1,4 +1,4 @@
-import { basename, extname } from 'node:path'
+import { basename, extname, isAbsolute } from 'node:path'
 import { isAnyArrayBuffer } from 'node:util/types'
 import {
   dialog,
@@ -43,7 +43,7 @@ interface IpcDependencies {
   exports: ExportService
   search: GlobalSearchService
   getWindow: () => BrowserWindow | null
-  getPendingOpenRequest: () => OpenFileRequest | undefined
+  getPendingOpenRequests: () => OpenFileRequest[]
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
   completeClose: (requestId: string, outcome: 'ready' | 'blocked' | 'cancelled') => void
 }
@@ -72,7 +72,7 @@ export function registerIpc({
   exports,
   search,
   getWindow,
-  getPendingOpenRequest,
+  getPendingOpenRequests,
   acceptSystemOpenFile,
   completeClose
 }: IpcDependencies): void {
@@ -90,7 +90,7 @@ export function registerIpc({
     return {
       settings: database.getSettings(),
       environment: active ? await workspace.activateEnvironment(active.id) : null,
-      pendingOpenRequest: getPendingOpenRequest()
+      pendingOpenRequests: getPendingOpenRequests()
     }
   })
   handle(IPC.completeClose, async (_event, input) => {
@@ -202,7 +202,11 @@ export function registerIpc({
     return workspace.openAbsoluteDocument(result.filePaths[0])
   })
   handle(IPC.openDroppedFile, async (_event, input) => {
-    const paths = parse(z.array(z.string().min(1).max(16_384)).min(1).max(MAX_DROPPED_DOCUMENTS), input)
+    // Paths come from webUtils.getPathForFile in the preload; files made by
+    // page scripts have no path, so anything relative or empty is rejected.
+    const paths = parse(z.array(
+      z.string().min(1).max(16_384).refine((path) => isAbsolute(path), 'Dropped documents need an absolute path')
+    ).min(1).max(MAX_DROPPED_DOCUMENTS), input)
     const documents: DocumentSnapshot[] = []
     for (const path of paths) documents.push(await workspace.openAbsoluteDocument(path))
     return documents
@@ -275,7 +279,7 @@ export function registerIpc({
   handle(IPC.renameEntry, async (_event, input) => workspace.renameEntry(parse(renameEntrySchema, input)))
   handle(IPC.trashEntry, async (_event, input) => {
     const request = parse(z.object({ projectId: idSchema, path: relativePathSchema }), input)
-    const fullPath = await workspace.getProjectEntryPath(request.projectId, request.path)
+    const fullPath = await workspace.getProjectEntryPath(request.projectId, request.path, { allowRoot: false })
     await shell.trashItem(fullPath)
     await workspace.markPathMissing(request.projectId, request.path)
   })
@@ -322,12 +326,12 @@ export function registerIpc({
       const request = parse(saveBinaryDocumentSchema, input)
       const data = await receiveBinaryPayload(port, request.byteLength)
       let destinationPath: string | undefined
-      if (request.saveAs) {
+      if (request.saveAs || request.copy) {
         const currentPath = workspace.getTrackedFilePath(request.fileId)
         const kind = workspace.getTrackedDocumentKind(request.fileId)
         const extension = kind
         const result = await showSaveDialog(getWindow(), {
-          title: `Save ${kind.toUpperCase()} as`,
+          title: request.copy ? `Save a copy of this ${kind.toUpperCase()}` : `Save ${kind.toUpperCase()} as`,
           defaultPath: `${basename(currentPath, `.${extension}`)} copy.${extension}`,
           filters: [{
             name: kind === 'docx'
@@ -353,12 +357,28 @@ export function registerIpc({
   })
 }
 
+let openFileDialogs = 0
+
+/** True while a native open/save panel started by a renderer request is showing. */
+export function hasOpenFileDialog(): boolean {
+  return openFileDialogs > 0
+}
+
+async function trackDialog<T>(dialogPromise: () => Promise<T>): Promise<T> {
+  openFileDialogs += 1
+  try {
+    return await dialogPromise()
+  } finally {
+    openFileDialogs -= 1
+  }
+}
+
 function showOpenDialog(window: BrowserWindow | null, options: Electron.OpenDialogOptions): Promise<Electron.OpenDialogReturnValue> {
-  return window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options)
+  return trackDialog(() => window ? dialog.showOpenDialog(window, options) : dialog.showOpenDialog(options))
 }
 
 function showSaveDialog(window: BrowserWindow | null, options: Electron.SaveDialogOptions): Promise<Electron.SaveDialogReturnValue> {
-  return window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options)
+  return trackDialog(() => window ? dialog.showSaveDialog(window, options) : dialog.showSaveDialog(options))
 }
 
 function receiveBinaryPayload(

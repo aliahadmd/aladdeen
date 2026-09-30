@@ -207,7 +207,11 @@ function inspectPptxContents(
       maxCompressionRatio: 200
     })
   }
-  const xml = extractZipTextEntries(data, requested)
+  const xml = extractZipTextEntries(
+    data,
+    requested,
+    (name) => name.startsWith('ppt/slides/') ? 32 * 1024 * 1024 : 16 * 1024 * 1024
+  )
   const presentationXml = xml.get('ppt/presentation.xml')
   const relationshipsXml = xml.get('ppt/_rels/presentation.xml.rels')
   const contentTypesXml = xml.get('[Content_Types].xml')
@@ -296,10 +300,16 @@ function inspectPptxContents(
   }
 }
 
-function extractZipTextEntries(data: Uint8Array, requested: ReadonlySet<string>): Map<string, string> {
+function extractZipTextEntries(
+  data: Uint8Array,
+  requested: ReadonlySet<string>,
+  maxEntryBytes: (name: string) => number
+): Map<string, string> {
   const chunks = new Map<string, string[]>()
   const decoders = new Map<string, TextDecoder>()
+  const inflatedBytes = new Map<string, number>()
   const completed = new Set<string>()
+  let totalInflatedBytes = 0
   let failure: Error | null = null
   const unzipper = new Unzip((file) => {
     const name = normalizeZipName(file.name)
@@ -310,6 +320,16 @@ function extractZipTextEntries(data: Uint8Array, requested: ReadonlySet<string>)
       if (failure) return
       if (error) {
         failure = error
+        file.terminate()
+        return
+      }
+      // The central directory sizes checked earlier are self-declared; enforce
+      // the same budgets on the bytes actually inflated.
+      const entryBytes = (inflatedBytes.get(name) ?? 0) + chunk.byteLength
+      inflatedBytes.set(name, entryBytes)
+      totalInflatedBytes += chunk.byteLength
+      if (entryBytes > maxEntryBytes(name) || totalInflatedBytes > MAX_EXPANDED_BYTES) {
+        failure = new Error(`${name} expands beyond the permitted size.`)
         file.terminate()
         return
       }
@@ -367,12 +387,15 @@ function inspectXlsxContents(
   const worksheetCarries = new Map<string, string>()
   const worksheetDecoders = new Map<string, TextDecoder>()
   const completed = new Set<string>()
+  const inflatedBytes = new Map<string, number>()
+  let totalInflatedBytes = 0
   let populatedCells = 0
   let failure: Error | null = null
   const unzipper = new Unzip((file) => {
     const name = normalizeZipName(file.name)
     if (!requested.has(name)) return
     const isWorksheet = worksheetCandidates.has(name)
+    const entryLimit = isWorksheet ? 512 * 1024 * 1024 : 16 * 1024 * 1024
     if (!isWorksheet) {
       textParts.set(name, [])
       textDecoders.set(name, new TextDecoder())
@@ -382,6 +405,14 @@ function inspectXlsxContents(
       if (failure) return
       if (error) {
         failure = error
+        file.terminate()
+        return
+      }
+      const entryBytes = (inflatedBytes.get(name) ?? 0) + chunk.byteLength
+      inflatedBytes.set(name, entryBytes)
+      totalInflatedBytes += chunk.byteLength
+      if (entryBytes > entryLimit || totalInflatedBytes > MAX_EXPANDED_BYTES) {
+        failure = new Error(`${name} expands beyond the permitted size.`)
         file.terminate()
         return
       }

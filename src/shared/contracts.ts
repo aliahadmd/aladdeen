@@ -385,6 +385,12 @@ export interface TextOpenDocument extends TextDocumentSnapshot, OpenDocumentStat
 export interface BinaryOpenDocument extends BinaryDocumentSnapshot, OpenDocumentState {
   binaryDirty: boolean
   adapterRevision: number
+  /**
+   * Changes every time the document is (re)loaded from disk, but not when it
+   * is saved. Binary adapters are keyed by it so a reload always rebuilds the
+   * editor from the fresh snapshot instead of reusing a torn-down instance.
+   */
+  loadGeneration: number
 }
 
 export type OpenDocument = TextOpenDocument | BinaryOpenDocument
@@ -420,7 +426,8 @@ export interface AppSettings extends ReadingSettings {
 export interface BootstrapData {
   settings: AppSettings
   environment: EnvironmentSnapshot | null
-  pendingOpenRequest?: OpenFileRequest
+  /** Finder/system open requests that arrived before the window could take them. */
+  pendingOpenRequests: OpenFileRequest[]
 }
 
 export interface EnvironmentEvent {
@@ -462,6 +469,11 @@ export interface SaveBinaryDocumentRequest {
   byteLength: number
   force?: boolean
   saveAs?: boolean
+  /**
+   * Write the bytes to a user-chosen destination without re-pointing the
+   * tracked document at it. Implies a Save As dialog.
+   */
+  copy?: boolean
 }
 
 export interface CreateEntryRequest {
