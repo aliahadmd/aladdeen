@@ -43,3 +43,12 @@ patchedDependencies:
   minimatch@3.1.5: patches/minimatch@3.1.5.patch
   minimatch@5.1.9: patches/minimatch@5.1.9.patch
   minimatch@9.0.9: patches/minimatch@9.0.9.patch
+auditConfig:
+  # http-cache-semantics <=4.2.0 can disclose cross-user cached responses via
+  # max-stale (GHSA-ch52-4w7c-c8xp). The advisory names 4.2.1 as the fix, but
+  # 4.2.1 is not published yet. It is reached only through electron-builder's
+  # download cache on the packaging machine and is not in the shipped app.asar.
+  # Scoped to this one id: any NEW advisory still fails the gate. Remove once
+  # http-cache-semantics >=4.2.1 is available and resolved here.
+  ignoreGhsas:
+    - GHSA-ch52-4w7c-c8xp
