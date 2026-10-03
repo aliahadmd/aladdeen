@@ -10,18 +10,22 @@ import {
   CheckCircle2,
   Code2,
   Columns2,
+  ExternalLink,
   Eye,
+  Info,
   Save,
   SaveAll,
-  ShieldCheck
+  ShieldCheck,
+  X
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { useEffectiveDarkMode } from '@renderer/hooks/use-effective-dark-mode'
 import { useMediaQuery } from '@renderer/hooks/use-media-query'
 import { COMPACT_WORKSPACE_QUERY } from '@renderer/lib/breakpoints'
 import { cn } from '@renderer/lib/cn'
 import { useAppStore } from '@renderer/store/app-store'
 import type { DocumentAdapterProps } from './registry'
-import { prepareHtmlPreview, validateHtmlSource } from './html-preview'
+import { describeHtmlPreviewLimits, prepareHtmlPreview, validateHtmlSource } from './html-preview'
 
 type HtmlMode = 'source' | 'preview' | 'split'
 
@@ -34,7 +38,9 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
   const compact = useMediaQuery(COMPACT_WORKSPACE_QUERY)
   const dark = useEffectiveDarkMode()
   const htmlContent = document.documentKind === 'html' ? document.content : ''
-  const [mode, setMode] = useState<HtmlMode>(compact ? 'preview' : 'split')
+  // Open on the rendered page; source and split views are one click away.
+  const [mode, setMode] = useState<HtmlMode>('preview')
+  const [limitsDismissed, setLimitsDismissed] = useState(false)
   const modeRef = useRef(mode)
   modeRef.current = mode
   const [editorGeneration, setEditorGeneration] = useState(0)
@@ -67,6 +73,20 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
     [document.id, previewSource]
   )
   const diagnostics = useMemo(() => validateHtmlSource(previewSource), [previewSource])
+  const limits = useMemo(() => describeHtmlPreviewLimits(previewSource), [previewSource])
+  const limitReasons = [
+    limits.usesRemoteResources ? 'loads styles or scripts from the internet' : '',
+    limits.usesScripts ? 'builds parts of itself with scripts' : ''
+  ].filter(Boolean)
+  const showLimits = mode !== 'source' && !limitsDismissed && limitReasons.length > 0
+
+  const openInBrowser = async (): Promise<void> => {
+    if (document.documentKind === 'html' && document.content !== document.savedContent) {
+      toast.info('Your browser shows the last saved version. Save to include your latest edits.')
+    }
+    const result = await window.aladdeen.system.openInBrowser(document.id)
+    if (!result.ok) toast.error(result.error.message)
+  }
   const extensions = useMemo(() => [html(), EditorView.lineWrapping], [])
 
   if (document.documentKind !== 'html') return <div />
@@ -140,8 +160,8 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
   )
 
   return (
-    <div className="relative grid h-full min-h-0 grid-rows-[39px_minmax(0,1fr)]">
-      <div className="flex items-center gap-1 border-b border-border bg-surface px-3">
+    <div className="relative flex h-full min-h-0 flex-col">
+      <div className="flex h-[39px] shrink-0 items-center gap-1 border-b border-border bg-surface px-3">
         <ModeButton active={mode === 'source'} icon={<Code2 size={13} />} onClick={() => setMode('source')}>Source</ModeButton>
         <ModeButton active={mode === 'preview'} icon={<Eye size={13} />} onClick={() => setMode('preview')}>Preview</ModeButton>
         {!compact && (
@@ -165,6 +185,15 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         >
           <SaveAll size={14} />
         </button>
+        <button
+          type="button"
+          className="grid h-7 w-7 shrink-0 place-items-center rounded-md border-0 bg-transparent text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+          onClick={() => void openInBrowser()}
+          aria-label="Open in browser"
+          title="Open in Browser"
+        >
+          <ExternalLink size={14} />
+        </button>
         <span
           className="ml-auto flex items-center gap-1.5 text-[10px] text-foreground-muted"
           title={diagnostics.length > 0
@@ -175,7 +204,33 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
           {diagnostics.length > 0 ? `${diagnostics.length} issue${diagnostics.length === 1 ? '' : 's'}` : 'Valid · Isolated'}
         </span>
       </div>
-      <div className="min-h-0">
+      {showLimits && (
+        <div role="note" className="flex shrink-0 items-center gap-2.5 border-b border-border bg-accent-soft px-3 py-2 text-[11px] text-foreground-soft">
+          <Info size={14} className="shrink-0 text-accent" />
+          <span className="min-w-0 flex-1">
+            Simplified preview: this page {limitReasons.join(' and ')}. Aladdeen previews offline with scripts off, so
+            some styling and content won’t appear.
+          </span>
+          <button
+            type="button"
+            onClick={() => void openInBrowser()}
+            className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[11px] font-semibold hover:opacity-90"
+            // Set inline: the global `button { color: inherit }` rule outranks utilities.
+            style={{ color: 'var(--accent-contrast)' }}
+          >
+            Open in Browser
+          </button>
+          <button
+            type="button"
+            onClick={() => setLimitsDismissed(true)}
+            aria-label="Dismiss"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-foreground-muted hover:bg-surface-hover hover:text-foreground"
+          >
+            <X size={13} />
+          </button>
+        </div>
+      )}
+      <div className="min-h-0 flex-1">
         {mode === 'source' ? sourcePane : mode === 'preview' ? previewPane : (
           <PanelGroup direction="horizontal" autoSaveId="aladdeen-html-split">
             <Panel defaultSize={48} minSize={28}>{sourcePane}</Panel>

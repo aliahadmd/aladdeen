@@ -3640,3 +3640,9 @@ body.is-resizing-sidebar * {
     box-shadow: inset 3px 0 0 var(--accent);
   }
 }
+
+/* Preview mode shows only the slides: the editing ribbon is hidden, not just
+   disabled. */
+.pptx-viewer-container[data-mode='preview'] .pptxv-ribbon {
+  display: none !important;
+}

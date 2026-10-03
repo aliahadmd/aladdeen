@@ -1,6 +1,9 @@
+import { execFile } from 'node:child_process'
 import { basename, extname, isAbsolute } from 'node:path'
+import { promisify } from 'node:util'
 import { isAnyArrayBuffer } from 'node:util/types'
 import {
+  app,
   dialog,
   ipcMain,
   nativeTheme,
@@ -47,6 +50,8 @@ interface IpcDependencies {
   acceptSystemOpenFile: (token: string) => Promise<DocumentSnapshot>
   completeClose: (requestId: string, outcome: 'ready' | 'blocked' | 'cancelled') => void
 }
+
+const execFileAsync = promisify(execFile)
 
 function parse<T>(schema: ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input)
@@ -317,6 +322,18 @@ export function registerIpc({
   })
   handle(IPC.exportDocument, async (_event, input) => exports.exportDocument(parse(exportRequestSchema, input)))
   handle(IPC.openExternal, async (_event, input) => shell.openExternal(parse(externalUrlSchema, input)))
+  handle(IPC.openInBrowser, async (_event, input) => {
+    const fileId = parse(idSchema, input)
+    if (workspace.getTrackedDocumentKind(fileId) !== 'html') {
+      throw new DesktopError('INVALID_FILE', 'Only HTML documents can be opened in a browser.')
+    }
+    const filePath = await workspace.resolveTrackedFilePath(fileId)
+    // Use the default web browser explicitly: the default app for .html files
+    // may be Aladdeen itself.
+    const browser = await app.getApplicationInfoForProtocol('https://').catch(() => null)
+    if (!browser?.path) throw new DesktopError('NOT_FOUND', 'No default web browser was found.')
+    await execFileAsync('/usr/bin/open', ['-a', browser.path, filePath])
+  })
 
   ipcMain.on(IPC.saveBinaryDocument, (event, input) => {
     const port = event.ports[0]

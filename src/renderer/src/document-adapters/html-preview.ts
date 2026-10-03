@@ -63,6 +63,11 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
     html { background: Canvas; color: CanvasText; }
     body { max-width: 880px; margin: 0 auto; padding: 72px clamp(24px, 6vw, 72px) 120px; overflow-wrap: anywhere; }
     img, video, canvas { max-width: 100%; height: auto; }
+    /* Icons sized only by framework classes (e.g. Tailwind's h-5 w-5) would
+       otherwise stretch to the page width when that framework can't load.
+       :where() keeps this at zero specificity so any real page CSS wins. */
+    :where(svg:not([width]):not([height])) { width: 1.25em; height: 1.25em; }
+    :where(svg) { max-width: 100%; }
     pre { overflow: auto; padding: 14px; border-radius: 8px; background: color-mix(in srgb, CanvasText 7%, Canvas); }
     table { display: block; max-width: 100%; overflow: auto; border-collapse: collapse; }
     th, td { border: 1px solid color-mix(in srgb, CanvasText 20%, Canvas); padding: 6px 9px; }
@@ -70,6 +75,28 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
   `
   document.head.append(style)
   return `<!doctype html>\n${document.documentElement.outerHTML}`
+}
+
+export interface HtmlPreviewLimits {
+  /** The page runs scripts, which the preview never executes. */
+  usesScripts: boolean
+  /** The page loads styles, scripts, or fonts from the internet. */
+  usesRemoteResources: boolean
+}
+
+const REMOTE_URL = /^(?:https?:)?\/\//i
+
+/** Reports what a page relies on that the offline, script-free preview omits. */
+export function describeHtmlPreviewLimits(source: string): HtmlPreviewLimits {
+  const document = new DOMParser().parseFromString(source, 'text/html')
+  const usesScripts = document.querySelector('script:not([type="application/ld+json"]):not([type="application/json"])') !== null ||
+    Array.from(document.querySelectorAll('*')).some((element) =>
+      Array.from(element.attributes).some((attribute) => /^on/i.test(attribute.name)))
+  const remoteAttribute = Array.from(document.querySelectorAll<HTMLElement>('script[src], link[href]')).some((element) =>
+    REMOTE_URL.test(element.getAttribute('src') ?? element.getAttribute('href') ?? ''))
+  const remoteImport = Array.from(document.querySelectorAll('style')).some((style) =>
+    /@import\s+(?:url\()?['"]?(?:https?:)?\/\//i.test(style.textContent ?? ''))
+  return { usesScripts, usesRemoteResources: remoteAttribute || remoteImport }
 }
 
 export function validateHtmlSource(source: string): ParserError[] {

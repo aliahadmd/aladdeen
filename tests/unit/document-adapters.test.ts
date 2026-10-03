@@ -7,6 +7,7 @@ import {
   isSupportedDocumentName
 } from '@shared/documents'
 import {
+  describeHtmlPreviewLimits,
   prepareHtmlPreview,
   validateHtmlSource
 } from '@renderer/document-adapters/html-preview'
@@ -95,5 +96,30 @@ describe('isolated HTML preview', () => {
     expect(result).toContain("default-src 'none'")
     expect(result).not.toContain('navigate-to')
     expect(validateHtmlSource('<div><span></div>')).not.toHaveLength(0)
+  })
+})
+
+describe('HTML preview limits', () => {
+  it('reports nothing for a self-contained page', () => {
+    expect(describeHtmlPreviewLimits('<h1>Plain</h1><style>h1 { color: red }</style><img src="cover.png">')).toEqual({
+      usesScripts: false,
+      usesRemoteResources: false
+    })
+  })
+
+  it('detects framework CDNs, remote fonts, scripts, and inline handlers', () => {
+    expect(describeHtmlPreviewLimits('<script src="https://cdn.tailwindcss.com"></script>')).toEqual({
+      usesScripts: true,
+      usesRemoteResources: true
+    })
+    expect(describeHtmlPreviewLimits('<link rel="stylesheet" href="//fonts.googleapis.com/css2?family=Inter">').usesRemoteResources).toBe(true)
+    expect(describeHtmlPreviewLimits('<style>@import url("https://example.com/a.css");</style>').usesRemoteResources).toBe(true)
+    expect(describeHtmlPreviewLimits('<button onclick="go()">Go</button>').usesScripts).toBe(true)
+    expect(describeHtmlPreviewLimits('<script type="application/ld+json">{}</script>').usesScripts).toBe(false)
+  })
+
+  it('gives unsized icons a small default size without overriding page CSS', () => {
+    const preview = prepareHtmlPreview('<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/></svg>', '11111111-1111-4111-8111-111111111111')
+    expect(preview).toContain(':where(svg:not([width]):not([height])) { width: 1.25em; height: 1.25em; }')
   })
 })

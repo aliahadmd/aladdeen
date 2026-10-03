@@ -223,6 +223,11 @@ test('opens, edits, saves, presents, and reopens a local PPTX without outbound r
     await expect(editor).toBeVisible({ timeout: 30_000 })
     const textElement = editor.locator('.pptxv-stage [data-element-id][aria-label="Original briefing"]')
     await expect(textElement).toBeVisible({ timeout: 20_000 })
+    const modeBar = editor.locator('.pptx-mode-bar')
+    await expect(modeBar.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true')
+    await window.screenshot({ path: test.info().outputPath('pptx-preview-mode.png') })
+    await modeBar.getByRole('button', { name: 'Edit' }).click()
+    await expect(modeBar.getByRole('button', { name: 'Edit' })).toHaveAttribute('aria-pressed', 'true')
     await expect(editor.locator([
       '.pptxv-ai-toggle',
       '.pptxv-tabrow-share',
@@ -572,8 +577,13 @@ test('opens and edits a dropped HTML document in place with contained local asse
       (image: HTMLImageElement) => image.complete && image.naturalWidth > 0
     )).toBe(true)
 
+    // HTML opens in the full preview, not beside its source.
+    await expect(window.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(window.locator('.html-source-editor')).toHaveCount(0)
+
     // In split view, clicking rendered content reveals its source line. This
     // needs the sandboxed preview to stay readable by the app (no scripts).
+    await window.getByRole('button', { name: 'Split' }).click()
     await preview.getByText('Opened directly and completely offline.').click()
     await expect(window.locator('.html-source-editor .cm-activeLine')).toContainText('Opened directly and completely offline.')
 

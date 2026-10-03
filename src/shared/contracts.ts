@@ -589,6 +589,8 @@ export interface AladdeenApi {
   }
   system: {
     openExternal(url: string): Promise<Result<void>>
+    /** Opens a tracked HTML document in the user's default web browser. */
+    openInBrowser(fileId: string): Promise<Result<void>>
   }
 }
 
@@ -643,5 +645,6 @@ export const IPC = {
   getSettings: 'settings:get',
   updateSettings: 'settings:update',
   exportDocument: 'export:document',
-  openExternal: 'system:open-external'
+  openExternal: 'system:open-external',
+  openInBrowser: 'system:open-in-browser'
 } as const

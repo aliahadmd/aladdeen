@@ -130,7 +130,8 @@ const api: AladdeenApi = {
     document: (request) => ipcRenderer.invoke(IPC.exportDocument, request)
   },
   system: {
-    openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url)
+    openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
+    openInBrowser: (fileId) => ipcRenderer.invoke(IPC.openInBrowser, fileId)
   }
 }
 

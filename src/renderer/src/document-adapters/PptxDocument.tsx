@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, FileSliders, LoaderCircle, ShieldAlert } from 'lucide-react'
+import { AlertTriangle, Eye, FileSliders, LoaderCircle, Pencil, ShieldAlert } from 'lucide-react'
 import {
   createPptxViewer,
   type PptxViewerInstance,
@@ -9,6 +9,7 @@ import {
 import 'pptx-vanilla-viewer/styles.css'
 import type { PresentationCompatibility } from '@shared/contracts'
 import { useEffectiveDarkMode } from '@renderer/hooks/use-effective-dark-mode'
+import { cn } from '@renderer/lib/cn'
 import { useAppStore } from '@renderer/store/app-store'
 import type { DocumentAdapterProps } from './registry'
 import {
@@ -120,6 +121,10 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
   const initialDark = useRef(dark)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  // Presentations open for viewing; editing is an explicit choice.
+  const [mode, setMode] = useState<'preview' | 'edit'>('preview')
+  const modeRef = useRef(mode)
+  modeRef.current = mode
   const [error, setError] = useState('')
   const [compatibility, setCompatibility] = useState<PresentationCompatibility | null>(null)
   const [requiresSaveAs, setRequiresSaveAs] = useState(false)
@@ -370,7 +375,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         viewer = createPptxViewer(host.current, {
           source,
           fileName: document.name,
-          editable: localCompatibility.level !== 'read-only',
+          editable: modeRef.current === 'edit' && localCompatibility.level !== 'read-only',
           showToolbar: true,
           showThumbnails: true,
           showFormatToolbar: true,
@@ -480,9 +485,46 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
     return cleanup
   }, [document.documentKind, document.id, document.name, presentationCompatibility, sessionUrl])
 
+  const canEdit = compatibility?.level !== 'read-only'
+  const inspectorSettled = useRef(false)
+  useEffect(() => {
+    if (loading) return
+    const editing = mode === 'edit' && canEdit
+    viewerRef.current?.setEditable(editing)
+    if (!editing || inspectorSettled.current) return
+    // Enabling editing opens the viewer's inspector; start editing with it
+    // closed, as before, and leave later toggles to the user.
+    const frame = window.requestAnimationFrame(() => {
+      inspectorSettled.current = true
+      const inspector = host.current?.querySelector<HTMLElement>('.pptxv-inspector')
+      const toggle = host.current?.querySelector<HTMLButtonElement>('[aria-label="Toggle inspector panel"]')
+      if (inspector && toggle && !inspector.hidden) toggle.click()
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [mode, canEdit, loading])
+
   if (document.documentKind !== 'pptx') return <div />
   return (
     <div className="aladdeen-pptx-host relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface-elevated">
+      <div className="pptx-mode-bar flex h-[39px] shrink-0 items-center gap-1 border-b border-border bg-surface px-3">
+        <ModeButton active={mode === 'preview'} icon={<Eye size={13} />} onClick={() => setMode('preview')}>
+          Preview
+        </ModeButton>
+        <ModeButton
+          active={mode === 'edit'}
+          icon={<Pencil size={13} />}
+          onClick={() => setMode('edit')}
+          disabled={!canEdit}
+          title={canEdit ? 'Edit slides, text, and notes' : 'This presentation is read-only in Aladdeen'}
+        >
+          Edit
+        </ModeButton>
+        <span className="ml-auto text-[10px] text-foreground-muted">
+          {mode === 'preview'
+            ? 'Viewing. Choose Edit to change slides.'
+            : 'Editing. Save with ⌘S.'}
+        </span>
+      </div>
       {compatibility && compatibility.level !== 'supported' && (
         <div className={compatibility.level === 'read-only' ? 'pptx-compatibility is-read-only' : 'pptx-compatibility'}>
           {compatibility.level === 'read-only' ? <ShieldAlert size={15} /> : <AlertTriangle size={15} />}
@@ -500,6 +542,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       )}
       <div
         ref={host}
+        data-mode={mode}
         className={compatibility?.level === 'read-only' ? 'pptx-viewer-container is-read-only' : 'pptx-viewer-container'}
         tabIndex={-1}
       />
@@ -525,5 +568,38 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         </div>
       )}
     </div>
+  )
+}
+
+function ModeButton({
+  active,
+  icon,
+  children,
+  onClick,
+  disabled = false,
+  title
+}: {
+  active: boolean
+  icon: React.ReactNode
+  children: React.ReactNode
+  onClick(): void
+  disabled?: boolean
+  title?: string
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex h-7 items-center gap-1.5 rounded-md border-0 bg-transparent px-2.5 text-[11px] font-medium text-foreground-muted hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent',
+        active && 'bg-accent-soft text-accent'
+      )}
+      onClick={onClick}
+      aria-pressed={active}
+      disabled={disabled}
+      title={title}
+    >
+      {icon}
+      {children}
+    </button>
   )
 }
