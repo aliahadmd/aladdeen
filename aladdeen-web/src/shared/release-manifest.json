@@ -1,10 +1,10 @@
 {
-  "version": "0.9.9",
+  "version": "0.9.10",
   "build": 1,
   "macos": {
     "arm64": {
-      "byteSize": 203574610,
-      "sha256": "e96500438a3470be0cf3f9e584612b75c24262d536d2b07fccea054d49fae016"
+      "byteSize": 203572225,
+      "sha256": "46f5f4e467ee53a33138c6b1b5e43345e678c4df318608a7246db26fbd2b8bc6"
     }
   }
 }
