@@ -887,13 +887,13 @@ test('opens, previews, edits, and manually saves a Markdown file', async () => {
 
     await window.getByRole('button', { name: 'Preview' }).click()
     await window.setViewportSize({ width: 900, height: 700 })
-    const outlineTrigger = window.getByRole('button', { name: '2 level 1 headings' })
+    const outlineTrigger = window.getByRole('button', { name: '3 headings' })
     await expect(outlineTrigger).toBeVisible()
     await outlineTrigger.hover()
-    const outline = window.getByRole('navigation', { name: 'Level 1 headings' })
+    const outline = window.getByRole('navigation', { name: 'Document headings' })
     await expect(outline.getByRole('button', { name: 'Edited offline' })).toBeVisible()
     await expect(outline.getByRole('button', { name: 'Final chapter' })).toBeVisible()
-    await expect(outline.getByRole('button', { name: 'Ignored subsection' })).toHaveCount(0)
+    await expect(outline.getByRole('button', { name: 'Ignored subsection' })).toBeVisible()
     await expect(window).toHaveScreenshot('heading-outline-open.png', {
       animations: 'disabled',
       maxDiffPixelRatio: 0.01
@@ -1119,7 +1119,8 @@ test('keeps the environment sidebar usable at compact window sizes', async () =>
       await window.getByRole('button', { name: 'Show sidebar' }).click()
       const sheet = window.getByRole('dialog', { name: 'Environment files' })
       await expect(sheet.locator('.sheet-panel')).toBeVisible()
-      await expect(sheet.getByRole('button', { name: 'New file' })).toBeVisible()
+      await expect(sheet.getByRole('button', { name: 'Open', exact: true })).toBeVisible()
+      await expect(sheet.getByRole('button', { name: 'New', exact: true })).toBeVisible()
       await expect(sheet.getByRole('heading', { name: 'Projects' })).toBeVisible()
       const box = await sheet.locator('.sheet-panel').boundingBox()
       expect(box?.x).toBeGreaterThanOrEqual(0)
@@ -1200,10 +1201,10 @@ test('renders responsive settings navigation in light and dark themes', async ()
     ]
 
     for (const theme of ['light', 'dark'] as const) {
-      await window.evaluate((nextTheme) => {
-        document.documentElement.classList.toggle('dark', nextTheme === 'dark')
-        document.documentElement.dataset.theme = nextTheme
-      }, theme)
+      await settings.getByRole('tab', { name: 'Appearance' }).click()
+      await settings.getByRole('group', { name: 'Theme', exact: true })
+        .getByRole('button', { name: theme === 'dark' ? 'Dark' : 'Light', exact: true }).click()
+      await expect(window.locator('html')).toHaveAttribute('data-theme', theme)
 
       for (const viewport of viewports) {
         await window.setViewportSize(viewport)
@@ -1229,10 +1230,11 @@ test('renders responsive settings navigation in light and dark themes', async ()
     await settings.getByRole('tab', { name: 'Reading' }).click()
     await expect(settings.getByRole('heading', { name: 'Reading', exact: true })).toBeVisible()
     for (const theme of ['light', 'dark'] as const) {
-      await window.evaluate((nextTheme) => {
-        document.documentElement.classList.toggle('dark', nextTheme === 'dark')
-        document.documentElement.dataset.theme = nextTheme
-      }, theme)
+      await settings.getByRole('tab', { name: 'Appearance' }).click()
+      await settings.getByRole('group', { name: 'Theme', exact: true })
+        .getByRole('button', { name: theme === 'dark' ? 'Dark' : 'Light', exact: true }).click()
+      await expect(window.locator('html')).toHaveAttribute('data-theme', theme)
+      await settings.getByRole('tab', { name: 'Reading' }).click()
       for (const viewport of viewports) {
         await window.setViewportSize(viewport)
         await expect(window).toHaveScreenshot(`reading-settings-${viewport.width}-${theme}.png`, {
@@ -1258,10 +1260,11 @@ test('renders responsive settings navigation in light and dark themes', async ()
     } as const
     const readingSample = settings.locator('.reading-settings-preview')
     for (const theme of ['light', 'dark'] as const) {
-      await window.evaluate((nextTheme) => {
-        document.documentElement.classList.toggle('dark', nextTheme === 'dark')
-        document.documentElement.dataset.theme = nextTheme
-      }, theme)
+      await settings.getByRole('tab', { name: 'Appearance' }).click()
+      await settings.getByRole('group', { name: 'Theme', exact: true })
+        .getByRole('button', { name: theme === 'dark' ? 'Dark' : 'Light', exact: true }).click()
+      await expect(window.locator('html')).toHaveAttribute('data-theme', theme)
+      await settings.getByRole('tab', { name: 'Reading' }).click()
       for (const [surface, background, foreground] of surfacePalettes[theme]) {
         await settings.getByRole('button', { name: surface, exact: true }).click()
         await expect(readingSample).toHaveCSS('background-color', background)

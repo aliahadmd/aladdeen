@@ -1,13 +1,14 @@
-import { Children, isValidElement, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Children, isValidElement, type ReactNode } from 'react'
 import type { MarkdownSourceDataAttributes } from '@shared/markdown'
 import { MermaidDiagram } from './MermaidDiagram'
 import { MarkdownMindmap } from './MarkdownMindmap'
+import { CodePreview } from './CodePreview'
 
 interface MarkdownCodeBlockProps {
   children?: ReactNode
   theme: 'light' | 'dark'
   sourceAttributes?: MarkdownSourceDataAttributes
+  interactive?: boolean
 }
 
 interface CodeElementProps {
@@ -22,49 +23,19 @@ function reactText(value: ReactNode): string {
   return ''
 }
 
-function copyWithSelection(value: string): boolean {
-  const textarea = document.createElement('textarea')
-  textarea.value = value
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.append(textarea)
-  textarea.select()
-  const copied = document.execCommand('copy')
-  textarea.remove()
-  return copied
-}
-
-async function copyCode(value: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(value)
-    return true
-  } catch {
-    return copyWithSelection(value)
-  }
-}
-
 export function MarkdownCodeBlock({
   children,
   theme,
-  sourceAttributes
+  sourceAttributes,
+  interactive = true
 }: MarkdownCodeBlockProps): React.JSX.Element {
-  const [copied, setCopied] = useState(false)
-  const copiedTimer = useRef<number | undefined>(undefined)
   const child = Children.count(children) === 1 ? Children.only(children) : null
   const props = isValidElement<CodeElementProps>(child) ? child.props : {}
   const language = /\blanguage-([\w-]+)\b/.exec(props.className ?? '')?.[1]
   const source = reactText(props.children).replace(/\n$/, '')
 
-  useEffect(
-    () => () => {
-      if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
-    },
-    []
-  )
-
   if (language === 'mermaid') {
-    return <MermaidDiagram source={source} theme={theme} sourceAttributes={sourceAttributes} />
+    return <MermaidDiagram source={source} theme={theme} sourceAttributes={sourceAttributes} interactive={interactive} />
   }
   // A fenced Markdown block is an outline, so offer the mindmap as the default lens
   // and keep the source one click away. MarkdownMindmap falls back to a plain code
@@ -76,6 +47,7 @@ export function MarkdownCodeBlock({
         code={children}
         language="Markdown"
         sourceAttributes={sourceAttributes}
+        interactive={interactive}
       />
     )
   }
@@ -94,23 +66,7 @@ export function MarkdownCodeBlock({
     )
   }
 
-  const handleCopy = async (): Promise<void> => {
-    if (!(await copyCode(source))) return
-    setCopied(true)
-    if (copiedTimer.current) window.clearTimeout(copiedTimer.current)
-    copiedTimer.current = window.setTimeout(() => setCopied(false), 1_500)
-  }
-
   return (
-    <figure {...sourceAttributes} className="markdown-code-block">
-      <figcaption className="code-block-toolbar">
-        <span>{language || 'Plain text'}</span>
-        <button type="button" onClick={() => void handleCopy()} aria-label={`Copy ${language || 'plain text'} code`}>
-          {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
-        </button>
-      </figcaption>
-      <pre>{children}</pre>
-    </figure>
+    <CodePreview source={source} language={language || 'Plain text'} interactive={interactive} sourceAttributes={sourceAttributes}>{children}</CodePreview>
   )
 }

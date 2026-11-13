@@ -8,6 +8,12 @@ import {
   type MindmapLayout
 } from '@shared/mindmap'
 import type { MarkdownSourceDataAttributes } from '@shared/markdown'
+import { wheelZoomFactor } from '@renderer/lib/preview-geometry'
+import { standaloneSvg } from '@renderer/lib/preview-svg'
+import { ExpandedPreview } from './ExpandedPreview'
+import { ZoomablePreview } from './ZoomablePreview'
+import { SvgPreviewImage } from './SvgPreviewImage'
+import { CodePreview } from './CodePreview'
 
 interface MarkdownMindmapProps {
   source: string
@@ -15,6 +21,7 @@ interface MarkdownMindmapProps {
   code: ReactNode
   language: string
   sourceAttributes?: MarkdownSourceDataAttributes
+  interactive?: boolean
 }
 
 const FONT_SIZE = 13
@@ -31,7 +38,7 @@ const MIN_ZOOM = 0.25
 const MAX_ZOOM = 4
 const ZOOM_STEP = 1.25
 
-const clampZoom = (value: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+const clampZoom = (value: number, minimum = MIN_ZOOM): number => Math.min(MAX_ZOOM, Math.max(minimum, value))
 
 /**
  * Text measurement via canvas, which matches what the browser will actually paint.
@@ -53,13 +60,15 @@ export function MarkdownMindmap({
   source,
   code,
   language,
-  sourceAttributes
+  sourceAttributes,
+  interactive = true
 }: MarkdownMindmapProps): React.JSX.Element {
   const [tab, setTab] = useState<'preview' | 'code'>('preview')
   const [zoom, setZoom] = useState(1)
   // Auto-fit tracks the pane until the reader zooms deliberately; after that, a pane
   // resize or a fullscreen toggle must not throw their chosen scale away.
   const [autoFit, setAutoFit] = useState(true)
+  const [expandedSvg, setExpandedSvg] = useState('')
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   /** Content-space point to keep still across a zoom change, with its screen offset. */
@@ -70,6 +79,8 @@ export function MarkdownMindmap({
     if (!root) return null
     return layoutMindmap(root, { measureText: createMeasurer(), lineHeight: LINE_HEIGHT })
   }, [source])
+  const minimumZoom = Math.min(MIN_ZOOM, layout && containerRef.current && containerRef.current.clientWidth > 8
+    ? (containerRef.current.clientWidth - 8) / layout.width : 1)
 
   const fit = useCallback(() => {
     const container = containerRef.current
@@ -92,7 +103,8 @@ export function MarkdownMindmap({
     const offsetX = client ? client.x - box.left : container.clientWidth / 2
     const offsetY = client ? client.y - box.top : container.clientHeight / 2
     setZoom((current) => {
-      const next = clampZoom(current * factor)
+      const fitted = layout && container.clientWidth > 8 ? (container.clientWidth - 8) / layout.width : 1
+      const next = clampZoom(current * factor, Math.min(MIN_ZOOM, fitted))
       if (next !== current) {
         anchorRef.current = {
           x: (container.scrollLeft + offsetX) / current,
@@ -104,7 +116,7 @@ export function MarkdownMindmap({
       return next
     })
     setAutoFit(false)
-  }, [])
+  }, [layout])
 
   // Restore the anchor after the browser has laid out the new SVG size.
   useEffect(() => {
@@ -130,21 +142,21 @@ export function MarkdownMindmap({
   // Registered manually because preventDefault needs a non-passive listener.
   useEffect(() => {
     const container = containerRef.current
-    if (!container) return
+    if (!container || !interactive) return
     const onWheel = (event: WheelEvent): void => {
       // Plain wheel keeps scrolling the diagram; only a modifier means "zoom".
       if (!event.ctrlKey && !event.metaKey) return
       event.preventDefault()
-      zoomAbout(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP, { x: event.clientX, y: event.clientY })
+      zoomAbout(wheelZoomFactor(event.deltaY, event.deltaMode, container.clientHeight), { x: event.clientX, y: event.clientY })
     }
     container.addEventListener('wheel', onWheel, { passive: false })
     return () => container.removeEventListener('wheel', onWheel)
-  }, [zoomAbout, tab])
+  }, [zoomAbout, tab, interactive])
 
   const download = useCallback(() => {
     const svg = svgRef.current
     if (!svg) return
-    const blob = new Blob([new XMLSerializer().serializeToString(svg)], {
+    const blob = new Blob([standaloneSvg(svg)], {
       type: 'image/svg+xml;charset=utf-8'
     })
     const url = URL.createObjectURL(blob)
@@ -152,25 +164,13 @@ export function MarkdownMindmap({
     anchor.href = url
     anchor.download = 'mindmap.svg'
     anchor.click()
-    URL.revokeObjectURL(url)
-  }, [])
-
-  const fullscreen = useCallback(() => {
-    const container = containerRef.current?.parentElement
-    if (!container) return
-    if (document.fullscreenElement) void document.exitFullscreen()
-    else void container.requestFullscreen?.()
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }, [])
 
   // Without a hierarchy there is nothing to draw, so stay a plain code block.
   if (!layout) {
     return (
-      <figure {...sourceAttributes} className="markdown-code-block">
-        <figcaption className="code-block-toolbar">
-          <span>{language}</span>
-        </figcaption>
-        <pre>{code}</pre>
-      </figure>
+      <CodePreview source={source} language={language} interactive={interactive} sourceAttributes={sourceAttributes}>{code}</CodePreview>
     )
   }
 
@@ -178,12 +178,12 @@ export function MarkdownMindmap({
     <figure {...sourceAttributes} className="markdown-code-block markdown-mindmap">
       <figcaption className="code-block-toolbar">
         <span>{language}</span>
-        <span className="mindmap-actions">
+        {interactive && <span className="mindmap-actions" data-preview-source-ignore="">
           <span className="mindmap-zoom" role="group" aria-label="Zoom">
             <button
               type="button"
               onClick={() => zoomAbout(1 / ZOOM_STEP)}
-              disabled={zoom <= MIN_ZOOM}
+              disabled={zoom <= minimumZoom}
               aria-label="Zoom out"
             >
               <ZoomOut size={13} aria-hidden="true" />
@@ -198,10 +198,12 @@ export function MarkdownMindmap({
               <ZoomIn size={13} aria-hidden="true" />
             </button>
           </span>
-          <button type="button" onClick={fullscreen} aria-label="Show the mindmap fullscreen">
-            <Maximize2 size={13} aria-hidden="true" />
-            <span>Fullscreen</span>
-          </button>
+          <ExpandedPreview key={source} title="Mindmap" triggerLabel="Expand mindmap" triggerClassName="mindmap-expand" trigger={<><Maximize2 size={13} aria-hidden="true" /><span>Expand</span></>}
+            onExpand={() => { if (svgRef.current) setExpandedSvg(standaloneSvg(svgRef.current)) }}>
+            <ZoomablePreview width={layout.width} height={layout.height} label={`Mindmap of ${layout.nodes[0]?.text || 'the document outline'}`} source={source}>
+              <SvgPreviewImage markup={expandedSvg} label={`Mindmap of ${layout.nodes[0]?.text || 'the document outline'}`} />
+            </ZoomablePreview>
+          </ExpandedPreview>
           <button type="button" onClick={download} aria-label="Download the mindmap as SVG">
             <Download size={13} aria-hidden="true" />
             <span>Download</span>
@@ -235,7 +237,7 @@ export function MarkdownMindmap({
               <span>Preview</span>
             </button>
           </span>
-        </span>
+        </span>}
       </figcaption>
       {tab === 'code' ? (
         <pre>{code}</pre>
@@ -243,10 +245,11 @@ export function MarkdownMindmap({
         <div
           className="mindmap-canvas"
           ref={containerRef}
-          tabIndex={0}
+          tabIndex={interactive ? 0 : undefined}
           role="group"
           aria-label="Mindmap, scrollable. Press plus or minus to zoom, 0 to fit."
           onKeyDown={(event) => {
+            if (!interactive) return
             if (event.metaKey || event.ctrlKey || event.altKey) return
             if (event.key === '+' || event.key === '=') {
               event.preventDefault()

@@ -111,8 +111,8 @@ export const sectionAddClasses =
 export const rowMoreClasses =
   'row-more grid h-[23px] w-[23px] shrink-0 place-items-center rounded-md border-0 bg-transparent p-0 text-foreground-muted opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 hover:bg-surface-hover hover:text-foreground data-[state=open]:opacity-100'
 
-export const sidebarQuickActionClasses =
-  'flex h-[29px] items-center gap-2 rounded-[7px] border-0 bg-transparent px-2 text-left text-[12px] text-foreground-soft transition-[transform,background-color,color] duration-[140ms] ease-fluid-out active:scale-[.97] hover:bg-surface-hover hover:text-foreground'
+export const sidebarActionButtonClasses =
+  'sidebar-action-button flex h-8 min-w-0 items-center gap-[6px] rounded-md border border-border bg-transparent px-2 text-left text-[12px] font-medium text-foreground-soft transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-accent focus-visible:-outline-offset-2 data-[state=open]:bg-surface-hover data-[state=open]:text-foreground'
 
 export const sidebarFooterButtonClasses =
   'sidebar-footer-button inline-flex h-[31px] min-w-0 items-center gap-[7px] rounded-[7px] border-0 bg-transparent px-2 text-[11px] text-foreground-soft transition-[transform,background-color,color] duration-[140ms] ease-fluid-out active:scale-[.97] hover:bg-surface-hover hover:text-foreground [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap'

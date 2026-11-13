@@ -125,3 +125,11 @@ body.export-document {
 .export-document .blocked-image {
   break-inside: avoid;
 }
+
+.export-document .diagram-toolbar,
+.export-document .preview-block-toolbar,
+.export-document .preview-expand { display: none !important; }
+.export-document .markdown-mindmap .mindmap-canvas { max-height: none; overflow: visible; }
+.export-document .markdown-mindmap .mindmap-svg { max-width: 100%; height: auto; }
+.export-document .math-overflow { overflow: visible; }
+.export-document .markdown-body .math-overflow .katex-display { width: auto; min-width: 0; }

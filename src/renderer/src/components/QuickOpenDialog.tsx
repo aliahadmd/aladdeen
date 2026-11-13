@@ -19,6 +19,7 @@ export function QuickOpenDialog(): React.JSX.Element {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || document.querySelector('[data-preview-expanded]')) return
       if ((event.metaKey || event.ctrlKey) && event.key.toLocaleLowerCase() === 'p') {
         event.preventDefault()
         if (environment) setOpen(true)

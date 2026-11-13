@@ -77,8 +77,9 @@ Then you create your first **environment**, a named workspace such as "Personal"
 
 From there:
 
-- **Add a folder** to bring in a project folder. Aladdeen lists the documents inside it and keeps the list up to date as files change. You choose which document types it shows and can hide subfolders you don't need.
-- **Open file** to work with a single document that isn't part of a folder.
+- **Open → Add folder** to bring in a project folder. Aladdeen lists the documents inside it and keeps the list up to date as files change. You choose which document types it shows and can hide subfolders you don't need. The **+** beside Projects opens the same workflow.
+- **Open → Open file** to work with a single document that isn't part of a folder.
+- **New** to create a document or folder. When a project is selected, new documents and subfolders use that location; the menu shows the destination. **New project folder** creates a separate linked project.
 - **Drag files from Finder** into the window to open them.
 - Double-click a supported file in Finder, or use **Open With → Aladdeen**.
 
@@ -89,6 +90,10 @@ You can keep several environments and switch between them; each one remembers it
 ### Markdown
 
 Write in a clean editor and read in a polished preview, side by side or one at a time. Tables, task lists, code blocks, footnotes, math, and Mermaid diagrams render right in the preview. A heading outline lets you jump around long documents, and while editing, clicking text in the preview takes you to that line in the editor. Export any Markdown document to **PDF** or **Word**.
+
+Use the square **Expand** button on diagrams to inspect them across the app window. Scroll to zoom around the pointer, drag to pan, and use **Fit** for an overview or **100%** for the original scale. Local images and mindmaps open in the same viewer. Press **Escape** to return to your reading position.
+
+Wide tables and equations offer expansion when they overflow; expanded tables keep their headers visible while scrolling. Code blocks offer **Wrap**, **Copy**, and **Expand**. The outline includes headings through level three, with **Top level** available for a shorter chapter list.
 
 ### Excel workbooks
 

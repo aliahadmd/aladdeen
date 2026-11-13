@@ -12,6 +12,9 @@ import {
 } from '@shared/markdown'
 import { MarkdownCodeBlock } from './MarkdownCodeBlock'
 import { MarkdownImage } from './MarkdownImage'
+import { LinkedImageContext } from '@renderer/lib/markdown-context'
+import { MarkdownTable } from './MarkdownTable'
+import { MarkdownMath } from './MarkdownMath'
 
 interface MarkdownContentProps {
   content: string
@@ -120,7 +123,7 @@ export function MarkdownContent({
               if (/\.(md|markdown)$/i.test(target)) onOpenRelativeDocument?.(target)
             }}
           >
-            {children}
+            <LinkedImageContext.Provider value>{children}</LinkedImageContext.Provider>
           </a>
         )
       },
@@ -136,6 +139,7 @@ export function MarkdownContent({
             height={height}
             loading={interactive ? 'lazy' : 'eager'}
             sourceAttributes={sourceDataAttributes(props as Record<string, unknown>)}
+            interactive={interactive}
           />
         )
       },
@@ -147,21 +151,22 @@ export function MarkdownContent({
           <MarkdownCodeBlock
             theme={theme}
             sourceAttributes={sourceDataAttributes(props as Record<string, unknown>)}
+            interactive={interactive}
           >
             {children}
           </MarkdownCodeBlock>
         )
       },
-      // A table that cannot overflow gets its columns crushed to a few characters
-      // instead of scrolling, so give every table its own scroll container.
-      // tabIndex makes the overflow keyboard-scrollable; no ARIA role is used because
-      // an unnamed region would add a nameless landmark around every table.
       table({ children, node: _node, ...props }) {
         return (
-          <div className="markdown-table-scroll" tabIndex={0}>
-            <table {...props}>{children}</table>
-          </div>
+          <MarkdownTable {...props} interactive={interactive}>{children}</MarkdownTable>
         )
+      },
+      span({ children, className, node: _node, ...props }) {
+        if (className?.split(/\s+/).includes('katex-display')) {
+          return <MarkdownMath {...props} className={className} interactive={interactive}>{children}</MarkdownMath>
+        }
+        return <span {...props} className={className}>{children}</span>
       }
     }),
     [documentId, interactive, onOpenExternal, onOpenRelativeDocument, theme]

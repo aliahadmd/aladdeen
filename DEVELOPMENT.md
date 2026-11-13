@@ -63,6 +63,21 @@ for `pnpm check` and `pnpm run deploy`.
 
 ## Document editors
 
+### Markdown preview controls
+
+`ExpandedPreview` owns the shared Radix dialog, focus return, and reading-position
+restoration. `ZoomablePreview` owns pointer-anchored wheel zoom, fit/native scale,
+dragging, and keyboard/button panning. Geometry is independent of rendering in
+`lib/preview-geometry.ts`. Mermaid stays sanitized and cached; cached inline SVG
+IDs are namespaced per instance, and expanded SVGs use isolated image documents.
+Mindmap SVG downloads include computed presentation styles.
+
+Tables and code keep native selectable content in the expanded shell. Equations
+retain KaTeX's MathML. Thread `interactive` through every Markdown block: the
+export renderer passes `false` and must render static content without controls.
+Viewer controls use `data-preview-source-ignore`, and application shortcuts
+respect `data-preview-expanded` so they cannot act beneath the viewer.
+
 ### DOCX
 
 DOCX editing uses the Apache-2.0-licensed
@@ -90,3 +105,19 @@ cloud, collaboration, export, recording, and built-in AI surfaces, and owns all
 saving through the existing atomic binary-document path. Exact-pinned release
 checks qualify edit/save/reopen behavior and byte-for-byte preservation of
 untouched OOXML parts before packaging.
+
+## Release dependency checks
+
+Run both the desktop and website `pnpm audit --audit-level high` checks before
+packaging. Security overrides stay within each dependency's major version,
+except when the owning tool itself is upgraded. The desktop tests use Vitest 4
+to remove the vulnerable Tinypool 1 dependency.
+
+The website keeps one documented exception for GHSA-mrhx-c7xc-m3w5 in Zod 3:
+Miniflare and the Workers test pool require its older API for local developer
+configuration, and no patched Zod 3 release exists. Zod is absent from the
+deployed Worker. Zod 4 instances are pinned to the patched release independently.
+Remove the exception when those Cloudflare tools migrate away from Zod 3.
+
+The E2E script resolves the Electron executable before starting Playwright, so
+a first-run binary download cannot consume an individual test timeout.

@@ -9,7 +9,6 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  FileCode2,
   FilePlus2,
   FileQuestion,
   FileSearch2,
@@ -67,7 +66,6 @@ import {
   sidebarClasses,
   sidebarFooterButtonClasses,
   sidebarIconButtonClasses,
-  sidebarQuickActionClasses,
   trackedFileRowClasses,
   treeLoadMoreClasses
 } from '@renderer/lib/ui-styles'
@@ -76,6 +74,8 @@ import { SettingsDialog } from './SettingsDialog'
 import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { BrandMark } from './BrandMark'
 import { DocumentKindIcon } from './DocumentKindIcon'
+import { DocumentKindMenuItems } from './DocumentKindMenuItems'
+import { SidebarActions } from './SidebarActions'
 
 interface SidebarProps {
   compact?: boolean
@@ -258,7 +258,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
     )),
     [environment?.files]
   )
-  const selectedProject = environment?.projects.find((project) => project.id === selectedProjectId)
+  const selectedProject = environment?.projects.find((project) => project.id === selectedProjectId && !project.archived)
 
   const toggleProject = (projectId: string): void => {
     const opening = !expandedProjects.has(projectId)
@@ -380,7 +380,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
                     </DropdownMenu.SubTrigger>
                     <DropdownMenu.Portal>
                       <DropdownMenu.SubContent className={dropdownContentClasses} sideOffset={4}>
-                        <DocumentKindItems
+                        <DocumentKindMenuItems
                           enabledKinds={project.enabledDocumentKinds}
                           onSelect={(kind) => beginNewDocument(kind, project.id)}
                           onManage={() => setManageProjectTarget(project)}
@@ -522,47 +522,23 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
         </label>
       )}
 
-      <div className="flex shrink-0 flex-col items-stretch gap-px px-[9px] pt-[3px] pb-[10px]">
-        <button className={sidebarQuickActionClasses} onClick={() => void addProject()}><FolderOpen size={15} /> Add folder</button>
-        <button className={sidebarQuickActionClasses} onClick={() => void openFile()}><FileText size={15} /> Open file</button>
-        <div aria-hidden="true" className="mx-[3px] my-[5px] border-t border-border" />
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button className={sidebarQuickActionClasses}>
-              <FilePlus2 size={15} /> New file <ChevronDown className="ml-auto" size={13} />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
-              <DocumentKindItems
-                enabledKinds={selectedProject?.enabledDocumentKinds}
-                onSelect={(kind) => beginNewDocument(
-                  kind,
-                  selectedProjectId ?? undefined,
-                  selectedFolderPath
-                )}
-                onManage={selectedProject ? () => setManageProjectTarget(selectedProject) : undefined}
-              />
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-        <button className={sidebarQuickActionClasses} onClick={() => setFormKind('project')}><FolderPlus size={15} /> New folder</button>
-      </div>
+      <SidebarActions
+        destination={selectedProject ? [selectedProject.name, selectedFolderPath].filter(Boolean).join(' / ') : undefined}
+        enabledDocumentKinds={selectedProject?.enabledDocumentKinds}
+        onAddFolder={addProject}
+        onOpenFile={() => void openFile()}
+        onCreateDocument={(kind) => beginNewDocument(kind, selectedProject?.id, selectedFolderPath)}
+        onCreateFolder={() => setFormKind(selectedProject ? 'folder' : 'project')}
+        onCreateProject={() => setFormKind('project')}
+        onManageTypes={selectedProject ? () => setManageProjectTarget(selectedProject) : undefined}
+      />
 
       <ScrollArea.Root className="min-h-0 flex-1 overflow-hidden">
-        <ScrollArea.Viewport className="h-full w-full px-[10px] pb-[22px]">
+        <ScrollArea.Viewport className="sidebar-library h-full w-full min-w-0 px-[10px] pb-[22px]">
           <section className="sidebar-section" aria-labelledby="projects-heading">
             <div className="flex min-h-7 items-center justify-between pr-1 pl-[3px]">
               <h2 className="m-0 text-[11px] font-[560] tracking-[.01em] text-foreground-muted" id="projects-heading">Projects</h2>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild><button className={sectionAddClasses} aria-label="Add project"><Plus size={14} /></button></DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="end">
-                    <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setFormKind('project')}><FolderPlus size={14} /> Create new folder</DropdownMenu.Item>
-                    <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void addProject()}><FolderOpen size={14} /> Add existing folder</DropdownMenu.Item>
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
+              <button type="button" className={sectionAddClasses} aria-label="Add folder" title="Add folder (⇧⌘O)" onClick={addProject}><Plus size={14} aria-hidden="true" /></button>
             </div>
 
             {query && searchResults.length > 0 && (
@@ -671,7 +647,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
                   : 'PowerPoint'} document`
           : undefined}
         initialValue={formKind === 'rename-environment' ? environment.environment.name : ''}
-        locationLabel={selectedProjectId ? environment.projects.find((project) => project.id === selectedProjectId)?.name : undefined}
+        locationLabel={selectedProject ? [selectedProject.name, selectedFolderPath].filter(Boolean).join(' / ') : undefined}
         onClose={() => setFormKind(null)}
         onSubmit={async (value) => {
           if (formKind === 'environment') return createEnvironment(value)
@@ -733,56 +709,6 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
   )
 }
 
-function DocumentKindItems({
-  enabledKinds,
-  onSelect,
-  onManage
-}: {
-  enabledKinds?: readonly DocumentKind[]
-  onSelect(documentKind: NewDocumentKind): void
-  onManage?(): void
-}): React.JSX.Element {
-  const enabled = new Set<DocumentKind>(enabledKinds ?? ['markdown', 'html', 'docx', 'xlsx', 'pptx'])
-  const hasCreatableDocument = enabled.has('markdown') || enabled.has('html') || enabled.has('docx') || enabled.has('xlsx') || enabled.has('pptx')
-  return (
-    <>
-      {enabled.has('markdown') && (
-        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('markdown')}>
-          <FileText size={14} /> Markdown
-        </DropdownMenu.Item>
-      )}
-      {enabled.has('html') && (
-        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('html')}>
-          <FileCode2 size={14} /> HTML
-        </DropdownMenu.Item>
-      )}
-      {enabled.has('docx') && (
-        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('docx')}>
-          <FileText size={14} /> Word document
-        </DropdownMenu.Item>
-      )}
-      {enabled.has('xlsx') && (
-        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('xlsx')}>
-          <DocumentKindIcon kind="xlsx" size={14} /> Excel workbook
-        </DropdownMenu.Item>
-      )}
-      {enabled.has('pptx') && (
-        <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onSelect('pptx')}>
-          <DocumentKindIcon kind="pptx" size={14} /> PowerPoint presentation
-        </DropdownMenu.Item>
-      )}
-      {onManage && (
-        <>
-          {hasCreatableDocument && <DropdownMenu.Separator className={dropdownSeparatorClasses} />}
-          <DropdownMenu.Item className={dropdownItemClasses()} onSelect={onManage}>
-            <SlidersHorizontal size={14} /> Manage file types…
-          </DropdownMenu.Item>
-        </>
-      )}
-    </>
-  )
-}
-
 function ProjectTreeItem({
   projectId, node, depth, activeFileId, trackedFilesByProjectPath, expanded, pages, loadingKeys, enabledDocumentKinds,
   onToggle, onOpen, onSelectFolder, onRename, onTrash, onCreate, onLoadMore, onManageDocumentKinds
@@ -836,7 +762,7 @@ function ProjectTreeItem({
                   </DropdownMenu.SubTrigger>
                   <DropdownMenu.Portal>
                     <DropdownMenu.SubContent className={dropdownContentClasses} sideOffset={4}>
-                      <DocumentKindItems
+                        <DocumentKindMenuItems
                         enabledKinds={enabledDocumentKinds}
                         onSelect={(kind) => onCreate(node.path, 'file', kind)}
                         onManage={onManageDocumentKinds}
@@ -938,7 +864,7 @@ function SidebarForm({ kind, title, initialValue = '', locationLabel, submitLabe
   const labels: Record<Exclude<FormKind, null>, string> = {
     environment: 'New environment',
     'rename-environment': 'Rename environment',
-    project: 'New folder project',
+    project: 'New project folder',
     file: 'New file',
     folder: 'New subfolder'
   }

@@ -3,6 +3,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -14,6 +15,7 @@ interface OutlineHeading {
   id: string
   label: string
   element: HTMLHeadingElement
+  depth: number
 }
 
 interface HeadingOutlineProps {
@@ -40,7 +42,10 @@ export function HeadingOutline({
   scrollRef,
   contentRevision
 }: HeadingOutlineProps): React.JSX.Element | null {
-  const [headings, setHeadings] = useState<OutlineHeading[]>([])
+  const [allHeadings, setHeadings] = useState<OutlineHeading[]>([])
+  const [compact, setCompact] = useState(false)
+  const topDepth = Math.min(...allHeadings.map((heading) => heading.depth), 3)
+  const headings = useMemo(() => compact ? allHeadings.filter((heading) => heading.depth === topDepth) : allHeadings, [allHeadings, compact, topDepth])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [highlightedId, setHighlightedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -58,10 +63,11 @@ export function HeadingOutline({
       setHeadings([])
       return
     }
-    const next = Array.from(article.querySelectorAll<HTMLHeadingElement>('h1[id^="md-"]')).map((element) => ({
+    const next = Array.from(article.querySelectorAll<HTMLHeadingElement>('h1[id^="md-"], h2[id^="md-"], h3[id^="md-"]')).map((element) => ({
       id: element.id,
       label: headingLabel(element),
-      element
+      element,
+      depth: Number(element.tagName.slice(1))
     }))
     setHeadings(next)
   }, [articleRef, contentRevision])
@@ -255,7 +261,7 @@ export function HeadingOutline({
             ref={triggerRef}
             type="button"
             className={`heading-outline-trigger ${densityClass}`}
-            aria-label={`${headings.length} level 1 ${headings.length === 1 ? 'heading' : 'headings'}`}
+            aria-label={`${headings.length} ${headings.length === 1 ? 'heading' : 'headings'}`}
             aria-controls={contentId}
             aria-expanded={open}
             onFocus={() => changeOpen(true)}
@@ -285,6 +291,7 @@ export function HeadingOutline({
                   data-active={heading.id === activeId || undefined}
                   data-highlighted={heading.id === highlightedId || undefined}
                   data-heading-id={heading.id}
+                  data-depth={heading.depth}
                   onPointerEnter={() => setHighlightedId(heading.id)}
                 />
               ))}
@@ -303,7 +310,7 @@ export function HeadingOutline({
           align="start"
           sideOffset={8}
           collisionPadding={12}
-          aria-label="Level 1 headings"
+          aria-label="Document headings"
           onOpenAutoFocus={(event) => event.preventDefault()}
           onPointerEnter={keepOpen}
           onPointerLeave={scheduleClose}
@@ -314,7 +321,11 @@ export function HeadingOutline({
             scheduleClose()
           }}
         >
-          <nav aria-label="Level 1 headings">
+          <div className="heading-outline-toolbar">
+            <span>Outline</span>
+            <button type="button" aria-pressed={compact} onClick={() => setCompact(!compact)} title="Show top-level headings only">Top level</button>
+          </div>
+          <nav aria-label="Document headings">
             <ul className="heading-outline-list">
               {headings.map((heading, index) => (
                 <li key={heading.id}>
@@ -328,6 +339,7 @@ export function HeadingOutline({
                     aria-current={heading.id === activeId ? 'location' : undefined}
                     data-highlighted={heading.id === highlightedId || undefined}
                     title={heading.label}
+                    style={{ paddingInlineStart: 10 + (heading.depth - topDepth) * 12 }}
                     onFocus={() => setHighlightedId(heading.id)}
                     onPointerEnter={() => setHighlightedId(heading.id)}
                     onKeyDown={(event) => handleRowKeyDown(event, index)}

@@ -1,6 +1,6 @@
 {
 	"name": "aladdeen-web",
-	"version": "0.9.10",
+	"version": "0.9.11",
 	"description": "The official website and R2-backed macOS arm64 download for the Aladdeen Research workspace.",
 	"private": true,
 	"packageManager": "pnpm@11.5.0",
@@ -33,7 +33,7 @@
 		"jsdom": "^29.1.1",
 		"typescript": "5.9.3",
 		"typescript-eslint": "8.48.0",
-		"vite": "^7.0.0",
+		"vite": "^7.3.7",
 		"vitest": "^4.1.10",
 		"wrangler": "4.114.0"
 	},

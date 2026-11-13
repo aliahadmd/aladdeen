@@ -25,7 +25,7 @@ function OutlineHarness({ content }: { content: string }): React.JSX.Element {
   )
 }
 
-describe('H1 heading outline', () => {
+describe('heading outline', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
@@ -35,12 +35,16 @@ describe('H1 heading outline', () => {
     })
   })
 
-  it('lists only parsed Markdown level-one headings', () => {
+  it('lists parsed H1–H3 headings and can filter to top-level chapters', () => {
     render(
       <OutlineHarness
         content={`# First chapter
 
-## Ignored subsection
+## Included subsection
+
+### Included detail
+
+#### Omitted deep detail
 
 \`\`\`md
 # Ignored code
@@ -53,22 +57,27 @@ Second chapter
       />
     )
 
-    const trigger = screen.getByRole('button', { name: '2 level 1 headings' })
+    const trigger = screen.getByRole('button', { name: '4 headings' })
     fireEvent.focus(trigger)
-    const navigation = screen.getByRole('navigation', { name: 'Level 1 headings' })
+    const navigation = screen.getByRole('navigation', { name: 'Document headings' })
     expect(within(navigation).getByRole('button', { name: 'First chapter' })).toBeVisible()
     expect(within(navigation).getByRole('button', { name: 'Second chapter' })).toBeVisible()
-    expect(within(navigation).queryByRole('button', { name: 'Ignored subsection' })).toBeNull()
+    expect(within(navigation).getByRole('button', { name: 'Included subsection' })).toBeVisible()
+    expect(within(navigation).getByRole('button', { name: 'Included detail' })).toBeVisible()
+    expect(within(navigation).queryByRole('button', { name: 'Omitted deep detail' })).toBeNull()
     expect(within(navigation).queryByRole('button', { name: 'Ignored code' })).toBeNull()
     expect(within(navigation).queryByRole('button', { name: 'Ignored raw HTML' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Top level' }))
+    expect(within(navigation).queryByRole('button', { name: 'Included subsection' })).toBeNull()
+    expect(screen.getByRole('button', { name: '2 headings' })).toBeVisible()
   })
 
   it('navigates by click and supports roving keyboard focus', () => {
     render(<OutlineHarness content={'# Chapter one\n\n# Chapter two\n\n# Chapter three'} />)
 
-    const trigger = screen.getByRole('button', { name: '3 level 1 headings' })
+    const trigger = screen.getByRole('button', { name: '3 headings' })
     fireEvent.focus(trigger)
-    const navigation = screen.getByRole('navigation', { name: 'Level 1 headings' })
+    const navigation = screen.getByRole('navigation', { name: 'Document headings' })
     const first = within(navigation).getByRole('button', { name: 'Chapter one' })
     const second = within(navigation).getByRole('button', { name: 'Chapter two' })
     const third = within(navigation).getByRole('button', { name: 'Chapter three' })
@@ -89,15 +98,18 @@ Second chapter
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('does not render a rail when the document has no H1', () => {
+  it('supports documents without H1 and omits the rail for plain text', () => {
     render(<OutlineHarness content={'## A subsection\n\nPlain text.'} />)
-    expect(screen.queryByRole('button', { name: /level 1 heading/ })).toBeNull()
+    expect(screen.getByRole('button', { name: '1 heading' })).toBeInTheDocument()
+    cleanup()
+    render(<OutlineHarness content="Plain text." />)
+    expect(screen.queryByRole('button', { name: /heading/ })).toBeNull()
   })
 
   it('compresses the marker rail for heading-heavy documents', () => {
     const content = Array.from({ length: 81 }, (_, index) => `# Chapter ${index + 1}`).join('\n\n')
     const { container } = render(<OutlineHarness content={content} />)
-    const trigger = screen.getByRole('button', { name: '81 level 1 headings' })
+    const trigger = screen.getByRole('button', { name: '81 headings' })
     expect(trigger).toHaveClass('is-ultra-dense')
     expect(container.querySelectorAll('.heading-outline-marker')).toHaveLength(81)
   })

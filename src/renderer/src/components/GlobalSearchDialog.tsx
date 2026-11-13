@@ -72,12 +72,14 @@ export function GlobalSearchDialog(): React.JSX.Element {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || document.querySelector('[data-preview-expanded]')) return
       if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLocaleLowerCase() === 'f') {
         event.preventDefault()
         if (environment) setOpen(true)
       }
     }
     const offOpenRequest = window.aladdeen.search.onOpenRequest(() => {
+      if (document.querySelector('[data-preview-expanded]')) return
       if (environment) setOpen(true)
     })
     window.addEventListener('keydown', onKeyDown)

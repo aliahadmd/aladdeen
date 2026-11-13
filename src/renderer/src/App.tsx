@@ -73,10 +73,12 @@ export default function App(): React.JSX.Element {
   }, [acceptSystemOpenFile, handleEnvironmentEvent, initialize])
 
   useEffect(() => window.aladdeen.document.onOpenDocumentRequest(() => {
+    if (document.querySelector('[data-preview-expanded]')) return
     void openFile()
   }), [openFile])
 
   useEffect(() => window.aladdeen.document.onCreateDocumentRequest((kind) => {
+    if (document.querySelector('[data-preview-expanded]')) return
     void createFile(undefined, kind)
   }), [createFile])
 
@@ -148,7 +150,7 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (tutorialReplayOpen || !environment) return
+      if (event.defaultPrevented || document.querySelector('[data-preview-expanded]') || tutorialReplayOpen || !environment) return
       const modifier = event.metaKey || event.ctrlKey
       if (!modifier) {
         if (event.key === 'Escape') {

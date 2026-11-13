@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import DOMPurify from 'dompurify'
 import type { MarkdownSourceDataAttributes } from '@shared/markdown'
+import { preparePreviewSvg } from '@renderer/lib/preview-svg'
+import { ExpandedPreview } from './ExpandedPreview'
+import { ZoomablePreview } from './ZoomablePreview'
+import { SvgPreviewImage } from './SvgPreviewImage'
 
 interface MermaidDiagramProps {
   source: string
   theme: 'light' | 'dark'
   sourceAttributes?: MarkdownSourceDataAttributes
+  interactive?: boolean
 }
 
 interface MermaidResult {
@@ -120,10 +125,13 @@ function withDeadline<T>(promise: Promise<T>, timeoutMs: number, message: string
 export function MermaidDiagram({
   source,
   theme,
-  sourceAttributes
+  sourceAttributes,
+  interactive = true
 }: MermaidDiagramProps): React.JSX.Element {
+  const instance = useId().replace(/:/g, '')
   const cacheKey = `${theme}\0${source}`
   const [result, setResult] = useState<MermaidResult>(() => diagramCache.get(cacheKey) ?? {})
+  const svg = useMemo(() => result.svg ? preparePreviewSvg(result.svg, `diagram-${instance}`) : null, [result.svg, instance])
 
   useEffect(() => {
     let cancelled = false
@@ -132,7 +140,7 @@ export function MermaidDiagram({
       setResult(cached)
       return
     }
-    setResult((current) => current.svg ? current : {})
+    setResult({})
     const timer = window.setTimeout(() => {
       void renderMermaid(source, theme).then((next) => {
         if (!cancelled) setResult(next)
@@ -159,7 +167,7 @@ export function MermaidDiagram({
     )
   }
 
-  if (!result.svg) {
+  if (!svg) {
     return (
       <figure
         {...sourceAttributes}
@@ -174,11 +182,20 @@ export function MermaidDiagram({
 
   return (
     <figure {...sourceAttributes} className="mermaid-diagram" data-mermaid-state="ready">
+      {interactive && <div className="diagram-toolbar" data-preview-source-ignore="">
+        <span>Mermaid</span>
+        <ExpandedPreview key={cacheKey} title={svg.title} triggerLabel="Expand diagram">
+          <ZoomablePreview width={svg.width} height={svg.height} label={svg.title} source={source}>
+            <SvgPreviewImage markup={svg.markup} label={svg.description || svg.title} />
+          </ZoomablePreview>
+        </ExpandedPreview>
+      </div>}
       <div
         className="mermaid-svg"
         role="img"
-        aria-label="Mermaid diagram"
-        dangerouslySetInnerHTML={{ __html: result.svg }}
+        aria-label={svg.title}
+        aria-description={svg.description || undefined}
+        dangerouslySetInnerHTML={{ __html: svg.markup }}
       />
     </figure>
   )
