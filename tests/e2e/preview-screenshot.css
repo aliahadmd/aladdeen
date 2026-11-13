@@ -1,0 +1,2 @@
+/* Keep centered prose stable across overlay and always-visible macOS scrollbars. */
+.preview-scroll { scrollbar-width: none !important; }

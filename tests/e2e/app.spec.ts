@@ -889,13 +889,14 @@ test('opens, previews, edits, and manually saves a Markdown file', async () => {
     await window.setViewportSize({ width: 900, height: 700 })
     const outlineTrigger = window.getByRole('button', { name: '3 headings' })
     await expect(outlineTrigger).toBeVisible()
-    await outlineTrigger.hover()
+    await outlineTrigger.focus()
     const outline = window.getByRole('navigation', { name: 'Document headings' })
     await expect(outline.getByRole('button', { name: 'Edited offline' })).toBeVisible()
     await expect(outline.getByRole('button', { name: 'Final chapter' })).toBeVisible()
     await expect(outline.getByRole('button', { name: 'Ignored subsection' })).toBeVisible()
     await expect(window).toHaveScreenshot('heading-outline-open.png', {
       animations: 'disabled',
+      stylePath: resolve('tests/e2e/preview-screenshot.css'),
       maxDiffPixelRatio: 0.01
     })
     await window.evaluate(() => {
@@ -904,6 +905,7 @@ test('opens, previews, edits, and manually saves a Markdown file', async () => {
     })
     await expect(window).toHaveScreenshot('heading-outline-open-dark.png', {
       animations: 'disabled',
+      stylePath: resolve('tests/e2e/preview-screenshot.css'),
       maxDiffPixelRatio: 0.01
     })
     await window.evaluate(() => {
@@ -1341,6 +1343,8 @@ test('renders extended Markdown safely and responsively', async () => {
         }, theme)
         await expect(window).toHaveScreenshot(`markdown-${viewport.width}-${theme}.png`, {
           animations: 'disabled',
+          // Normalize native scrollbar modes across macOS screenshot hosts.
+          stylePath: resolve('tests/e2e/preview-screenshot.css'),
           maxDiffPixelRatio: 0.01,
           // CoreText edge colors vary across macOS hosts; solid geometry still uses the strict 1% cap.
           threshold: 0.4

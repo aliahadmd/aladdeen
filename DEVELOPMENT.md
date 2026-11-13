@@ -121,3 +121,7 @@ Remove the exception when those Cloudflare tools migrate away from Zod 3.
 
 The E2E script resolves the Electron executable before starting Playwright, so
 a first-run binary download cannot consume an individual test timeout.
+
+Document screenshots normalize preview scrollbars during capture because macOS
+overlay and always-visible scrollbar settings otherwise shift centered prose.
+The outline screenshot opens through keyboard focus to avoid hover timing races.
