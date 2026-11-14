@@ -135,6 +135,9 @@ describe('settings dialog', () => {
     expect(openExternal).toHaveBeenNthCalledWith(1, 'https://x.com/aliahadmd1')
     expect(openExternal).toHaveBeenNthCalledWith(2, 'https://github.com/aliahadmd')
     expect(openExternal).toHaveBeenNthCalledWith(3, 'mailto:ali@aliahad.com')
+    expect(screen.getByText(/GNU General Public License v3\.0 \(GPLv3\)/i)).toBeVisible()
+    fireEvent.click(screen.getByRole('button', { name: /View source & license on GitHub/i }))
+    expect(openExternal).toHaveBeenNthCalledWith(4, 'https://github.com/LiLabsAI/LiResearch')
 
     view.unmount()
     render(<SettingsDialog open onOpenChange={vi.fn()} />)

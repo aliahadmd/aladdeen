@@ -1,7 +1,8 @@
 # Third-party notices
 
-LiResearch is proprietary software and includes third-party components under
-their own licenses.
+LiResearch is free software licensed under the GNU General Public License v3.0
+(GPLv3) and includes third-party components under their own GPLv3-compatible
+licenses.
 
 ## Eigenpal DOCX Editor
 
@@ -13,7 +14,7 @@ their own licenses.
 - License text: https://www.apache.org/licenses/LICENSE-2.0
 
 Eigenpal DOCX Editor is used for local DOCX parsing, rendering, editing, and
-serialization. Its inclusion does not change LiResearch's proprietary license.
+serialization. Its inclusion does not change LiResearch's GPLv3 license.
 
 ## Univer spreadsheet engine
 
@@ -92,4 +93,4 @@ SmartArt renderer import. LiResearch keeps 3D SmartArt disabled in v1.
 
 These unmodified dependencies support local EMF conversion and embedded-font
 decompression. MPL-2.0 obligations remain limited to the unmodified
-`mtx-decompressor` component and do not change LiResearch's proprietary license.
+`mtx-decompressor` component and do not change LiResearch's GPLv3 license.

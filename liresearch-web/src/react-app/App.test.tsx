@@ -85,6 +85,15 @@ describe("LiResearch landing page", () => {
 		expect(Object.keys(RELEASE_ARTIFACTS)).toEqual(["arm64"]);
 		expect(screen.getAllByText(/Open Anyway/).length).toBeGreaterThan(0);
 		expect(screen.getByText(RELEASE_ARTIFACTS.arm64.sha256)).toBeInTheDocument();
+		expect(screen.getByRole("link", { name: "Source (GPLv3)" })).toHaveAttribute(
+			"href",
+			"https://github.com/LiLabsAI/LiResearch",
+		);
+		expect(screen.getByRole("link", { name: "License" })).toHaveAttribute(
+			"href",
+			"https://github.com/LiLabsAI/LiResearch/blob/main/LICENSE",
+		);
+		expect(document.body.textContent).not.toMatch(/proprietary/i);
 	});
 
 	it("switches tour slides by click and arrow keys", () => {

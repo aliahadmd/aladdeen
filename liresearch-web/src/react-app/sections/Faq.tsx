@@ -34,9 +34,9 @@ const faqItems = [
 			"To update, download the newest version and replace the app in Applications; your environments and settings carry over. To uninstall, drag LiResearch to the Trash. Your documents are never affected.",
 	},
 	{
-		question: "Is LiResearch free?",
+		question: "Is LiResearch free and open source?",
 		answer:
-			"Yes, during the current beta. LiResearch is proprietary software by Ali Ahad, and future versions may be paid.",
+			"Yes. LiResearch is free, open-source software by Ali Ahad, licensed under the GNU General Public License v3.0 (GPLv3). You can study, fork, and contribute to the source code on GitHub, and any distributed derivatives remain open source under GPLv3.",
 	},
 ] as const;
 

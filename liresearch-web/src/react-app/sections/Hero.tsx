@@ -39,7 +39,7 @@ export function Hero({ artifact }: { artifact: ReleaseArtifact }): ReactNode {
 					className="rise-in group inline-flex items-center gap-2 rounded-full border border-line bg-raised/70 py-1 pl-1 pr-3 text-sm text-ink-soft backdrop-blur transition-colors hover:border-line-strong"
 				>
 					<span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-xs font-semibold text-accent">v{artifact.version}</span>
-					Free during the beta
+					Open source · GPLv3
 					<ArrowIcon className="h-3 w-3 transition-transform duration-300 group-hover:translate-x-0.5" />
 				</a>
 

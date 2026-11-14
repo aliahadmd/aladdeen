@@ -54,4 +54,4 @@ if (lockfile.includes('@docx-editor.dev/react')) {
   fail('the placeholder @docx-editor.dev/react namespace must not be packaged.')
 }
 
-console.log(`${EXPECTED_PACKAGE}@${EXPECTED_VERSION} is ready for proprietary LiResearch packaging under Apache-2.0.`)
+console.log(`${EXPECTED_PACKAGE}@${EXPECTED_VERSION} is ready for LiResearch packaging under Apache-2.0.`)

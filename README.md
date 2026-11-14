@@ -167,8 +167,8 @@ LiResearch works entirely on your Mac.
 
 ## Questions
 
-**Is LiResearch free?**
-Yes, during the current beta. Future versions may be paid. LiResearch is proprietary software by [Ali Ahad](https://aliahad.com); the beta is free to use, but it is not open source.
+**Is LiResearch free and open source?**
+Yes. LiResearch is free, open-source software by [Ali Ahad](https://aliahad.com), licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE). You can study, fork, modify, and contribute to the source code on [GitHub](https://github.com/LiLabsAI/LiResearch).
 
 **Does it work on an Intel Mac, Windows, or Linux?**
 No. LiResearch is built only for Macs with Apple silicon.
@@ -179,6 +179,12 @@ Download the newest version and replace the app in your Applications folder. You
 **How do I uninstall it?**
 Drag LiResearch from Applications to the Trash. To also remove its list of folders and settings, delete `~/Library/Application Support/LiResearch`. Your documents are not affected either way.
 
----
+## Contributing & License
 
-Building LiResearch from source? See [DEVELOPMENT.md](DEVELOPMENT.md). Open-source components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Copyright © 2026 [Ali Ahad](https://aliahad.com).
+
+LiResearch is free software licensed under the **GNU General Public License v3.0 (GPLv3)** — see [LICENSE](LICENSE). Under GPLv3, anyone is free to study, use, modify, and redistribute the software or fork the repository, and any distributed modified or derivative versions must also remain open source under GPLv3 with attribution preserved.
+
+- **Contribute:** Issues, forks, and pull requests are welcome on [GitHub](https://github.com/LiLabsAI/LiResearch) — see [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Build from source:** See [DEVELOPMENT.md](DEVELOPMENT.md).
+- **Third-party notices:** Open-source components and their GPLv3-compatible licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

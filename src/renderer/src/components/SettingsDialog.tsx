@@ -652,6 +652,21 @@ function AboutSettings({ onShowTutorial }: { onShowTutorial?(): void }): React.J
           </section>
         )}
         <section className="py-5">
+          <h3 className="m-0 text-[13px] font-[620] text-foreground">Open source &amp; license</h3>
+          <p className="mt-2 mb-3 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
+            Copyright © 2026 Ali Ahad. Released as free software under the GNU General Public License v3.0 (GPLv3). Distributed modifications and derivatives must also be licensed under GPLv3.
+          </p>
+          <button
+            className="inline-flex h-9 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-[12px] font-[620] text-foreground transition-colors hover:bg-surface-hover"
+            type="button"
+            onClick={() => void window.liresearch.system.openExternal('https://github.com/LiLabsAI/LiResearch')}
+          >
+            <Github size={15} />
+            View source &amp; license on GitHub
+            <ExternalLink size={12} aria-hidden="true" />
+          </button>
+        </section>
+        <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">Developer</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
             Contact the developer for product questions, feedback, or security concerns.

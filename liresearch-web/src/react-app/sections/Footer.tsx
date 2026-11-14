@@ -35,7 +35,7 @@ export function Footer({ artifact }: { artifact: ReleaseArtifact }): ReactNode {
 					<div>
 						<p className="text-sm font-semibold text-ink">LiResearch</p>
 						<p className="text-xs text-ink-faint">
-							Version {artifact.version} · Proprietary software, free during beta
+							Version {artifact.version} · Open source (GPLv3)
 						</p>
 					</div>
 				</div>
@@ -47,6 +47,12 @@ export function Footer({ artifact }: { artifact: ReleaseArtifact }): ReactNode {
 					))}
 					<a href="https://github.com/LiLabsAI/LiResearch/releases" className="text-ink-soft transition-colors hover:text-ink">
 						Releases
+					</a>
+					<a href="https://github.com/LiLabsAI/LiResearch" className="text-ink-soft transition-colors hover:text-ink">
+						GitHub
+					</a>
+					<a href="https://github.com/LiLabsAI/LiResearch/blob/main/LICENSE" className="text-ink-soft transition-colors hover:text-ink">
+						License
 					</a>
 				</nav>
 				<p className="text-xs text-ink-faint">

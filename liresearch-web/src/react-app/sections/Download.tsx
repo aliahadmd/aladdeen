@@ -60,7 +60,7 @@ export function Download({ artifact }: { artifact: ReleaseArtifact }): ReactNode
 	return (
 		<section id="download" className="relative mx-auto w-full max-w-6xl px-5 py-24 md:px-8 md:py-32">
 			<SectionHeading eyebrow="Download" title="Get LiResearch for your Mac.">
-				Free while LiResearch is in beta. One download, no account, nothing else to install.
+				Free and open source under GPLv3. One download, no account, nothing else to install.
 			</SectionHeading>
 
 			<div className="mt-14 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -88,8 +88,8 @@ export function Download({ artifact }: { artifact: ReleaseArtifact }): ReactNode
 							<dd className="mt-1 font-medium text-ink">{formatSize(artifact.byteSize)}</dd>
 						</div>
 						<div>
-							<dt className="text-ink-faint">Price</dt>
-							<dd className="mt-1 font-medium text-ink">Free during beta</dd>
+							<dt className="text-ink-faint">License</dt>
+							<dd className="mt-1 font-medium text-ink">Free · GPLv3</dd>
 						</div>
 					</dl>
 
@@ -106,6 +106,10 @@ export function Download({ artifact }: { artifact: ReleaseArtifact }): ReactNode
 						Also on{" "}
 						<a className="font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink" href="https://github.com/LiLabsAI/LiResearch/releases/latest">
 							GitHub Releases
+						</a>
+						{" · "}
+						<a className="font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink" href="https://github.com/LiLabsAI/LiResearch">
+							Source (GPLv3)
 						</a>
 					</p>
 				</div>

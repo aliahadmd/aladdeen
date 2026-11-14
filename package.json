@@ -14,7 +14,7 @@
     "url": "git+https://github.com/LiLabsAI/LiResearch.git"
   },
   "packageManager": "pnpm@11.5.0",
-  "license": "UNLICENSED",
+  "license": "GPL-3.0-only",
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
