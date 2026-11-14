@@ -101,7 +101,7 @@ export class ExportService {
 
   private assertContentSize(content: string): void {
     if (Buffer.byteLength(content, 'utf8') > MAX_DOCUMENT_BYTES) {
-      throw new DesktopError('INVALID_FILE', 'This document is larger than Aladdeen’s 20 MiB limit.')
+      throw new DesktopError('INVALID_FILE', 'This document is larger than LiResearch’s 20 MiB limit.')
     }
   }
 
@@ -153,7 +153,7 @@ export class ExportService {
         content: request.content
       })
       await withTimeout(
-        printWindow.webContents.executeJavaScript(`window.renderAladdeenExport(${payload})`, true),
+        printWindow.webContents.executeJavaScript(`window.renderLiResearchExport(${payload})`, true),
         EXPORT_RENDER_TIMEOUT_MS,
         'The PDF export content did not finish rendering.'
       )
@@ -207,9 +207,9 @@ export class ExportService {
       ].filter(Boolean)
       const document = new Document({
         title: metadata?.title || request.title,
-        creator: metadata?.author || 'Aladdeen',
+        creator: metadata?.author || 'LiResearch',
         keywords: metadata?.tags.join(', ') || undefined,
-        description: ['Exported from Markdown by Aladdeen', ...metadataDetails].join('. '),
+        description: ['Exported from Markdown by LiResearch', ...metadataDetails].join('. '),
         footnotes,
         styles: {
           default: {
@@ -220,8 +220,8 @@ export class ExportService {
           },
           paragraphStyles: [
             {
-              id: 'AladdeenCode',
-              name: 'Aladdeen Code',
+              id: 'LiResearchCode',
+              name: 'LiResearch Code',
               basedOn: 'Normal',
               quickFormat: true,
               run: { font: 'Courier New', size: 18, color: '252535' },
@@ -266,7 +266,7 @@ export class ExportService {
       if (extended.type === 'math') {
         children.push(
           new Paragraph({
-            style: 'AladdeenCode',
+            style: 'LiResearchCode',
             children: [
               new TextRun({ text: 'Math', bold: true, font: 'Courier New' }),
               new TextRun({ break: 1, text: extended.value ?? '', font: 'Courier New' })
@@ -338,7 +338,7 @@ export class ExportService {
             const isMermaid = node.lang?.toLowerCase() === 'mermaid'
           children.push(
             new Paragraph({
-              style: 'AladdeenCode',
+              style: 'LiResearchCode',
               children: [
                 ...(isMermaid
                   ? [
@@ -646,7 +646,7 @@ async function waitForExportRenderer(window: BrowserWindowType): Promise<void> {
   const deadline = Date.now() + EXPORT_LOAD_TIMEOUT_MS
   while (!window.isDestroyed()) {
     const ready = await window.webContents.executeJavaScript(
-      'typeof window.renderAladdeenExport === "function"',
+      'typeof window.renderLiResearchExport === "function"',
       true
     ) as boolean
     if (ready) return

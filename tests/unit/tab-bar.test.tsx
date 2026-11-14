@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TabBar } from '@renderer/components/TabBar'
 import { useAppStore } from '@renderer/store/app-store'
-import type { AladdeenApi, OpenDocument } from '@shared/contracts'
+import type { LiResearchApi, OpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const environmentId = '22222222-2222-4222-8222-222222222222'
@@ -34,11 +34,11 @@ function document(id: string, name: string): OpenDocument {
 
 describe('document tabs', () => {
   beforeEach(() => {
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
       value: {
         environments: { persistState: vi.fn().mockResolvedValue({ ok: true, value: undefined }) }
-      } as unknown as AladdeenApi
+      } as unknown as LiResearchApi
     })
     useAppStore.setState({
       environment: {

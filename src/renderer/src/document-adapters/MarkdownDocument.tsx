@@ -76,7 +76,7 @@ export function MarkdownDocument({ document }: DocumentAdapterProps): React.JSX.
           compact ? (
             mobilePane === 'editor' ? editor : preview
           ) : (
-            <PanelGroup direction="horizontal" autoSaveId="aladdeen-markdown-split">
+            <PanelGroup direction="horizontal" autoSaveId="liresearch-markdown-split">
               <Panel defaultSize={44} minSize={28} maxSize={70}>{editor}</Panel>
               <PanelResizeHandle className="relative w-px bg-border after:absolute after:inset-y-0 after:left-0 after:z-[2] after:w-[7px] after:content-[''] data-[resize-handle-active]:bg-accent" />
               <Panel defaultSize={56} minSize={30}>{preview}</Panel>

@@ -118,7 +118,7 @@ export function XlsxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
             UniverSheetsConditionalFormattingPreset(),
             UniverSheetsHyperLinkPreset({
               urlHandler: {
-                navigateToOtherWebsite: (url) => void window.aladdeen.system.openExternal(url)
+                navigateToOtherWebsite: (url) => void window.liresearch.system.openExternal(url)
               }
             })
           ]
@@ -194,13 +194,13 @@ export function XlsxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
 
   if (document.documentKind !== 'xlsx') return <div />
   return (
-    <div className="aladdeen-xlsx-host relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface-elevated">
+    <div className="liresearch-xlsx-host relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface-elevated">
       {compatibility && compatibility.level !== 'supported' && (
         <div className={compatibility.level === 'read-only' ? 'xlsx-compatibility is-read-only' : 'xlsx-compatibility'}>
           {compatibility.level === 'read-only' ? <ShieldAlert size={15} /> : <AlertTriangle size={15} />}
           <span>
             {compatibility.level === 'read-only'
-              ? `Read-only: Aladdeen cannot safely honor ${compatibility.reasons.join(', ')}.`
+              ? `Read-only: LiResearch cannot safely honor ${compatibility.reasons.join(', ')}.`
               : requiresSaveAs
                 ? `Compatibility copy required to preserve ${compatibility.reasons.join(', ')}.`
                 : `Compatibility features preserved in this editable copy: ${compatibility.reasons.join(', ')}.`}

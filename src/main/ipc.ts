@@ -55,7 +55,7 @@ const execFileAsync = promisify(execFile)
 
 function parse<T>(schema: ZodType<T>, input: unknown): T {
   const result = schema.safeParse(input)
-  if (!result.success) throw new DesktopError('INVALID_PATH', 'Aladdeen rejected an invalid request.', z.prettifyError(result.error))
+  if (!result.success) throw new DesktopError('INVALID_PATH', 'LiResearch rejected an invalid request.', z.prettifyError(result.error))
   return result.data
 }
 
@@ -64,7 +64,7 @@ function requireTrustedSender(
   window: BrowserWindow | null
 ): void {
   if (!window || window.isDestroyed() || event.sender.id !== window.webContents.id) {
-    throw new DesktopError('PERMISSION_DENIED', 'The request did not come from the Aladdeen window.')
+    throw new DesktopError('PERMISSION_DENIED', 'The request did not come from the LiResearch window.')
   }
   if (event.senderFrame && event.senderFrame !== window.webContents.mainFrame) {
     throw new DesktopError('PERMISSION_DENIED', 'Subframes cannot use desktop features.')
@@ -201,7 +201,7 @@ export function registerIpc({
     const result = await showOpenDialog(getWindow(), {
       title: 'Open document',
       properties: ['openFile'],
-      filters: [{ name: 'Aladdeen documents', extensions: [...DOCUMENT_EXTENSIONS] }]
+      filters: [{ name: 'LiResearch documents', extensions: [...DOCUMENT_EXTENSIONS] }]
     })
     if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'Open file was cancelled.')
     return workspace.openAbsoluteDocument(result.filePaths[0])
@@ -307,7 +307,7 @@ export function registerIpc({
     const result = await showOpenDialog(getWindow(), {
       title: `Locate ${basename(currentPath)}`,
       properties: ['openFile'],
-      filters: [{ name: 'Aladdeen documents', extensions: [...DOCUMENT_EXTENSIONS] }]
+      filters: [{ name: 'LiResearch documents', extensions: [...DOCUMENT_EXTENSIONS] }]
     })
     if (result.canceled || !result.filePaths[0]) throw new DesktopError('CANCELLED', 'Locate file was cancelled.')
     return workspace.locateTrackedFile(fileId, result.filePaths[0])
@@ -329,7 +329,7 @@ export function registerIpc({
     }
     const filePath = await workspace.resolveTrackedFilePath(fileId)
     // Use the default web browser explicitly: the default app for .html files
-    // may be Aladdeen itself.
+    // may be LiResearch itself.
     const browser = await app.getApplicationInfoForProtocol('https://').catch(() => null)
     if (!browser?.path) throw new DesktopError('NOT_FOUND', 'No default web browser was found.')
     await execFileAsync('/usr/bin/open', ['-a', browser.path, filePath])

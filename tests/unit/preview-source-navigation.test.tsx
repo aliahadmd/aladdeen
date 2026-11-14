@@ -126,7 +126,7 @@ describe('preview-to-source navigation', () => {
   })
 
   it('replaces spoofed raw HTML offsets with trusted positions', () => {
-    const content = '<mark data-aladdeen-source-start="999" data-aladdeen-source-end="1000">Safe</mark>'
+    const content = '<mark data-liresearch-source-start="999" data-liresearch-source-end="1000">Safe</mark>'
     const { onRevealSource } = renderNavigableMarkdown(content)
 
     fireEvent.click(screen.getByText('Safe'))
@@ -136,7 +136,7 @@ describe('preview-to-source navigation', () => {
       to: content.indexOf('Safe') + 4,
       exact: true
     })
-    expect(document.querySelector('[data-aladdeen-source-start="999"]')).toBeNull()
+    expect(document.querySelector('[data-liresearch-source-start="999"]')).toBeNull()
   })
 
   it('does not annotate or navigate preview-only rendering', () => {
@@ -153,7 +153,7 @@ describe('preview-to-source navigation', () => {
 
     fireEvent.click(screen.getByText('Reader mode.'))
     expect(onRevealSource).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-aladdeen-source-start]')).toBeNull()
+    expect(container.querySelector('[data-liresearch-source-start]')).toBeNull()
   })
 
   it('switches compact editing to the editor and records an ephemeral reveal', () => {

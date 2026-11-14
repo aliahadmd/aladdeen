@@ -28,7 +28,7 @@ export function ProjectDocumentTypes({
     <fieldset className="min-w-0 border-0 p-0">
       <legend className="text-[12px] font-semibold text-foreground">Document types</legend>
       <p className="mt-1 text-[11px] leading-[1.45] text-foreground-muted">
-        Choose which formats Aladdeen discovers in this project.
+        Choose which formats LiResearch discovers in this project.
       </p>
       <div className="mt-2.5 grid grid-cols-1 gap-2 min-[400px]:grid-cols-2 min-[720px]:grid-cols-4">
         {PROJECT_DOCUMENT_TYPE_OPTIONS.map((option) => {

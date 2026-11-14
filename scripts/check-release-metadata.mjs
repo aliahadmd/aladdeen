@@ -8,8 +8,8 @@ import { URL } from "node:url";
 const root = new URL("../", import.meta.url);
 const [desktopPackage, webPackage, manifest] = await Promise.all([
   readJson(new URL("package.json", root)),
-  readJson(new URL("aladdeen-web/package.json", root)),
-  readJson(new URL("aladdeen-web/src/shared/release-manifest.json", root))
+  readJson(new URL("liresearch-web/package.json", root)),
+  readJson(new URL("liresearch-web/src/shared/release-manifest.json", root))
 ]);
 
 if (desktopPackage.version !== manifest.version || webPackage.version !== manifest.version) {
@@ -32,10 +32,10 @@ if (Object.keys(manifest.macos ?? {}).some((architecture) => architecture !== "a
 }
 
 const artifactArgument = process.argv.slice(2).find((argument) => argument !== "--")
-  ?? process.env.ALADDEEN_ARTIFACT_PATH;
+  ?? process.env.LIRESEARCH_ARTIFACT_PATH;
 if (artifactArgument) {
   const artifactPath = resolve(artifactArgument);
-  const expectedFilename = `Aladdeen-${manifest.version}-arm64.dmg`;
+  const expectedFilename = `LiResearch-${manifest.version}-arm64.dmg`;
   if (basename(artifactPath) !== expectedFilename) {
     throw new Error(`Release artifact filename mismatch: expected ${expectedFilename}.`);
   }

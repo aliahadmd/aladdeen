@@ -42,7 +42,7 @@ const ONBOARDING_STEPS: readonly OnboardingStep[] = [
   {
     id: 'local',
     title: 'Research stays on your Mac',
-    description: 'Aladdeen reads and edits documents where they already live. No account, cloud, conversion, or network connection is required.',
+    description: 'LiResearch reads and edits documents where they already live. No account, cloud, conversion, or network connection is required.',
     palette: 'lavender',
     Illustration: LocalResearchIllustration
   },
@@ -175,8 +175,8 @@ export function OnboardingExperience({ mode, onClose }: OnboardingExperienceProp
     >
       <header className="relative z-[2] grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-5 max-[640px]:px-3">
         <div className="flex min-w-0 items-center gap-2">
-          <BrandMark className="h-8 w-8 shrink-0" title="Aladdeen" />
-          <span className="truncate text-[12px] font-[680] tracking-[-.01em] max-[520px]:hidden">Aladdeen Research</span>
+          <BrandMark className="h-8 w-8 shrink-0" title="LiResearch" />
+          <span className="truncate text-[12px] font-[680] tracking-[-.01em] max-[520px]:hidden">LiResearch</span>
         </div>
 
         <div className="flex min-w-[118px] justify-center" aria-label={progressText}>
@@ -225,7 +225,7 @@ export function OnboardingExperience({ mode, onClose }: OnboardingExperienceProp
         <p className="sr-only" role="status" aria-live="polite">{progressText}</p>
         {showSetup ? (
           <section className="onboarding-step mx-auto flex min-h-full w-full max-w-[560px] flex-col items-center justify-center py-5 text-center max-[640px]:py-3">
-            <BrandMark className="mb-4 h-12 w-12" title="Aladdeen" />
+            <BrandMark className="mb-4 h-12 w-12" title="LiResearch" />
             <h1
               id="onboarding-page-title"
               ref={headingRef}

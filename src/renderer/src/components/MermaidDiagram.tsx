@@ -79,7 +79,7 @@ async function renderMermaid(source: string, theme: 'light' | 'dark'): Promise<M
         secure: ['securityLevel', 'startOnLoad', 'maxTextSize', 'themeCSS'],
         suppressErrorRendering: true
       })
-      const id = `aladdeen-mermaid-${renderSequence++}`
+      const id = `liresearch-mermaid-${renderSequence++}`
       const rendered = await withDeadline(
         mermaid.render(id, source),
         MERMAID_RENDER_TIMEOUT_MS,

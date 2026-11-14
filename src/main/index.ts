@@ -28,9 +28,9 @@ const productionRendererCsp = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: aladdeen-asset:",
-  "font-src 'self' data: blob: aladdeen-asset:",
-  "connect-src 'self' aladdeen-document: aladdeen-asset:",
+  "img-src 'self' data: blob: liresearch-asset:",
+  "font-src 'self' data: blob: liresearch-asset:",
+  "connect-src 'self' liresearch-document: liresearch-asset:",
   "worker-src 'self' blob:",
   "frame-src 'self'",
   "object-src 'none'",
@@ -42,7 +42,7 @@ const productionExportCsp = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: aladdeen-asset:",
+  "img-src 'self' data: liresearch-asset:",
   "font-src 'self' data:",
   "connect-src 'none'",
   "frame-src 'none'",
@@ -53,11 +53,11 @@ const productionExportCsp = [
 ].join('; ')
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: 'aladdeen-asset',
+    scheme: 'liresearch-asset',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
   },
   {
-    scheme: 'aladdeen-document',
+    scheme: 'liresearch-document',
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true }
   }
 ])
@@ -114,7 +114,7 @@ app.on('open-file', (event, filePath) => {
 void app.whenReady().then(async () => {
   database = new AppDatabase(
     app.getPath('userData'),
-    userDataPolicy.previousUserDataPath
+    userDataPolicy.previousUserDataPaths
   )
   const settings = database.getSettings()
   nativeTheme.themeSource = settings.theme
@@ -146,10 +146,10 @@ void app.whenReady().then(async () => {
   installMenu()
 }).catch((error: unknown) => {
   const message = error instanceof Error ? error.message : 'An unexpected startup error occurred.'
-  console.error('Aladdeen failed to start:', error)
+  console.error('LiResearch failed to start:', error)
   dialog.showErrorBox(
-    'Aladdeen could not start',
-    `${message}\n\nYour documents were not changed. Restart Aladdeen after resolving the error.`
+    'LiResearch could not start',
+    `${message}\n\nYour documents were not changed. Restart LiResearch after resolving the error.`
   )
   app.exit(1)
 })
@@ -177,7 +177,7 @@ function createWindow(): void {
     minHeight: 480,
     show: false,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#18181b' : '#f7f7f9',
-    title: 'Aladdeen',
+    title: 'LiResearch',
     webPreferences: {
       preload: join(mainBundleDirectory, '../preload/index.cjs'),
       contextIsolation: true,
@@ -294,7 +294,7 @@ function configureSessionSecurity(): void {
 }
 
 function registerAssetProtocol(service: WorkspaceService): void {
-  protocol.handle('aladdeen-asset', async (request) => {
+  protocol.handle('liresearch-asset', async (request) => {
     try {
       const url = new URL(request.url)
       if (url.hostname !== 'document') return new Response('Not found', { status: 404 })
@@ -313,7 +313,7 @@ function registerAssetProtocol(service: WorkspaceService): void {
 }
 
 function registerDocumentProtocol(service: WorkspaceService): void {
-  protocol.handle('aladdeen-document', async (request) => {
+  protocol.handle('liresearch-document', async (request) => {
     try {
       const url = new URL(request.url)
       if (url.hostname !== 'session') return new Response('Not found', { status: 404 })
@@ -362,7 +362,7 @@ async function acceptSystemOpenFile(token: string): Promise<DocumentSnapshot> {
   const pendingIndex = pendingOpenRequests.findIndex((pending) => pending.token === token)
   if (pendingIndex !== -1) pendingOpenRequests.splice(pendingIndex, 1)
   if (!request || request.expiresAt < Date.now()) throw new Error('The file-open request expired. Open the file again.')
-  if (!workspace) throw new Error('Aladdeen is not ready.')
+  if (!workspace) throw new Error('LiResearch is not ready.')
   return workspace.openAbsoluteDocument(request.path)
 }
 
@@ -537,8 +537,8 @@ async function handleCloseTimeout(requestId: string): Promise<void> {
   }
   const result = await dialog.showMessageBox(window, {
     type: 'warning',
-    title: 'Aladdeen could not confirm your saves',
-    message: 'Aladdeen did not receive a save confirmation from the document window.',
+    title: 'LiResearch could not confirm your saves',
+    message: 'LiResearch did not receive a save confirmation from the document window.',
     detail: 'Keep the application open to protect your edits, or discard unsaved changes and continue closing.',
     buttons: ['Keep Open', request.action === 'quit' ? 'Quit and Discard' : 'Close and Discard'],
     defaultId: 0,

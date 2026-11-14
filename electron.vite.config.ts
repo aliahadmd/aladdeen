@@ -37,7 +37,7 @@ export default defineConfig({
       tailwindcss(),
       {
         // The dev server needs localhost in the meta CSP; production builds do not.
-        name: 'aladdeen-strip-dev-csp',
+        name: 'liresearch-strip-dev-csp',
         apply: 'build',
         transformIndexHtml: (html) => html.replace(' ws://localhost:* http://localhost:*', '')
       }

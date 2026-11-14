@@ -49,5 +49,5 @@ export function toAssetUrl(fileId: string, target: string): string | null {
   if (!target || /^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) return null
   const path = localReferenceToPath(target)
   if (!path) return null
-  return `aladdeen-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(path)}`
+  return `liresearch-asset://document/${encodeURIComponent(fileId)}?path=${encodeURIComponent(path)}`
 }

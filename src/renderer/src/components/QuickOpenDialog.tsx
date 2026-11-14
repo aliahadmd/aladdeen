@@ -36,7 +36,7 @@ export function QuickOpenDialog(): React.JSX.Element {
     setResultQuery(null)
     setActiveIndex(0)
     const timer = setTimeout(() => {
-      void window.aladdeen.projects.search(query, 60).then((result) => {
+      void window.liresearch.projects.search(query, 60).then((result) => {
         if (currentRequest !== requestId.current || !result.ok) return
         setResults(result.value)
         setResultQuery(query)

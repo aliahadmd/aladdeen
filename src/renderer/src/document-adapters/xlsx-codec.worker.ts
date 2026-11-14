@@ -447,7 +447,7 @@ export function applyUniverSnapshot(target: Workbook, snapshot: IWorkbookData): 
     }
   }
   for (const [index, { reference }] of desired.entries()) {
-    reference.sheet.title = `__aladdeen_${index + 1}__`
+    reference.sheet.title = `__liresearch_${index + 1}__`
   }
   for (const { data, reference } of desired) {
     reference.sheet.title = data.name!

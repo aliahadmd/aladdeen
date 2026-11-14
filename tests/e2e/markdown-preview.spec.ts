@@ -18,7 +18,7 @@ C -->|Final verified answer| A`
 
 test('inspects Markdown diagrams, images, tables, code and math without losing the reading position', async () => {
   test.setTimeout(120_000)
-  const root = await mkdtemp(join(tmpdir(), 'aladdeen-preview-'))
+  const root = await mkdtemp(join(tmpdir(), 'liresearch-preview-'))
   const filePath = join(root, 'inspection.md')
   const columns = Array.from({ length: 10 }, (_, index) => `Column_${index}_with_a_long_unbroken_identifier`)
   const table = `| ${columns.join(' | ')} |\n| ${columns.map(() => '---').join(' | ')} |\n${Array.from({ length: 30 }, (_, row) => `| ${columns.map((_, column) => `Row ${row + 1}, column ${column + 1}`).join(' | ')} |`).join('\n')}`

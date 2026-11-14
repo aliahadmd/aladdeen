@@ -235,7 +235,7 @@ export function DocxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       <DocxSaveState status={document.status} error={document.error} />
       <button
         type="button"
-        className="aladdeen-docx-title-action"
+        className="liresearch-docx-title-action"
         onClick={() => void saveDocumentAs(document.id)}
         title="Save this Word document to another location"
       >
@@ -248,14 +248,14 @@ export function DocxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
   if (document.documentKind !== 'docx') return <div />
 
   return (
-    <div className="aladdeen-docx-host relative h-full min-h-0 min-w-0 overflow-hidden bg-surface-muted">
+    <div className="liresearch-docx-host relative h-full min-h-0 min-w-0 overflow-hidden bg-surface-muted">
       {sourceBuffer && (
-        <PluginHost plugins={EMPTY_PLUGINS} className="aladdeen-docx-plugin-host">
+        <PluginHost plugins={EMPTY_PLUGINS} className="liresearch-docx-plugin-host">
           <DocxEditor
             key={document.id}
             ref={editorRef}
             documentBuffer={sourceBuffer}
-            author="Aladdeen User"
+            author="LiResearch User"
             mode={mode}
             onModeChange={setMode}
             colorMode={colorMode}
@@ -269,7 +269,7 @@ export function DocxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
             showOutlineButton
             documentName={document.name}
             documentNameEditable={false}
-            renderLogo={() => <BrandMark className="h-6 w-6 shrink-0" title="Aladdeen" />}
+            renderLogo={() => <BrandMark className="h-6 w-6 shrink-0" title="LiResearch" />}
             renderTitleBarRight={() => titleBarActions}
             onEditorViewReady={() => {
               registerRuntime()
@@ -357,7 +357,7 @@ function DocxSaveState({
   return (
     <span
       className={cn(
-        'aladdeen-docx-save-state',
+        'liresearch-docx-save-state',
         status === 'saved' && 'text-success',
         status === 'conflict' && 'text-warning',
         status === 'error' && 'text-danger'

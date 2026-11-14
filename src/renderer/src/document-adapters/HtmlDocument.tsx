@@ -84,7 +84,7 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
     if (document.documentKind === 'html' && document.content !== document.savedContent) {
       toast.info('Your browser shows the last saved version. Save to include your latest edits.')
     }
-    const result = await window.aladdeen.system.openInBrowser(document.id)
+    const result = await window.liresearch.system.openInBrowser(document.id)
     if (!result.ok) toast.error(result.error.message)
   }
   const extensions = useMemo(() => [html(), EditorView.lineWrapping], [])
@@ -145,10 +145,10 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
             if (modeRef.current === 'preview' || frameWindow.getSelection()?.toString()) return
             const target = event.target as HTMLElement | null
             if (!target?.closest || target.closest('a,button,input,summary')) return
-            const mapped = target.closest<HTMLElement>('[data-aladdeen-source-start]')
+            const mapped = target.closest<HTMLElement>('[data-liresearch-source-start]')
             if (!mapped) return
-            const from = Number(mapped.dataset.aladdeenSourceStart)
-            const to = Number(mapped.dataset.aladdeenSourceEnd)
+            const from = Number(mapped.dataset.liresearchSourceStart)
+            const to = Number(mapped.dataset.liresearchSourceEnd)
             if (Number.isFinite(from) && Number.isFinite(to)) {
               revealPreviewSource(document.id, { from, to, exact: false })
               if (compact) setMode('source')
@@ -208,7 +208,7 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         <div role="note" className="flex shrink-0 items-center gap-2.5 border-b border-border bg-accent-soft px-3 py-2 text-[11px] text-foreground-soft">
           <Info size={14} className="shrink-0 text-accent" />
           <span className="min-w-0 flex-1">
-            Simplified preview: this page {limitReasons.join(' and ')}. Aladdeen previews offline with scripts off, so
+            Simplified preview: this page {limitReasons.join(' and ')}. LiResearch previews offline with scripts off, so
             some styling and content won’t appear.
           </span>
           <button
@@ -232,7 +232,7 @@ export function HtmlDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       )}
       <div className="min-h-0 flex-1">
         {mode === 'source' ? sourcePane : mode === 'preview' ? previewPane : (
-          <PanelGroup direction="horizontal" autoSaveId="aladdeen-html-split">
+          <PanelGroup direction="horizontal" autoSaveId="liresearch-html-split">
             <Panel defaultSize={48} minSize={28}>{sourcePane}</Panel>
             <PanelResizeHandle className="w-px bg-border data-[resize-handle-active]:bg-accent" />
             <Panel defaultSize={52} minSize={28}>{previewPane}</Panel>

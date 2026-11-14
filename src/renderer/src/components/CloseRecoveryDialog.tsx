@@ -57,7 +57,7 @@ export function CloseRecoveryDialog({
           </div>
           <AlertDialog.Title className={dialogTitleClasses}>Some edits could not be saved</AlertDialog.Title>
           <AlertDialog.Description className={dialogDescriptionClasses}>
-            Aladdeen kept the window open. Retry the original files, save recoverable copies elsewhere,
+            LiResearch kept the window open. Retry the original files, save recoverable copies elsewhere,
             or explicitly discard the unsaved edits before {actionProgressive}.
           </AlertDialog.Description>
           <div className="mt-[18px] grid gap-[7px]">

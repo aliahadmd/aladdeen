@@ -14,7 +14,7 @@ interface ExportRenderPayload {
 
 declare global {
   interface Window {
-    renderAladdeenExport(payload: ExportRenderPayload): Promise<void>
+    renderLiResearchExport(payload: ExportRenderPayload): Promise<void>
   }
 }
 
@@ -45,7 +45,7 @@ async function waitForImages(): Promise<void> {
   ).then(() => undefined), 15_000, 'Timed out while loading local images.')
 }
 
-window.renderAladdeenExport = async ({ fileId, title, content }) => {
+window.renderLiResearchExport = async ({ fileId, title, content }) => {
   root.render(
     <MarkdownContent
       content={content}

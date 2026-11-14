@@ -121,12 +121,12 @@ let environmentRequestId = 0
 let settingsRequestId = 0
 let documentMutationVersion = 0
 let documentLoadGeneration = 0
-let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.aladdeen.settings.update>>> = Promise.resolve({
+let settingsWriteQueue: Promise<Awaited<ReturnType<typeof window.liresearch.settings.update>>> = Promise.resolve({
   ok: true,
   value: {
     theme: 'system',
     accent: 'indigo',
-    themePreset: 'aladdeen',
+    themePreset: 'liresearch',
     sidebarWidth: 320,
     sidebarCollapsed: false,
     completedOnboardingVersion: 0,
@@ -192,7 +192,7 @@ function mergeTrackedMetadata(documents: OpenDocument[], snapshot: EnvironmentSn
 export const useAppStore = create<AppState>((set, get) => {
   const persistOpenState = async (): Promise<void> => {
     if (!get().environment) return
-    await window.aladdeen.environments.persistState({
+    await window.liresearch.environments.persistState({
       openFileIds: get().documents.map((document) => document.id),
       activeFileId: get().activeFileId ?? undefined
     })
@@ -222,7 +222,7 @@ export const useAppStore = create<AppState>((set, get) => {
         !get().documents.some(isDocumentDirty)
       ) return true
     }
-    toast.error('Edits continued while Aladdeen was preparing the documents. Try again.')
+    toast.error('Edits continued while LiResearch was preparing the documents. Try again.')
     return false
   }
 
@@ -235,7 +235,7 @@ export const useAppStore = create<AppState>((set, get) => {
     if (!document || (!isDocumentDirty(document) && !force && !saveAs)) return true
     if (document.deleted && !force) {
       set((state) => ({ documents: state.documents.map((item) => item.id === fileId
-        ? { ...item, status: 'error', error: 'This file was deleted outside Aladdeen.' }
+        ? { ...item, status: 'error', error: 'This file was deleted outside LiResearch.' }
         : item) }))
       return false
     }
@@ -280,7 +280,7 @@ export const useAppStore = create<AppState>((set, get) => {
       )) || Boolean(runtime.requiresSaveAs?.())
       let result
       try {
-        result = await window.aladdeen.document.saveBinary({
+        result = await window.liresearch.document.saveBinary({
           fileId,
           expectedRevision: document.revision,
           force,
@@ -351,8 +351,8 @@ export const useAppStore = create<AppState>((set, get) => {
     let result
     try {
       result = saveAs
-        ? await window.aladdeen.document.saveAs(request)
-        : await window.aladdeen.document.save(request)
+        ? await window.liresearch.document.saveAs(request)
+        : await window.liresearch.document.save(request)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'The document could not be saved.'
       set((state) => ({
@@ -417,7 +417,7 @@ export const useAppStore = create<AppState>((set, get) => {
     }
     let result
     try {
-      result = await window.aladdeen.document.saveBinary({
+      result = await window.liresearch.document.saveBinary({
         fileId: document.id,
         expectedRevision: document.revision,
         force: true,
@@ -474,7 +474,7 @@ export const useAppStore = create<AppState>((set, get) => {
     settings: {
       theme: 'system',
       accent: 'indigo',
-      themePreset: 'aladdeen',
+      themePreset: 'liresearch',
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
@@ -483,7 +483,7 @@ export const useAppStore = create<AppState>((set, get) => {
     persistedSettings: {
       theme: 'system',
       accent: 'indigo',
-      themePreset: 'aladdeen',
+      themePreset: 'liresearch',
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
@@ -505,7 +505,7 @@ export const useAppStore = create<AppState>((set, get) => {
       initializePromise = (async () => {
         try {
           set({ bootStatus: 'booting' })
-          const result = await window.aladdeen.app.bootstrap()
+          const result = await window.liresearch.app.bootstrap()
           if (!result.ok) {
             toast.error(result.error.message)
             set({ bootStatus: 'error' })
@@ -522,7 +522,7 @@ export const useAppStore = create<AppState>((set, get) => {
           }
           set({ bootStatus: 'ready' })
         } catch (error) {
-          toast.error(error instanceof Error ? error.message : 'Aladdeen could not finish starting.')
+          toast.error(error instanceof Error ? error.message : 'LiResearch could not finish starting.')
           set({ bootStatus: 'error' })
         }
       })().finally(() => {
@@ -539,7 +539,7 @@ export const useAppStore = create<AppState>((set, get) => {
       const dirty = get().documents.filter(isDocumentDirty)
       for (const document of dirty) {
         if (isTextOpenDocument(document)) {
-          const result = await window.aladdeen.document.saveCopy(document.id, document.content)
+          const result = await window.liresearch.document.saveCopy(document.id, document.content)
           if (!result.ok) {
             withoutCancelled(result.error)
             return false
@@ -561,7 +561,7 @@ export const useAppStore = create<AppState>((set, get) => {
           if (!(await flushDocuments())) return false
           await persistOpenState()
         }
-        const result = await window.aladdeen.environments.create(name)
+        const result = await window.liresearch.environments.create(name)
         if (!result.ok) {
           withoutCancelled(result.error)
           return false
@@ -577,7 +577,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async renameEnvironment(name) {
       const environmentId = get().environment?.environment.id
       if (!environmentId) return false
-      const result = await window.aladdeen.environments.rename(environmentId, name)
+      const result = await window.liresearch.environments.rename(environmentId, name)
       if (!result.ok) {
         withoutCancelled(result.error)
         return false
@@ -593,7 +593,7 @@ export const useAppStore = create<AppState>((set, get) => {
       try {
         if (!(await flushDocuments())) return false
         await persistOpenState()
-        const result = await window.aladdeen.environments.remove(environmentId)
+        const result = await window.liresearch.environments.remove(environmentId)
         if (!result.ok) {
           withoutCancelled(result.error)
           return false
@@ -622,7 +622,7 @@ export const useAppStore = create<AppState>((set, get) => {
         if (!(await flushDocuments())) return
         await persistOpenState()
         const requestId = ++environmentRequestId
-        const result = await window.aladdeen.environments.switch(environmentId)
+        const result = await window.liresearch.environments.switch(environmentId)
         if (!result.ok) return withoutCancelled(result.error)
         if (requestId !== environmentRequestId) return
         await get().loadEnvironment(result.value)
@@ -636,14 +636,14 @@ export const useAppStore = create<AppState>((set, get) => {
       for (const document of get().documents) {
         cleanupDocumentRuntime(document.id)
         if (!isTextOpenDocument(document)) {
-          void window.aladdeen.document.releaseSession(document.session.id)
+          void window.liresearch.document.releaseSession(document.session.id)
         }
       }
       saveOperations.clear()
       editorViewports.clear()
       previewScrollPositions.clear()
       const opened = await mapWithConcurrency(snapshot.openFileIds, 4, async (fileId) =>
-        window.aladdeen.document.open({ kind: 'tracked', fileId })
+        window.liresearch.document.open({ kind: 'tracked', fileId })
       )
       if (requestId !== environmentRequestId) return
       const documents = opened.flatMap((result) => result.ok ? [openDocumentFromSnapshot(result.value)] : [])
@@ -665,7 +665,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async refreshEnvironment() {
       const environmentId = get().environment?.environment.id
       if (!environmentId) return
-      const result = await window.aladdeen.environments.refresh()
+      const result = await window.liresearch.environments.refresh()
       if (!result.ok) {
         if (result.error.code !== 'NOT_FOUND') toast.error(result.error.message)
         return
@@ -675,7 +675,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async createProject(name) {
-      const result = await window.aladdeen.projects.create(name)
+      const result = await window.liresearch.projects.create(name)
       if (!result.ok) return withoutCancelled(result.error)
       const newest = result.value.projects.find((project) => !get().environment?.projects.some((old) => old.id === project.id))
       set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value), selectedProjectId: newest?.id ?? null, selectedFolderPath: '' }))
@@ -686,7 +686,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async commitProjectImport(selections) {
-      const result = await window.aladdeen.projects.commitImport(selections)
+      const result = await window.liresearch.projects.commitImport(selections)
       if (!result.ok) {
         withoutCancelled(result.error)
         return false
@@ -703,7 +703,7 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async updateProject(request) {
-      const result = await window.aladdeen.projects.update(request)
+      const result = await window.liresearch.projects.update(request)
       if (!result.ok) {
         withoutCancelled(result.error)
         return false
@@ -718,14 +718,14 @@ export const useAppStore = create<AppState>((set, get) => {
     },
 
     async removeProject(projectId) {
-      const result = await window.aladdeen.projects.remove(projectId)
+      const result = await window.liresearch.projects.remove(projectId)
       if (!result.ok) return withoutCancelled(result.error)
       set((state) => ({ environment: result.value, documents: mergeTrackedMetadata(state.documents, result.value), selectedProjectId: null, selectedFolderPath: '' }))
     },
 
     async openFile() {
       if (!get().environment) return
-      const result = await window.aladdeen.document.openFile()
+      const result = await window.liresearch.document.openFile()
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
@@ -734,13 +734,13 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!get().environment) return
       const projectId = get().selectedProjectId
       const result = projectId && name
-        ? await window.aladdeen.files.create({
+        ? await window.liresearch.files.create({
             projectId,
             parentPath: get().selectedFolderPath,
             name,
             documentKind
           })
-        : await window.aladdeen.files.create({ documentKind })
+        : await window.liresearch.files.create({ documentKind })
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
@@ -748,7 +748,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async createFolder(name) {
       const projectId = get().selectedProjectId
       if (!projectId) return
-      const result = await window.aladdeen.files.createFolder({ projectId, parentPath: get().selectedFolderPath, name })
+      const result = await window.liresearch.files.createFolder({ projectId, parentPath: get().selectedFolderPath, name })
       if (!result.ok) return withoutCancelled(result.error)
       set({ environment: result.value })
     },
@@ -759,13 +759,13 @@ export const useAppStore = create<AppState>((set, get) => {
         await activateDocument(existing.id)
         return
       }
-      const result = await window.aladdeen.document.open(target)
+      const result = await window.liresearch.document.open(target)
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
 
     async openRelativeDocument(fileId, target) {
-      const result = await window.aladdeen.document.openRelative(fileId, target)
+      const result = await window.liresearch.document.openRelative(fileId, target)
       if (!result.ok) return withoutCancelled(result.error)
       await ingestDocument(result.value)
     },
@@ -782,7 +782,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
 
       if (!fileId || !get().documents.some((document) => document.id === fileId)) {
-        const result = await window.aladdeen.document.open(match.target)
+        const result = await window.liresearch.document.open(match.target)
         if (!result.ok) return withoutCancelled(result.error)
         fileId = result.value.id
         await ingestDocument(result.value)
@@ -877,7 +877,7 @@ export const useAppStore = create<AppState>((set, get) => {
 
     async openDroppedFiles(files) {
       if (!get().environment || files.length === 0) return
-      const result = await window.aladdeen.document.openDropped(files.slice(0, MAX_DROPPED_DOCUMENTS))
+      const result = await window.liresearch.document.openDropped(files.slice(0, MAX_DROPPED_DOCUMENTS))
       if (!result.ok) return withoutCancelled(result.error)
       for (const snapshot of result.value) await ingestDocument(snapshot)
     },
@@ -977,7 +977,7 @@ export const useAppStore = create<AppState>((set, get) => {
       if (!discard && isDocumentDirty(document) && !(await get().saveDocument(fileId))) return
       cleanupDocumentRuntime(fileId)
       if (!isTextOpenDocument(document)) {
-        await window.aladdeen.document.releaseSession(document.session.id)
+        await window.liresearch.document.releaseSession(document.session.id)
       }
       set((state) => {
         const index = state.documents.findIndex((item) => item.id === fileId)
@@ -1026,7 +1026,7 @@ export const useAppStore = create<AppState>((set, get) => {
     async removeTrackedFile(fileId) {
       await get().closeDocument(fileId)
       if (get().documents.some((document) => document.id === fileId)) return
-      const result = await window.aladdeen.files.removeTracked(fileId)
+      const result = await window.liresearch.files.removeTracked(fileId)
       if (!result.ok) return withoutCancelled(result.error)
       set({ environment: result.value })
     },
@@ -1034,14 +1034,14 @@ export const useAppStore = create<AppState>((set, get) => {
     async trashTrackedFile(fileId) {
       const document = get().documents.find((candidate) => candidate.id === fileId)
       if (document && isDocumentDirty(document) && !(await get().saveDocument(fileId))) return
-      const result = await window.aladdeen.files.trashTracked(fileId)
+      const result = await window.liresearch.files.trashTracked(fileId)
       if (!result.ok) return withoutCancelled(result.error)
       toast.success(`${document?.name ?? 'File'} moved to Trash.`)
       await get().refreshEnvironment()
     },
 
     async locateTrackedFile(fileId) {
-      const result = await window.aladdeen.files.locate(fileId)
+      const result = await window.liresearch.files.locate(fileId)
       if (!result.ok) return withoutCancelled(result.error)
       set((state) => ({
         documents: state.documents.map((document) => document.id === fileId
@@ -1058,9 +1058,9 @@ export const useAppStore = create<AppState>((set, get) => {
       if (event.type === 'removed') {
         if (document) {
           set((state) => ({ documents: state.documents.map((item) => item.id === event.fileId
-            ? { ...item, deleted: true, status: 'error', error: 'This file was deleted outside Aladdeen.' }
+            ? { ...item, deleted: true, status: 'error', error: 'This file was deleted outside LiResearch.' }
             : item) }))
-          toast.warning(`${document.name} was removed outside Aladdeen.`)
+          toast.warning(`${document.name} was removed outside LiResearch.`)
         }
         await get().refreshEnvironment()
         return
@@ -1069,13 +1069,13 @@ export const useAppStore = create<AppState>((set, get) => {
       if (isDocumentDirty(document) || document.status === 'saving') {
         set((state) => ({
           conflictFileIds: enqueueConflict(state.conflictFileIds, event.fileId as string),
-          documents: state.documents.map((item) => item.id === event.fileId ? { ...item, status: 'conflict', error: 'This file changed outside Aladdeen.' } : item)
+          documents: state.documents.map((item) => item.id === event.fileId ? { ...item, status: 'conflict', error: 'This file changed outside LiResearch.' } : item)
         }))
         return
       }
       const requestId = (externalReadRequests.get(event.fileId) ?? 0) + 1
       externalReadRequests.set(event.fileId, requestId)
-      const result = await window.aladdeen.document.read(event.fileId)
+      const result = await window.liresearch.document.read(event.fileId)
       if (externalReadRequests.get(event.fileId) !== requestId) return
       if (!result.ok) {
         withoutCancelled(result.error)
@@ -1087,7 +1087,7 @@ export const useAppStore = create<AppState>((set, get) => {
         set((state) => ({
           conflictFileIds: enqueueConflict(state.conflictFileIds, event.fileId as string),
           documents: state.documents.map((item) => item.id === event.fileId
-            ? { ...item, status: 'conflict', error: 'This file changed outside Aladdeen.' }
+            ? { ...item, status: 'conflict', error: 'This file changed outside LiResearch.' }
             : item)
         }))
         return
@@ -1117,7 +1117,7 @@ export const useAppStore = create<AppState>((set, get) => {
           toast.error('Resolve the current save issue before opening another file.')
           return
         }
-        const result = await window.aladdeen.document.acceptOpenFile(request.token)
+        const result = await window.liresearch.document.acceptOpenFile(request.token)
         // The token is single-use either way, so it leaves the queue now.
         set((state) => ({
           pendingOpenRequests: state.pendingOpenRequests.filter((pending) => pending.token !== request.token)
@@ -1141,7 +1141,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       if (action === 'copy') {
         if (isTextOpenDocument(document)) {
-          const copy = await window.aladdeen.document.saveCopy(fileId, document.content)
+          const copy = await window.liresearch.document.saveCopy(fileId, document.content)
           if (!copy.ok) return withoutCancelled(copy.error)
           toast.success('A copy of your changes was saved.')
         } else {
@@ -1149,7 +1149,7 @@ export const useAppStore = create<AppState>((set, get) => {
           toast.success('A copy of your document was saved.')
         }
       }
-      const external = await window.aladdeen.document.read(fileId)
+      const external = await window.liresearch.document.read(fileId)
       if (!external.ok) return withoutCancelled(external.error)
       cleanupDocumentRuntime(fileId)
       set((state) => ({
@@ -1169,7 +1169,7 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       const latest = get().documents.find((candidate) => candidate.id === document.id)
       if (!latest || !isTextOpenDocument(latest) || latest.documentKind !== 'markdown') return
-      const result = await window.aladdeen.export.document({
+      const result = await window.liresearch.export.document({
         fileId: latest.id,
         title: latest.name.replace(/\.(md|markdown)$/i, ''),
         content: latest.content,
@@ -1185,8 +1185,8 @@ export const useAppStore = create<AppState>((set, get) => {
       const requestId = ++settingsRequestId
       set({ settings })
       settingsWriteQueue = settingsWriteQueue.then(
-        () => window.aladdeen.settings.update(settings),
-        () => window.aladdeen.settings.update(settings)
+        () => window.liresearch.settings.update(settings),
+        () => window.liresearch.settings.update(settings)
       )
       const result = await settingsWriteQueue
       if (result.ok) set({ persistedSettings: result.value })
@@ -1266,7 +1266,7 @@ export const accentOptions: Array<{ value: Accent; label: string }> = [
 ]
 
 export const themePresetOptions: Array<{ value: ThemePreset; label: string; description: string }> = [
-  { value: 'aladdeen', label: 'Aladdeen', description: 'The classic look — calm indigo accents' },
+  { value: 'liresearch', label: 'LiResearch', description: 'The classic look — calm indigo accents' },
   { value: 'mono', label: 'Mono', description: 'Clean grayscale — minimal and focused' },
   { value: 'catppuccin', label: 'Catppuccin', description: 'Soothing pastels — Latte and Macchiato' },
   { value: 'everforest', label: 'Everforest', description: 'Warm, low-contrast forest greens' },

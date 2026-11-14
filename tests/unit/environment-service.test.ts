@@ -17,8 +17,8 @@ afterEach(async () => {
 
 describe('environment service', () => {
   it('updates the project index immediately after rename and Save As', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-index-consistency-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-index-consistency-'))
     created.push(profile, projectPath)
     await writeFile(join(projectPath, 'draft.md'), '# Draft\n', 'utf8')
 
@@ -55,8 +55,8 @@ describe('environment service', () => {
   })
 
   it('opens HTML, DOCX, PDF, XLSX, and PPTX in place with format-specific sessions', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const documentsPath = await mkdtemp(join(tmpdir(), 'aladdeen-formats-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const documentsPath = await mkdtemp(join(tmpdir(), 'liresearch-formats-'))
     created.push(profile, documentsPath)
     await writeFile(join(documentsPath, 'page.html'), '<!doctype html><h1>Local page</h1>', 'utf8')
     await writeFile(join(documentsPath, 'proof.pdf'), '%PDF-1.4\n%%EOF\n', 'latin1')
@@ -77,19 +77,19 @@ describe('environment service', () => {
     })
     expect(docx).toMatchObject({
       documentKind: 'docx',
-      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+      session: { url: expect.stringMatching(/^liresearch-document:\/\/session\//) }
     })
     expect(pdf).toMatchObject({
       documentKind: 'pdf',
-      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+      session: { url: expect.stringMatching(/^liresearch-document:\/\/session\//) }
     })
     expect(xlsx).toMatchObject({
       documentKind: 'xlsx',
-      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+      session: { url: expect.stringMatching(/^liresearch-document:\/\/session\//) }
     })
     expect(pptx).toMatchObject({
       documentKind: 'pptx',
-      session: { url: expect.stringMatching(/^aladdeen-document:\/\/session\//) }
+      session: { url: expect.stringMatching(/^liresearch-document:\/\/session\//) }
     })
     expect((await service.getSnapshot()).files.map((file) => file.documentKind).sort()).toEqual([
       'docx',
@@ -129,9 +129,9 @@ describe('environment service', () => {
   })
 
   it('opens project and standalone files together and keeps them tracked', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-project-'))
-    const loosePath = await mkdtemp(join(tmpdir(), 'aladdeen-loose-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-project-'))
+    const loosePath = await mkdtemp(join(tmpdir(), 'liresearch-loose-'))
     created.push(profile, projectPath, loosePath)
     await mkdir(join(projectPath, 'guides'))
     await writeFile(join(projectPath, 'guides', 'start.md'), '# Project\n', 'utf8')
@@ -170,8 +170,8 @@ describe('environment service', () => {
   })
 
   it('rejects overlapping project roots', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-project-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-project-'))
     created.push(profile, projectPath)
     await mkdir(join(projectPath, 'nested'))
     const database = new AppDatabase(profile)
@@ -185,8 +185,8 @@ describe('environment service', () => {
   })
 
   it('archives and removes only project metadata without touching disk content', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-safe-removal-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-safe-removal-'))
     const documentPath = join(projectPath, 'README.md')
     created.push(profile, projectPath)
     await writeFile(documentPath, '# Keep me\n', 'utf8')
@@ -216,8 +216,8 @@ describe('environment service', () => {
   })
 
   it('discovers only enabled project formats while directly opened filtered files remain tracked', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-format-policy-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-format-policy-'))
     created.push(profile, projectPath)
     await writeFile(join(projectPath, 'README.md'), '# Notes\n', 'utf8')
     await writeFile(join(projectPath, 'page.html'), '<h1>Local page</h1>', 'utf8')
@@ -306,8 +306,8 @@ describe('environment service', () => {
   })
 
   it('bulk-adds a project with a selective metadata index and keeps unopened files out of recents', async () => {
-    const profile = await mkdtemp(join(tmpdir(), 'aladdeen-profile-'))
-    const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-scoped-project-'))
+    const profile = await mkdtemp(join(tmpdir(), 'liresearch-profile-'))
+    const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-scoped-project-'))
     created.push(profile, projectPath)
     await mkdir(join(projectPath, 'docs', 'nested'), { recursive: true })
     await mkdir(join(projectPath, 'archive'))

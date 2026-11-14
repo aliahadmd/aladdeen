@@ -1,4 +1,4 @@
-name: Build and test Aladdeen
+name: Build and test LiResearch
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: aladdeen-web
+        working-directory: liresearch-web
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
@@ -45,7 +45,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          cache-dependency-path: aladdeen-web/pnpm-lock.yaml
+          cache-dependency-path: liresearch-web/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit --audit-level high
       - run: pnpm check
@@ -96,21 +96,21 @@ jobs:
         run: |
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
-          dmg="release/${version}/Aladdeen-${version}-arm64.dmg"
+          dmg="release/${version}/LiResearch-${version}-arm64.dmg"
           test -f "$dmg"
           shasum -a 256 "$dmg" > "release/${version}/SHA256SUMS"
-          stat -f '%z' "$dmg" > "release/${version}/Aladdeen-${version}-arm64.dmg.size"
+          stat -f '%z' "$dmg" > "release/${version}/LiResearch-${version}-arm64.dmg.size"
       - name: Verify ad-hoc signatures
         shell: bash
         run: |
           set -euo pipefail
           while IFS= read -r -d '' app; do
             codesign --verify --deep --strict --verbose=2 "$app"
-          done < <(find release -type d -name 'Aladdeen.app' -print0)
+          done < <(find release -type d -name 'LiResearch.app' -print0)
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: github.event_name != 'push'
         with:
-          name: aladdeen-macos-arm64
+          name: liresearch-macos-arm64
           path: |
             release/*/*.dmg
             release/*/SHA256SUMS

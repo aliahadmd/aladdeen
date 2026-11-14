@@ -175,15 +175,15 @@ export function PdfDocument({ document }: DocumentAdapterProps): React.JSX.Eleme
   useEffect(() => {
     const viewer = viewerElement.current
     if (!viewer) return
-    for (const existing of viewer.querySelectorAll('[data-aladdeen-pdf-annotation]')) existing.remove()
+    for (const existing of viewer.querySelectorAll('[data-liresearch-pdf-annotation]')) existing.remove()
     for (const annotation of annotations) {
       const pageElement = viewer.querySelector<HTMLElement>(
         `.page[data-page-number="${annotation.pageIndex + 1}"]`
       )
       if (!pageElement) continue
       const marker = viewer.ownerDocument.createElement('span')
-      marker.dataset.aladdeenPdfAnnotation = annotation.id
-      marker.className = `aladdeen-pdf-annotation is-${annotation.tool}`
+      marker.dataset.liresearchPdfAnnotation = annotation.id
+      marker.className = `liresearch-pdf-annotation is-${annotation.tool}`
       marker.style.left = `${annotation.xRatio * 100}%`
       marker.style.top = `${annotation.yRatio * 100}%`
       marker.textContent = annotation.text ?? (annotation.tool === 'highlight' ? '' : '•')

@@ -77,7 +77,7 @@ export function MarkdownPreview({
           documentId={document.id}
           fallbackTitle={document.name}
           theme={dark ? 'dark' : 'light'}
-          onOpenExternal={(target) => void window.aladdeen.system.openExternal(target)}
+          onOpenExternal={(target) => void window.liresearch.system.openExternal(target)}
           onOpenRelativeDocument={(target) => void openRelativeDocument(document.id, target)}
           onRevealSource={(target) => revealPreviewSource(document.id, target)}
           sourceNavigationEnabled={editing && sourceNavigationReady}

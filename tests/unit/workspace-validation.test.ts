@@ -24,14 +24,14 @@ describe('workspace safety', () => {
   })
 
   it('contains resolved paths inside the root', () => {
-    const root = '/tmp/aladdeen-workspace'
-    expect(resolveSyntacticPath(root, 'notes/today.md')).toBe('/tmp/aladdeen-workspace/notes/today.md')
-    expect(isPathInside(root, '/tmp/aladdeen-workspace/notes')).toBe(true)
+    const root = '/tmp/liresearch-workspace'
+    expect(resolveSyntacticPath(root, 'notes/today.md')).toBe('/tmp/liresearch-workspace/notes/today.md')
+    expect(isPathInside(root, '/tmp/liresearch-workspace/notes')).toBe(true)
     expect(() => resolveSyntacticPath(root, '../outside.md')).toThrow(/outside/i)
   })
 
   it('rejects symlinked files even when their target stays inside the project', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'aladdeen-path-'))
+    const root = await mkdtemp(join(tmpdir(), 'liresearch-path-'))
     created.push(root)
     await mkdir(join(root, 'notes'))
     await writeFile(join(root, 'notes', 'target.md'), '# Target\n')

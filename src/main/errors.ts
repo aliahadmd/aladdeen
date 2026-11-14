@@ -20,7 +20,7 @@ export function toAppError(error: unknown, fallback: ErrorCode = 'INTERNAL'): Ap
     const candidate = error as NodeJS.ErrnoException
     if (candidate.code === 'ENOENT') return { code: 'NOT_FOUND', message: 'The file no longer exists.' }
     if (candidate.code === 'EACCES' || candidate.code === 'EPERM') {
-      return { code: 'PERMISSION_DENIED', message: 'Aladdeen does not have permission to complete that action.' }
+      return { code: 'PERMISSION_DENIED', message: 'LiResearch does not have permission to complete that action.' }
     }
     if (candidate.code === 'EEXIST') return { code: 'ALREADY_EXISTS', message: 'An item with that name already exists.' }
     return { code: fallback, message: error.message || 'Something went wrong.' }

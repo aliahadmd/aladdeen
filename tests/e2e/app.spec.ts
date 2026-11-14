@@ -37,8 +37,8 @@ function namespaceWorkbookSheetElements(bytes: Uint8Array): Uint8Array {
 
 test('opens, edits, saves, and reopens a local XLSX workbook', async () => {
   test.setTimeout(90_000)
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-xlsx-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-xlsx-workspace-'))
   const xlsxPath = join(workspace, 'budget.xlsx')
   const source = createWorkbook()
   const sourceSheet = addWorksheet(source, 'Budget')
@@ -50,7 +50,7 @@ test('opens, edits, saves, and reopens a local XLSX workbook', async () => {
   try {
     let window = await application.firstWindow()
     await createFirstEnvironment(window)
-    const editor = window.locator('.aladdeen-xlsx-host')
+    const editor = window.locator('.liresearch-xlsx-host')
     await expect(editor).toBeVisible({ timeout: 30_000 })
     await expect(editor.getByText('Budget', { exact: true })).toBeVisible({ timeout: 15_000 })
     const documentFooter = window.locator('footer').filter({ hasText: 'XLSX' })
@@ -78,7 +78,7 @@ test('opens, edits, saves, and reopens a local XLSX workbook', async () => {
     await closeElectron(application)
     application = await electron.launch({ args: ['.', xlsxPath, `--user-data-dir=${userData}`] })
     window = await application.firstWindow()
-    const reopened = window.locator('.aladdeen-xlsx-host')
+    const reopened = window.locator('.liresearch-xlsx-host')
     await expect(reopened).toBeVisible({ timeout: 30_000 })
     await expect(reopened.getByText('Budget', { exact: true })).toBeVisible({ timeout: 15_000 })
     await expect(reopened.locator('canvas[id^="univer-sheet-main-canvas_"]')).toBeVisible()
@@ -93,8 +93,8 @@ test('opens, edits, saves, and reopens a local XLSX workbook', async () => {
 
 test('rebuilds the XLSX editor when the workbook changes on disk', async () => {
   test.setTimeout(90_000)
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-reload-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-reload-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-xlsx-reload-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-xlsx-reload-workspace-'))
   const xlsxPath = join(workspace, 'plan.xlsx')
   const workbookWithSheet = async (sheetName: string, value: string): Promise<Uint8Array> => {
     const workbook = createWorkbook()
@@ -107,7 +107,7 @@ test('rebuilds the XLSX editor when the workbook changes on disk', async () => {
   try {
     const window = await application.firstWindow()
     await createFirstEnvironment(window)
-    const editor = window.locator('.aladdeen-xlsx-host')
+    const editor = window.locator('.liresearch-xlsx-host')
     await expect(editor.getByText('Budget', { exact: true })).toBeVisible({ timeout: 30_000 })
 
     await writeFile(xlsxPath, await workbookWithSheet('Forecast', 'Changed elsewhere'))
@@ -137,8 +137,8 @@ test('rebuilds the XLSX editor when the workbook changes on disk', async () => {
 
 test('requires one compatibility copy and preserves unknown XLSX parts on later saves', async () => {
   test.setTimeout(90_000)
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-xlsx-preserve-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-xlsx-preserve-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-xlsx-preserve-workspace-'))
   const xlsxPath = join(workspace, 'preservation.xlsx')
   const copyPath = join(workspace, 'preservation copy.xlsx')
   const source = createWorkbook()
@@ -153,7 +153,7 @@ test('requires one compatibility copy and preserves unknown XLSX parts on later 
   try {
     const window = await application.firstWindow()
     await createFirstEnvironment(window)
-    const editor = window.locator('.aladdeen-xlsx-host')
+    const editor = window.locator('.liresearch-xlsx-host')
     await expect(editor).toBeVisible({ timeout: 30_000 })
     await expect(editor.getByText(/Compatibility copy required to preserve custom XML/)).toBeVisible()
     await application.evaluate(({ dialog }, destination) => {
@@ -190,8 +190,8 @@ test('requires one compatibility copy and preserves unknown XLSX parts on later 
 
 test('opens, edits, saves, presents, and reopens a local PPTX without outbound requests', async () => {
   test.setTimeout(90_000)
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pptx-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pptx-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-pptx-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-pptx-workspace-'))
   const pptxPath = join(workspace, 'briefing.pptx')
   const created = await PptxHandler.create({ title: 'Offline briefing', initialSlideCount: 1 })
   try {
@@ -219,7 +219,7 @@ test('opens, edits, saves, presents, and reopens a local PPTX without outbound r
       })
     })
     await createFirstEnvironment(window)
-    const editor = window.locator('.aladdeen-pptx-host')
+    const editor = window.locator('.liresearch-pptx-host')
     await expect(editor).toBeVisible({ timeout: 30_000 })
     const textElement = editor.locator('.pptxv-stage [data-element-id][aria-label="Original briefing"]')
     await expect(textElement).toBeVisible({ timeout: 20_000 })
@@ -259,7 +259,7 @@ test('opens, edits, saves, presents, and reopens a local PPTX without outbound r
     for (const [tabName, tabKey] of ribbonTabs) {
       await editor.getByRole('tab', { name: tabName, exact: true }).click()
       const ribbonContent = editor.locator('.pptxv-ribbon-tab-content:not([hidden])')
-      await expect(ribbonContent).toHaveAttribute('data-aladdeen-ribbon-tab', tabKey)
+      await expect(ribbonContent).toHaveAttribute('data-liresearch-ribbon-tab', tabKey)
       const layout = await ribbonContent.evaluate((root) => {
         const buttons = [...root.querySelectorAll<HTMLButtonElement>('button')]
           .filter((button) => {
@@ -377,7 +377,7 @@ test('opens, edits, saves, presents, and reopens a local PPTX without outbound r
     await closeElectron(application)
     application = await electron.launch({ args: ['.', pptxPath, `--user-data-dir=${userData}`] })
     window = await application.firstWindow()
-    const reopened = window.locator('.aladdeen-pptx-host')
+    const reopened = window.locator('.liresearch-pptx-host')
     await expect(reopened).toBeVisible({ timeout: 30_000 })
     await expect(reopened.locator('.pptxv-stage [data-element-id][aria-label="Updated briefing"]')).toBeVisible({ timeout: 20_000 })
   } finally {
@@ -407,8 +407,8 @@ async function presentationTexts(path: string): Promise<string[]> {
 
 test('opens, scrolls, edits, saves, and reopens a DOCX through Eigenpal', async () => {
   test.setTimeout(60_000)
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-docx-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-docx-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-docx-workspace-'))
   const docxPath = join(workspace, 'proposal.docx')
   const source = new Document({
     sections: [{
@@ -444,9 +444,9 @@ test('opens, scrolls, edits, saves, and reopens a DOCX through Eigenpal', async 
     await expect(editableRun).toBeVisible()
     await editableRun.click()
     await window.keyboard.press('End')
-    await window.keyboard.insertText(' updated in Aladdeen')
+    await window.keyboard.insertText(' updated in LiResearch')
     await window.keyboard.press('Tab')
-    await expect(editor).toContainText('updated in Aladdeen')
+    await expect(editor).toContainText('updated in LiResearch')
     await expect(window.getByRole('button', { name: /Unsaved/ }).first()).toBeVisible()
     await window.keyboard.press('ControlOrMeta+S')
     const documentFooter = window.locator('footer').filter({ hasText: 'DOCX' })
@@ -461,7 +461,7 @@ test('opens, scrolls, edits, saves, and reopens a DOCX through Eigenpal', async 
     window = await application.firstWindow()
     const reopened = window.locator('.ep-root.docx-editor')
     await expect(reopened).toBeVisible({ timeout: 15_000 })
-    await expect(reopened).toContainText('updated in Aladdeen')
+    await expect(reopened).toContainText('updated in LiResearch')
   } finally {
     await closeElectron(application)
     await Promise.all([
@@ -472,8 +472,8 @@ test('opens, scrolls, edits, saves, and reopens a DOCX through Eigenpal', async 
 })
 
 test('opens and renders a local PDF without outbound requests', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pdf-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-pdf-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-pdf-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-pdf-workspace-'))
   const pdfPath = join(workspace, 'evidence.pdf')
   const source = await PDFDocument.create()
   const page = source.addPage([480, 320])
@@ -519,8 +519,8 @@ async function closeElectron(application: Awaited<ReturnType<typeof electron.lau
 }
 
 test('opens and edits a dropped HTML document in place with contained local assets', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-html-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-html-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-html-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-html-workspace-'))
   const activePath = join(workspace, 'current.md')
   const htmlPath = join(workspace, 'field-notes.html')
   const imagePath = join(workspace, 'map.png')
@@ -608,7 +608,7 @@ test('opens and edits a dropped HTML document in place with contained local asse
 })
 
 test('onboards into a persistent environment', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-'))
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
@@ -680,8 +680,8 @@ test('onboards into a persistent environment', async () => {
 
 test('bulk-links a selectively indexed project and quick-opens files without filling recents', async () => {
   test.setTimeout(60_000)
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
-  const projectParent = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-library-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-profile-'))
+  const projectParent = await mkdtemp(join(tmpdir(), 'liresearch-e2e-library-'))
   const projectPath = join(projectParent, 'library')
   await mkdir(projectPath)
   await mkdir(join(projectPath, 'docs'))
@@ -839,12 +839,12 @@ test('bulk-links a selectively indexed project and quick-opens files without fil
 })
 
 test('opens, previews, edits, and manually saves a Markdown file', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-workspace-'))
   const markdownPath = join(workspace, 'hello.md')
   const pdfPath = join(workspace, 'hello.pdf')
   const docxPath = join(workspace, 'hello.docx')
-  await writeFile(markdownPath, '# Hello Aladdeen\n\n- [x] Preview works\n', 'utf8')
+  await writeFile(markdownPath, '# Hello LiResearch\n\n- [x] Preview works\n', 'utf8')
   const application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
 
   try {
@@ -852,7 +852,7 @@ test('opens, previews, edits, and manually saves a Markdown file', async () => {
     await window.getByRole('button', { name: 'Skip tutorial' }).click()
     await expect(window.getByText(/After setup, we’ll open/)).toBeVisible()
     await window.getByRole('button', { name: 'Create environment' }).click()
-    await expect(window.getByRole('heading', { name: 'Hello Aladdeen' })).toBeVisible()
+    await expect(window.getByRole('heading', { name: 'Hello LiResearch' })).toBeVisible()
     await expect(window.getByRole('tab', { name: /hello\.md/i })).toBeVisible()
     await expect(window.getByRole('heading', { name: 'Individual files' })).toBeVisible()
     await expect(window.locator('.tracked-file-row')).toContainText('hello')
@@ -953,8 +953,8 @@ test('opens, previews, edits, and manually saves a Markdown file', async () => {
 })
 
 test('flushes the latest edit before the application quits', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-close-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-close-file-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-close-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-close-file-'))
   const markdownPath = join(workspace, 'close-safe.md')
   await writeFile(markdownPath, '# Before\n', 'utf8')
   const application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
@@ -981,8 +981,8 @@ test('flushes the latest edit before the application quits', async () => {
 })
 
 test('keeps a long editor manually scrollable after preview-to-source navigation', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-scroll-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-scroll-workspace-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-scroll-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-scroll-workspace-'))
   const markdownPath = join(workspace, 'long-document.md')
   const paragraphs = Array.from(
     { length: 400 },
@@ -1076,8 +1076,8 @@ test('keeps a long editor manually scrollable after preview-to-source navigation
 })
 
 test('restores tabs independently for each environment', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-environments-'))
-  const folder = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-files-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-environments-'))
+  const folder = await mkdtemp(join(tmpdir(), 'liresearch-e2e-files-'))
   const markdownPath = join(folder, 'persistent.md')
   await writeFile(markdownPath, '# Persistent tab\n', 'utf8')
   let application = await electron.launch({ args: ['.', markdownPath, `--user-data-dir=${userData}`] })
@@ -1110,7 +1110,7 @@ test('restores tabs independently for each environment', async () => {
 })
 
 test('keeps the environment sidebar usable at compact window sizes', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-compact-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-compact-'))
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
@@ -1142,7 +1142,7 @@ test('keeps the environment sidebar usable at compact window sizes', async () =>
 })
 
 test('uses compact document chrome and persists the desktop sidebar layout', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-chrome-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-chrome-'))
   let application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     let window = await application.firstWindow()
@@ -1166,7 +1166,7 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
     await window.getByRole('button', { name: 'Collapse sidebar' }).click()
     await expect(window.getByRole('button', { name: 'Show sidebar' })).toBeVisible()
     await expect.poll(async () => {
-      const result = await window.evaluate(() => globalThis.window.aladdeen.settings.get())
+      const result = await window.evaluate(() => globalThis.window.liresearch.settings.get())
       return result.ok ? result.value : null
     }).toMatchObject({ sidebarWidth: 336, sidebarCollapsed: true })
 
@@ -1183,7 +1183,7 @@ test('uses compact document chrome and persists the desktop sidebar layout', asy
 })
 
 test('renders responsive settings navigation in light and dark themes', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-settings-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-settings-'))
   const application = await electron.launch({ args: ['.', `--user-data-dir=${userData}`] })
   try {
     const window = await application.firstWindow()
@@ -1296,8 +1296,8 @@ test('renders responsive settings navigation in light and dark themes', async ()
 })
 
 test('renders extended Markdown safely and responsively', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-markdown-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-markdown-file-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-markdown-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-markdown-file-'))
   const markdownPath = join(workspace, 'compatibility.md')
   const fixture = await readFile(resolve('tests/fixtures/markdown-compatibility.md'), 'utf8')
   await writeFile(markdownPath, fixture, 'utf8')
@@ -1311,8 +1311,8 @@ test('renders extended Markdown safely and responsively', async () => {
     })
     await createFirstEnvironment(window)
 
-    await expect(window.getByRole('article', { name: 'Aladdeen Compatibility' })).toBeVisible()
-    await expect(window.getByText('title: "Aladdeen Compatibility"')).toHaveCount(0)
+    await expect(window.getByRole('article', { name: 'LiResearch Compatibility' })).toBeVisible()
+    await expect(window.getByText('title: "LiResearch Compatibility"')).toHaveCount(0)
     await expect(window.locator('.markdown-toc')).toHaveCount(1)
     await expect(window.locator('.markdown-callout')).toContainText('Local first')
     await expect(window.locator('dl')).toContainText('A definition with formatting.')
@@ -1361,8 +1361,8 @@ test('renders extended Markdown safely and responsively', async () => {
 })
 
 test('exports extended Markdown structure to PDF and DOCX', async () => {
-  const userData = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-export-profile-'))
-  const workspace = await mkdtemp(join(tmpdir(), 'aladdeen-e2e-export-file-'))
+  const userData = await mkdtemp(join(tmpdir(), 'liresearch-e2e-export-profile-'))
+  const workspace = await mkdtemp(join(tmpdir(), 'liresearch-e2e-export-file-'))
   const markdownPath = join(workspace, 'export-compatibility.md')
   const pdfPath = join(workspace, 'export-compatibility.pdf')
   const docxPath = join(workspace, 'export-compatibility.docx')
@@ -1414,7 +1414,7 @@ test('exports extended Markdown structure to PDF and DOCX', async () => {
     const coreXml = strFromU8(archive['docProps/core.xml']!)
     const footnotesXml = strFromU8(archive['word/footnotes.xml']!)
 
-    expect(coreXml).toContain('Aladdeen Compatibility')
+    expect(coreXml).toContain('LiResearch Compatibility')
     expect(coreXml).toContain('offline, markdown')
     expect(documentXml).toContain('A definition with ')
     expect(documentXml).toContain('Local first')

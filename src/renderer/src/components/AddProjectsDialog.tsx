@@ -72,7 +72,7 @@ export function AddProjectsDialog(): React.JSX.Element {
   const chooseFolders = async (): Promise<void> => {
     if (choosing) return
     setChoosing(true)
-    const result = await window.aladdeen.projects.chooseExisting()
+    const result = await window.liresearch.projects.chooseExisting()
     setChoosing(false)
     if (!result.ok) {
       if (result.error.code !== 'CANCELLED') toast.error(result.error.message)
@@ -133,7 +133,7 @@ export function AddProjectsDialog(): React.JSX.Element {
             <button className="m-[22px] flex min-h-[310px] flex-col items-center justify-center gap-[9px] rounded-xl border border-dashed border-border-strong bg-surface text-foreground-soft" type="button" onClick={() => void chooseFolders()} disabled={choosing}>
               {choosing ? <LoaderCircle className="spinner text-accent" size={20} /> : <FolderOpen className="text-accent" size={22} />}
               <strong className="text-[14px] text-foreground">{choosing ? 'Scanning selected folders…' : 'Choose one or more folders'}</strong>
-              <span className="max-w-[420px] text-center text-[11px] leading-[1.5] text-foreground-muted">Aladdeen stores references and metadata only. Files stay in their original locations.</span>
+              <span className="max-w-[420px] text-center text-[11px] leading-[1.5] text-foreground-muted">LiResearch stores references and metadata only. Files stay in their original locations.</span>
             </button>
           ) : (
             <div className="project-import-layout">

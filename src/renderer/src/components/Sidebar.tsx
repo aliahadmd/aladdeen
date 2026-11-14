@@ -189,7 +189,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
     setExpandedProjects(new Set(openProjects.map((project) => project.id)))
     setExpandedFolders(Object.fromEntries(currentEnvironment.projects.map((project) => [project.id, new Set(project.expandedPaths.filter(Boolean))])))
     const requests = openProjects.flatMap((project) =>
-      project.expandedPaths.map((path) => window.aladdeen.projects.listChildren(project.id, path))
+      project.expandedPaths.map((path) => window.liresearch.projects.listChildren(project.id, path))
     )
     void Promise.all(requests).then((results) => {
       if (cancelled) return
@@ -211,7 +211,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
     setSearchResults([])
     let cancelled = false
     const timer = setTimeout(() => {
-      void window.aladdeen.projects.search(query, 80).then((result) => {
+      void window.liresearch.projects.search(query, 80).then((result) => {
         if (!cancelled && result.ok) setSearchResults(result.value)
       })
     }, 140)
@@ -268,7 +268,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
       else next.add(projectId)
       const paths = [...(expandedFolders[projectId] ?? [])]
       if (next.has(projectId)) paths.unshift('')
-      void window.aladdeen.projects.persistExpandedPaths(projectId, paths)
+      void window.liresearch.projects.persistExpandedPaths(projectId, paths)
       return next
     })
     if (opening) void loadChildren(projectId, '')
@@ -283,7 +283,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
       else nextSet.add(path)
       const paths = [...nextSet]
       if (expandedProjects.has(projectId)) paths.unshift('')
-      void window.aladdeen.projects.persistExpandedPaths(projectId, paths)
+      void window.liresearch.projects.persistExpandedPaths(projectId, paths)
       return { ...current, [projectId]: nextSet }
     })
     if (opening) void loadChildren(projectId, path)
@@ -294,7 +294,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
     const key = treeKey(projectId, parentPath)
     if (cursor === undefined && treePages[key] && treePages[key]!.total === treePages[key]!.entries.length) return
     setLoadingTreeKeys((current) => new Set(current).add(key))
-    const result = await window.aladdeen.projects.listChildren(projectId, parentPath, cursor)
+    const result = await window.liresearch.projects.listChildren(projectId, parentPath, cursor)
     setLoadingTreeKeys((current) => {
       const next = new Set(current)
       next.delete(key)
@@ -313,7 +313,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
   }
 
   const renameEntry = async (projectId: string, node: WorkspaceTreeNode, name: string): Promise<boolean> => {
-    const result = await window.aladdeen.files.rename({ projectId, path: node.path, newName: name })
+    const result = await window.liresearch.files.rename({ projectId, path: node.path, newName: name })
     if (!result.ok) {
       toast.error(result.error.message)
       return false
@@ -326,7 +326,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
 
   const trashEntry = async (): Promise<void> => {
     if (!trashNode) return
-    const result = await window.aladdeen.files.trash(trashNode.projectId, trashNode.node.path)
+    const result = await window.liresearch.files.trash(trashNode.projectId, trashNode.node.path)
     if (!result.ok) {
       toast.error(result.error.message)
       return
@@ -391,7 +391,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
                   <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => { setSelectedLocation(project.id, ''); setFormKind('folder') }}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
                 </>}
                 <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => setManageProjectTarget(project)}><SlidersHorizontal size={14} /> Project settings</DropdownMenu.Item>
-                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.aladdeen.files.revealProjectEntry(project.id, '')}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
+                <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.liresearch.files.revealProjectEntry(project.id, '')}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
                 <DropdownMenu.Separator className={dropdownSeparatorClasses} />
                 <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={() => setRemoveProjectTarget(project)}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
               </DropdownMenu.Content>
@@ -446,10 +446,10 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
   return (
     <aside className={cn(sidebarClasses, compact && 'is-compact w-full shadow-[12px_0_38px_rgb(0_0_0/.18)]')} aria-label="Environment files">
       <div className="flex min-h-11 shrink-0 items-center justify-between pt-2 pr-[9px] pb-1 pl-[11px]">
-        <div className="flex min-w-0 items-center gap-2" aria-label="Aladdeen Research">
+        <div className="flex min-w-0 items-center gap-2" aria-label="LiResearch">
           <BrandMark className="block h-[25px] w-[25px] shrink-0 drop-shadow-[0_3px_7px_rgb(0_0_0/.16)]" />
-          <span className="flex min-w-0 items-baseline gap-1.5 overflow-hidden whitespace-nowrap">
-            <strong className="shrink-0 text-[13px] font-[720] tracking-[-.015em] text-foreground">Aladdeen</strong>
+          <span className="flex min-w-0 items-baseline overflow-hidden whitespace-nowrap">
+            <strong className="shrink-0 text-[13px] font-[720] tracking-[-.015em] text-foreground">Li</strong>
             <span className="sidebar-brand-signature truncate text-foreground-soft" aria-hidden="true">Research</span>
           </span>
         </div>
@@ -625,7 +625,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
         </DropdownMenu.Root>
         <button
           className={cn(sidebarFooterButtonClasses, 'ml-auto')}
-          data-aladdeen-settings-trigger
+          data-liresearch-settings-trigger
           onClick={() => setSettingsOpen(true)}
         >
           <Settings2 size={15} />
@@ -697,7 +697,7 @@ export function Sidebar({ compact = false, onShowTutorial }: SidebarProps): Reac
       <ConfirmDialog
         open={deleteEnvironmentOpen}
         title={`Delete “${environment.environment.name}”?`}
-        description="Only Aladdeen’s saved environment metadata is removed. No folders or documents will be deleted."
+        description="Only LiResearch’s saved environment metadata is removed. No folders or documents will be deleted."
         confirmLabel="Delete environment"
         destructive
         onCancel={() => setDeleteEnvironmentOpen(false)}
@@ -773,7 +773,7 @@ function ProjectTreeItem({
                 <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onCreate(node.path, 'folder')}><FolderPlus size={14} /> New subfolder</DropdownMenu.Item>
               </>}
               <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => onRename(node)}><Pencil size={14} /> Rename</DropdownMenu.Item>
-              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.aladdeen.files.revealProjectEntry(projectId, node.path)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
+              <DropdownMenu.Item className={dropdownItemClasses()} onSelect={() => void window.liresearch.files.revealProjectEntry(projectId, node.path)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
               <DropdownMenu.Separator className={dropdownSeparatorClasses} />
               <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={() => onTrash(node)}><Trash2 size={14} /> Move to Trash</DropdownMenu.Item>
             </DropdownMenu.Content>
@@ -838,7 +838,7 @@ function TrackedFileRow({ file, active, onOpen, onLocate, onRemove, onTrash }: {
         <DropdownMenu.Portal>
           <DropdownMenu.Content className={dropdownContentClasses} sideOffset={4} align="start">
             {file.missing && <DropdownMenu.Item className={dropdownItemClasses()} onSelect={onLocate}><LocateFixed size={14} /> Locate file</DropdownMenu.Item>}
-            <DropdownMenu.Item className={dropdownItemClasses()} disabled={file.missing} onSelect={() => void window.aladdeen.files.revealTracked(file.id)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
+            <DropdownMenu.Item className={dropdownItemClasses()} disabled={file.missing} onSelect={() => void window.liresearch.files.revealTracked(file.id)}><FolderOpen size={14} /> Reveal in folder</DropdownMenu.Item>
             <DropdownMenu.Separator className={dropdownSeparatorClasses} />
             <DropdownMenu.Item className={dropdownItemClasses(true)} disabled={file.missing} onSelect={onTrash}><Trash2 size={14} /> Move to Trash</DropdownMenu.Item>
             <DropdownMenu.Item className={dropdownItemClasses(true)} onSelect={onRemove}><Unlink size={14} /> Remove from environment</DropdownMenu.Item>
@@ -882,7 +882,7 @@ function SidebarForm({ kind, title, initialValue = '', locationLabel, submitLabe
           <div className={dialogIconClasses()}>{kind === 'file' ? <FilePlus2 size={18} /> : kind?.includes('environment') ? <FolderKanban size={18} /> : <FolderPlus size={18} />}</div>
           <Dialog.Title className={dialogTitleClasses}>{title ?? (kind ? labels[kind] : '')}</Dialog.Title>
           <Dialog.Description className={dialogDescriptionClasses}>
-            {kind === 'project' ? 'You’ll choose where to create it next.' : locationLabel && (kind === 'file' || kind === 'folder') ? `Create inside ${locationLabel}` : kind?.includes('environment') ? 'Environment names are unique in Aladdeen.' : 'Choose a clear, portable name.'}
+            {kind === 'project' ? 'You’ll choose where to create it next.' : locationLabel && (kind === 'file' || kind === 'folder') ? `Create inside ${locationLabel}` : kind?.includes('environment') ? 'Environment names are unique in LiResearch.' : 'Choose a clear, portable name.'}
           </Dialog.Description>
           <input className={dialogInputClasses} value={value} autoFocus onFocus={(event) => kind?.includes('rename') && event.currentTarget.select()} placeholder={kind === 'file' ? 'Document name' : kind === 'project' || kind === 'folder' ? 'Folder name' : 'Environment name'} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && void submit()} />
           <div className={dialogActionsClasses}><Dialog.Close className={buttonClasses({ variant: 'secondary' })}>Cancel</Dialog.Close><button className={buttonClasses()} disabled={!value.trim() || busy} onClick={() => void submit()}>{busy ? 'Working…' : submitLabel ?? (kind?.includes('rename') ? 'Rename' : 'Create')}</button></div>

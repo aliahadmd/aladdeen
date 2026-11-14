@@ -77,18 +77,18 @@ describe('isolated HTML preview', () => {
       '<link rel="stylesheet" href="./theme.css"><img src="images/photo.png"><img src="/outside.png">',
       '11111111-1111-4111-8111-111111111111'
     )
-    expect(result).toContain('aladdeen-asset://document/11111111-1111-4111-8111-111111111111?path=.%2Ftheme.css')
-    expect(result).toContain('aladdeen-asset://document/11111111-1111-4111-8111-111111111111?path=images%2Fphoto.png')
+    expect(result).toContain('liresearch-asset://document/11111111-1111-4111-8111-111111111111?path=.%2Ftheme.css')
+    expect(result).toContain('liresearch-asset://document/11111111-1111-4111-8111-111111111111?path=images%2Fphoto.png')
     expect(result).not.toContain('/outside.png')
   })
 
   it('replaces spoofed source attributes with parser-owned offsets', () => {
     const result = prepareHtmlPreview(
-      '<p data-aladdeen-source-start="9999" data-aladdeen-source-end="10000">Safe</p>',
+      '<p data-liresearch-source-start="9999" data-liresearch-source-end="10000">Safe</p>',
       '11111111-1111-4111-8111-111111111111'
     )
-    expect(result).not.toContain('data-aladdeen-source-start="9999"')
-    expect(result).toContain('data-aladdeen-source-start="0"')
+    expect(result).not.toContain('data-liresearch-source-start="9999"')
+    expect(result).toContain('data-liresearch-source-start="0"')
   })
 
   it('injects an offline CSP and reports malformed source diagnostics', () => {

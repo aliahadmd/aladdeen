@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocumentActions } from '@renderer/components/DocumentActions'
 import { useAppStore } from '@renderer/store/app-store'
-import type { AladdeenApi, AppSettings, TextOpenDocument } from '@shared/contracts'
+import type { LiResearchApi, AppSettings, TextOpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 import { DEFAULT_READING_SETTINGS } from '@shared/reading'
 
@@ -10,7 +10,7 @@ const fileId = '11111111-1111-4111-8111-111111111111'
 const settings: AppSettings = {
   theme: 'system',
   accent: 'indigo',
-  themePreset: 'aladdeen',
+  themePreset: 'liresearch',
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 1,
@@ -39,9 +39,9 @@ describe('Markdown document actions', () => {
 
   beforeEach(() => {
     update.mockClear()
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { settings: { update } } as unknown as AladdeenApi
+      value: { settings: { update } } as unknown as LiResearchApi
     })
     useAppStore.setState({
       documents: [document],

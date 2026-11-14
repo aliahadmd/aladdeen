@@ -4,10 +4,10 @@ import type { PluggableList } from 'unified'
 import type { PreviewSourceTarget } from '@shared/contracts'
 import {
   extractMarkdownMetadata,
-  aladdeenMarkdownRehypePlugins,
-  aladdeenMarkdownRemarkPlugins,
+  liresearchMarkdownRehypePlugins,
+  liresearchMarkdownRemarkPlugins,
   prepareMarkdownSourceWithMap,
-  rehypeAladdeenSourcePositions,
+  rehypeLiResearchSourcePositions,
   type MarkdownSourceDataAttributes
 } from '@shared/markdown'
 import { MarkdownCodeBlock } from './MarkdownCodeBlock'
@@ -46,17 +46,17 @@ function safeUrlTransform(url: string): string {
 }
 
 function sourceDataAttributes(props: Record<string, unknown>): MarkdownSourceDataAttributes {
-  const start = props['data-aladdeen-source-start'] ?? props.dataAladdeenSourceStart
-  const end = props['data-aladdeen-source-end'] ?? props.dataAladdeenSourceEnd
-  const exact = props['data-aladdeen-source-exact'] ?? props.dataAladdeenSourceExact
+  const start = props['data-liresearch-source-start'] ?? props.dataLiresearchSourceStart
+  const end = props['data-liresearch-source-end'] ?? props.dataLiresearchSourceEnd
+  const exact = props['data-liresearch-source-exact'] ?? props.dataLiresearchSourceExact
   return {
     ...(typeof start === 'number' || typeof start === 'string'
-      ? { 'data-aladdeen-source-start': start }
+      ? { 'data-liresearch-source-start': start }
       : {}),
     ...(typeof end === 'number' || typeof end === 'string'
-      ? { 'data-aladdeen-source-end': end }
+      ? { 'data-liresearch-source-end': end }
       : {}),
-    ...(typeof exact === 'string' ? { 'data-aladdeen-source-exact': exact } : {})
+    ...(typeof exact === 'string' ? { 'data-liresearch-source-exact': exact } : {})
   }
 }
 
@@ -78,13 +78,13 @@ export function MarkdownContent({
     () =>
       sourceNavigationEnabled
         ? [
-            ...aladdeenMarkdownRehypePlugins,
+            ...liresearchMarkdownRehypePlugins,
             [
-              rehypeAladdeenSourcePositions,
+              rehypeLiResearchSourcePositions,
               { preparedContent: prepared.content, sourceMap: prepared.sourceMap }
             ]
           ]
-        : aladdeenMarkdownRehypePlugins,
+        : liresearchMarkdownRehypePlugins,
     [prepared, sourceNavigationEnabled]
   )
 
@@ -189,15 +189,15 @@ export function MarkdownContent({
     if (!(target instanceof Element) || target.closest(SOURCE_INTERACTIVE_SELECTOR)) return
     const selection = window.getSelection()
     if (selection && !selection.isCollapsed) return
-    const sourceElement = target.closest<HTMLElement>('[data-aladdeen-source-start][data-aladdeen-source-end]')
+    const sourceElement = target.closest<HTMLElement>('[data-liresearch-source-start][data-liresearch-source-end]')
     if (!sourceElement || !event.currentTarget.contains(sourceElement)) return
-    const from = Number(sourceElement.dataset.aladdeenSourceStart)
-    const to = Number(sourceElement.dataset.aladdeenSourceEnd)
+    const from = Number(sourceElement.dataset.liresearchSourceStart)
+    const to = Number(sourceElement.dataset.liresearchSourceEnd)
     if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to <= from) return
     onRevealSource({
       from,
       to,
-      exact: sourceElement.dataset.aladdeenSourceExact === 'true'
+      exact: sourceElement.dataset.liresearchSourceExact === 'true'
     })
   }
 
@@ -211,7 +211,7 @@ export function MarkdownContent({
       onClick={handleSourceClick}
     >
       <ReactMarkdown
-        remarkPlugins={aladdeenMarkdownRemarkPlugins}
+        remarkPlugins={liresearchMarkdownRemarkPlugins}
         rehypePlugins={rehypePlugins}
         components={components}
         urlTransform={safeUrlTransform}

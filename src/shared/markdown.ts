@@ -48,9 +48,9 @@ export interface PreparedMarkdownSource {
 }
 
 export interface MarkdownSourceDataAttributes {
-  'data-aladdeen-source-start'?: number | string
-  'data-aladdeen-source-end'?: number | string
-  'data-aladdeen-source-exact'?: string
+  'data-liresearch-source-start'?: number | string
+  'data-liresearch-source-end'?: number | string
+  'data-liresearch-source-exact'?: string
 }
 
 interface PositionedNode {
@@ -139,7 +139,7 @@ const SAFE_TAG_NAMES = [
   'var'
 ]
 
-export const aladdeenMarkdownSanitizeSchema: SanitizeSchema = {
+export const liresearchMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   clobberPrefix: '',
   tagNames: [...new Set(SAFE_TAG_NAMES)],
@@ -213,7 +213,7 @@ export const aladdeenMarkdownSanitizeSchema: SanitizeSchema = {
   protocols: {
     ...defaultSchema.protocols,
     href: ['http', 'https'],
-    src: ['aladdeen-asset']
+    src: ['liresearch-asset']
   },
   required: {
     ...defaultSchema.required,
@@ -475,7 +475,7 @@ function transformCallout(node: MarkdownNode): void {
   })
 }
 
-const remarkAladdeenStructure: Plugin = () => (tree) => {
+const remarkLiResearchStructure: Plugin = () => (tree) => {
   const root = tree as unknown as MarkdownParent
   const slugger = new GithubSlugger()
   const headings: MarkdownHeading[] = []
@@ -552,7 +552,7 @@ const AUTO_DIRECTION_TAGS = new Set([
   'th'
 ])
 
-const rehypeAladdeenPolish: Plugin = () => (tree) => {
+const rehypeLiResearchPolish: Plugin = () => (tree) => {
   visit(tree as never, 'element', (node: { tagName?: string; properties?: Record<string, unknown>; children?: unknown[] }, index, parent) => {
     if (!node.tagName) return
     node.properties ??= {}
@@ -639,17 +639,17 @@ function sourcePositionProperties(
   exact = false
 ): Record<string, unknown> {
   return {
-    dataAladdeenSourceStart: position.start,
-    dataAladdeenSourceEnd: position.end,
-    ...(exact ? { dataAladdeenSourceExact: 'true' } : {})
+    dataLiresearchSourceStart: position.start,
+    dataLiresearchSourceEnd: position.end,
+    ...(exact ? { dataLiresearchSourceExact: 'true' } : {})
   }
 }
 
 /**
  * Runs after sanitization so source-position attributes can only originate from
- * Aladdeen, never from user-authored raw HTML.
+ * LiResearch, never from user-authored raw HTML.
  */
-export const rehypeAladdeenSourcePositions: Plugin = (rawOptions?: unknown) => {
+export const rehypeLiResearchSourcePositions: Plugin = (rawOptions?: unknown) => {
   const options = rawOptions as SourcePositionOptions | undefined
   return (tree) => {
     if (!options) return
@@ -701,18 +701,18 @@ export const rehypeAladdeenSourcePositions: Plugin = (rawOptions?: unknown) => {
   }
 }
 
-export const aladdeenMarkdownRemarkPlugins: PluggableList = [
+export const liresearchMarkdownRemarkPlugins: PluggableList = [
   [remarkFrontmatter, ['yaml', 'toml']],
   remarkMath,
   remarkGfm,
   remarkDeflist,
   remarkSmartypants,
-  remarkAladdeenStructure
+  remarkLiResearchStructure
 ]
 
-export const aladdeenMarkdownRehypePlugins: PluggableList = [
+export const liresearchMarkdownRehypePlugins: PluggableList = [
   rehypeRaw,
-  [rehypeSanitize, aladdeenMarkdownSanitizeSchema],
+  [rehypeSanitize, liresearchMarkdownSanitizeSchema],
   [rehypeKatex, { throwOnError: false, strict: 'ignore', trust: false }],
   // highlight.js's Markdown grammar has no CommonMark flanking rules, so a single
   // intraword underscore (op_id, BUILD_PLAN) opens an emphasis run that swallows the
@@ -720,9 +720,9 @@ export const aladdeenMarkdownRehypePlugins: PluggableList = [
   // list markers after that point render unstyled. Half-highlighted source is worse
   // than none, so nested Markdown is rendered as plain text.
   [rehypeHighlight, { detect: false, subset: false, plainText: ['markdown', 'md', 'mkd'] }],
-  rehypeAladdeenPolish
+  rehypeLiResearchPolish
 ]
 
 export function createMarkdownAstProcessor() {
-  return unified().use(remarkParse).use(aladdeenMarkdownRemarkPlugins)
+  return unified().use(remarkParse).use(liresearchMarkdownRemarkPlugins)
 }

@@ -15,19 +15,19 @@ afterEach(async () => {
 
 describe('application metadata database', () => {
   it('migrates a new database and persists environments, projects, files, and tab state', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-'))
     created.push(directory)
     const database = new AppDatabase(directory)
-    const migrated = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const migrated = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     expect(
       (migrated.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(13)
+    ).toBe(14)
     migrated.close()
 
     expect(database.getSettings()).toEqual({
       theme: 'system',
       accent: 'indigo',
-      themePreset: 'aladdeen',
+      themePreset: 'liresearch',
       sidebarWidth: 320,
       sidebarCollapsed: false,
       completedOnboardingVersion: 0,
@@ -133,12 +133,12 @@ describe('application metadata database', () => {
   })
 
   it('falls back safely when persisted reading preferences are invalid', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-reading-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-reading-'))
     created.push(directory)
     const database = new AppDatabase(directory)
     database.close()
 
-    const raw = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const raw = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     const insert = raw.prepare(`INSERT INTO app_settings (key, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`)
     insert.run('reading_font', 'downloaded-font', Date.now())
@@ -150,12 +150,12 @@ describe('application metadata database', () => {
     raw.close()
 
     const reopened = new AppDatabase(directory)
-    expect(reopened.getSettings()).toMatchObject({ ...DEFAULT_READING_SETTINGS, themePreset: 'aladdeen' })
+    expect(reopened.getSettings()).toMatchObject({ ...DEFAULT_READING_SETTINGS, themePreset: 'liresearch' })
     reopened.close()
   })
 
   it('enforces case-insensitive unique environment names', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-'))
     created.push(directory)
     const database = new AppDatabase(directory)
     database.createEnvironment('Writing')
@@ -164,7 +164,7 @@ describe('application metadata database', () => {
   })
 
   it('paginates direct SQL children without loading a 50,000-file index', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-large-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-large-'))
     created.push(directory)
     const database = new AppDatabase(directory)
     const environment = database.createEnvironment('Large library')
@@ -202,7 +202,7 @@ describe('application metadata database', () => {
   }, 15_000)
 
   it('imports legacy workspace metadata into a Personal environment', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-'))
     created.push(directory)
     const previousDatabaseName = ['fl', 'uid', 'md.sqlite'].join('')
     const legacy = new DatabaseSync(join(directory, previousDatabaseName))
@@ -230,13 +230,44 @@ describe('application metadata database', () => {
     database.close()
   })
 
+  it('migrates an Aladdeen database from a prior profile directory and upgrades the classic theme preset', async () => {
+    const previousDirectory = await mkdtemp(join(tmpdir(), 'liresearch-prev-'))
+    const userDataDirectory = await mkdtemp(join(tmpdir(), 'liresearch-next-'))
+    created.push(previousDirectory, userDataDirectory)
+
+    const seed = new AppDatabase(previousDirectory)
+    const seededEnvironment = seed.createEnvironment('Research')
+    expect(seededEnvironment.name).toBe('Research')
+    seed.close()
+
+    const { renameSync } = await import('node:fs')
+    const legacyPath = join(previousDirectory, 'aladdeen.sqlite')
+    renameSync(join(previousDirectory, 'liresearch.sqlite'), legacyPath)
+    const raw = new DatabaseSync(legacyPath)
+    raw.exec(`
+      INSERT INTO app_settings (key, value, updated_at) VALUES ('theme_preset', 'aladdeen', 100)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at;
+      PRAGMA user_version = 13;
+    `)
+    raw.close()
+
+    const migratedDb = new AppDatabase(userDataDirectory, [previousDirectory, join(previousDirectory, 'older')])
+    expect(migratedDb.listEnvironments().map((env) => env.name)).toEqual(['Research'])
+    expect(migratedDb.getSettings().themePreset).toBe('liresearch')
+    migratedDb.close()
+
+    const verified = new DatabaseSync(join(userDataDirectory, 'liresearch.sqlite'))
+    expect((verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(14)
+    verified.close()
+  })
+
   it('repairs legacy history left behind by an interrupted version-two migration', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-repair-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-repair-'))
     created.push(directory)
     const initial = new AppDatabase(directory)
     initial.close()
 
-    const raw = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const raw = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     raw.exec(`
       DELETE FROM environments;
       CREATE TABLE recent_workspaces (path TEXT PRIMARY KEY, last_opened_at INTEGER NOT NULL) STRICT;
@@ -258,7 +289,7 @@ describe('application metadata database', () => {
     )
     repaired.close()
 
-    const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const verified = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     expect(verified.prepare(
       "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'recent_workspaces'"
     ).get()).toBeUndefined()
@@ -266,7 +297,7 @@ describe('application metadata database', () => {
   })
 
   it('migrates removed Research Notes metadata without losing application data', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-research-notes-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-research-notes-'))
     created.push(directory)
     const initial = new AppDatabase(directory)
     const environment = initial.createEnvironment('Research')
@@ -274,7 +305,7 @@ describe('application metadata database', () => {
     const file = initial.upsertTrackedFile(environment.id, '/research/evidence.md', project.id)
     initial.close()
 
-    const legacy = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const legacy = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     legacy.exec(`
       CREATE TABLE environment_note_locations (
         environment_id TEXT PRIMARY KEY REFERENCES environments(id) ON DELETE CASCADE,
@@ -317,10 +348,10 @@ describe('application metadata database', () => {
     expect(migrated.listTrackedFiles(environment.id)).toEqual([expect.objectContaining({ id: file.id })])
     migrated.close()
 
-    const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const verified = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     expect(
       (verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
-    ).toBe(13)
+    ).toBe(14)
     for (const table of ['environment_note_locations', 'research_notes', 'research_note_links']) {
       expect(verified.prepare(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
@@ -330,7 +361,7 @@ describe('application metadata database', () => {
   })
 
   it('chains XLSX and PPTX additions for the former complete format set and reclassifies workbooks', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-xlsx-migration-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-xlsx-migration-'))
     created.push(directory)
     const initial = new AppDatabase(directory)
     const environment = initial.createEnvironment('Migration')
@@ -366,7 +397,7 @@ describe('application metadata database', () => {
     initial.upsertTrackedFile(environment.id, '/complete/legacy.xlsx', complete.id)
     initial.close()
 
-    const legacy = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const legacy = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     legacy.exec(`
       UPDATE environment_files SET document_kind = 'markdown' WHERE lower(path) LIKE '%.xlsx';
       PRAGMA user_version = 8;
@@ -386,7 +417,7 @@ describe('application metadata database', () => {
   })
 
   it('adds PPTX only to the previous complete five-format set and reclassifies presentation paths', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-pptx-migration-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-pptx-migration-'))
     created.push(directory)
     const initial = new AppDatabase(directory)
     const environment = initial.createEnvironment('Presentation migration')
@@ -422,7 +453,7 @@ describe('application metadata database', () => {
     initial.upsertTrackedFile(environment.id, '/complete/legacy.pptx', complete.id)
     initial.close()
 
-    const legacy = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const legacy = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     legacy.exec(`
       UPDATE environment_files SET document_kind = 'markdown' WHERE lower(path) LIKE '%.pptx';
       PRAGMA user_version = 9;
@@ -442,14 +473,14 @@ describe('application metadata database', () => {
   })
 
   it('refuses a database created by a newer schema without downgrading it', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'aladdeen-db-future-'))
+    const directory = await mkdtemp(join(tmpdir(), 'liresearch-db-future-'))
     created.push(directory)
-    const raw = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const raw = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     raw.exec('PRAGMA user_version = 99;')
     raw.close()
 
     expect(() => new AppDatabase(directory)).toThrow(/newer application version/i)
-    const verified = new DatabaseSync(join(directory, 'aladdeen.sqlite'))
+    const verified = new DatabaseSync(join(directory, 'liresearch.sqlite'))
     expect((verified.prepare('PRAGMA user_version').get() as { user_version: number }).user_version).toBe(99)
     verified.close()
   })

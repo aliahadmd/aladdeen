@@ -16,16 +16,16 @@ export function Welcome(): React.JSX.Element {
       <div className="z-[1] w-[min(90%,600px)] px-5 py-11 text-center">
         <BrandMark
           className="mx-auto mb-6 h-[66px] w-[66px] drop-shadow-[0_16px_28px_rgb(0_0_0/.18)]"
-          title="Aladdeen"
+          title="LiResearch"
         />
         <p className={eyebrowClasses}>
-          {environment?.environment.name.toLocaleUpperCase() ?? 'ALADDEEN'}
+          {environment?.environment.name.toLocaleUpperCase() ?? 'LIRESEARCH'}
         </p>
         <h1 className="m-0 text-[clamp(34px,5vw,51px)] leading-[1.05] font-[680] tracking-[-.045em]">
           Your research, one calm workspace.
         </h1>
         <p className="mx-auto mt-[19px] mb-[27px] max-w-[480px] text-[15px] leading-[1.6] text-foreground-soft">
-          Read, write, organize, and search Markdown, HTML, Word, PDF, Excel, and PowerPoint sources in place. Aladdeen keeps your research connected without copying or converting it.
+          Read, write, organize, and search Markdown, HTML, Word, PDF, Excel, and PowerPoint sources in place. LiResearch keeps your research connected without copying or converting it.
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           <button className={buttonClasses({ size: 'large' })} onClick={() => void addProject()}><FolderOpen size={16} /> Add folder</button>

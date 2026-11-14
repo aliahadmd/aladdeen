@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProjectSettingsDialog } from '@renderer/components/ProjectSettingsDialog'
 import { useAppStore } from '@renderer/store/app-store'
 import type {
-  AladdeenApi,
+  LiResearchApi,
   ProjectScopePreview,
   ProjectSummary
 } from '@shared/contracts'
@@ -66,11 +66,11 @@ describe('minimal project settings dialog', () => {
     inspectScope.mockResolvedValue({ ok: true, value: preview })
     updateProject.mockResolvedValue(true)
     removeProject.mockResolvedValue(undefined)
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
       value: {
         projects: { inspectScope }
-      } as unknown as AladdeenApi
+      } as unknown as LiResearchApi
     })
     useAppStore.setState({ updateProject, removeProject })
   })

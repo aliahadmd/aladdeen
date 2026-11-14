@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="build/icon.svg" width="88" height="88" alt="Aladdeen genie lamp logo">
+  <img src="build/icon.svg" width="88" height="88" alt="LiResearch logo">
 </p>
 
-<h1 align="center">Aladdeen Research</h1>
+<h1 align="center">LiResearch</h1>
 
 <p align="center">
   <strong>One calm workspace for all your research documents, right on your Mac.</strong><br>
@@ -10,19 +10,19 @@
 </p>
 
 <p align="center">
-  <a href="https://aladdeen.aliahad.com"><strong>Download for Mac</strong></a>
+  <a href="https://liresearch.aliahad.com"><strong>Download for Mac</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/aliahadmd/aladdeen/releases/latest">Latest release</a>
+  <a href="https://github.com/aliahadmd/LiResearch/releases/latest">Latest release</a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/markdown-preview.png" alt="Aladdeen showing a Markdown document with a rendered pie chart, the project sidebar, and the heading outline" width="900">
+  <img src="docs/screenshots/markdown-preview.png" alt="LiResearch showing a Markdown document with a rendered pie chart, the project sidebar, and the heading outline" width="900">
 </p>
 
-Research ends up scattered across notes, reports, spreadsheets, slide decks, and PDFs. Aladdeen brings them into one window without moving, copying, converting, or uploading anything. Your files stay exactly where they are on disk, and every format opens in a tool built for it.
+Research ends up scattered across notes, reports, spreadsheets, slide decks, and PDFs. LiResearch brings them into one window without moving, copying, converting, or uploading anything. Your files stay exactly where they are on disk, and every format opens in a tool built for it.
 
 - **Every format in one place.** Markdown, HTML, Word (.docx), PDF, Excel (.xlsx), and PowerPoint (.pptx).
-- **Your files never move.** Aladdeen opens documents where they already live and saves changes back to the same file.
+- **Your files never move.** LiResearch opens documents where they already live and saves changes back to the same file.
 - **Private by design.** No account, no cloud, no tracking. It works without an internet connection.
 - **Find the passage, not just the file.** Search inside every document at once and jump straight to the match.
 
@@ -30,25 +30,25 @@ Research ends up scattered across notes, reports, spreadsheets, slide decks, and
 
 **You need** a Mac with Apple silicon (M1, M2, M3, M4, or newer) running macOS 12 Monterey or later. Intel Macs, Windows, and Linux are not supported.
 
-1. Download the latest `Aladdeen-…-arm64.dmg` from [aladdeen.aliahad.com](https://aladdeen.aliahad.com) or from the [releases page](https://github.com/aliahadmd/aladdeen/releases/latest).
-2. Open the downloaded file and drag **Aladdeen** into your **Applications** folder.
-3. Open Aladdeen from Applications.
+1. Download the latest `LiResearch-…-arm64.dmg` from [liresearch.aliahad.com](https://liresearch.aliahad.com) or from the [releases page](https://github.com/aliahadmd/LiResearch/releases/latest).
+2. Open the downloaded file and drag **LiResearch** into your **Applications** folder.
+3. Open LiResearch from Applications.
 
 ### The first time you open it
 
-Aladdeen is not yet notarized by Apple, so the first time you open it macOS shows a warning that it can't verify the developer. To allow it:
+LiResearch is not yet notarized by Apple, so the first time you open it macOS shows a warning that it can't verify the developer. To allow it:
 
 1. Click **Done** (or **Cancel**) on the warning.
 2. Open **System Settings → Privacy & Security** and scroll down to the **Security** section.
-3. Next to the message about Aladdeen, click **Open Anyway**, then confirm.
+3. Next to the message about LiResearch, click **Open Anyway**, then confirm.
 
-You only need to do this once. On older versions of macOS you can instead right-click Aladdeen in Applications, choose **Open**, and confirm.
+You only need to do this once. On older versions of macOS you can instead right-click LiResearch in Applications, choose **Open**, and confirm.
 
-Want to make sure your download is genuine? Each [release](https://github.com/aliahadmd/aladdeen/releases) lists the file's exact size and SHA-256 checksum. You can compare it by running `shasum -a 256` on the downloaded file in Terminal.
+Want to make sure your download is genuine? Each [release](https://github.com/aliahadmd/LiResearch/releases) lists the file's exact size and SHA-256 checksum. You can compare it by running `shasum -a 256` on the downloaded file in Terminal.
 
 ## Getting started
 
-When you first open Aladdeen, a short tour shows what it can do. You can skip it at any time.
+When you first open LiResearch, a short tour shows what it can do. You can skip it at any time.
 
 <table>
   <tr>
@@ -77,11 +77,11 @@ Then you create your first **environment**, a named workspace such as "Personal"
 
 From there:
 
-- **Open → Add folder** to bring in a project folder. Aladdeen lists the documents inside it and keeps the list up to date as files change. You choose which document types it shows and can hide subfolders you don't need. The **+** beside Projects opens the same workflow.
+- **Open → Add folder** to bring in a project folder. LiResearch lists the documents inside it and keeps the list up to date as files change. You choose which document types it shows and can hide subfolders you don't need. The **+** beside Projects opens the same workflow.
 - **Open → Open file** to work with a single document that isn't part of a folder.
 - **New** to create a document or folder. When a project is selected, new documents and subfolders use that location; the menu shows the destination. **New project folder** creates a separate linked project.
 - **Drag files from Finder** into the window to open them.
-- Double-click a supported file in Finder, or use **Open With → Aladdeen**.
+- Double-click a supported file in Finder, or use **Open With → LiResearch**.
 
 You can keep several environments and switch between them; each one remembers its own open tabs. Folders can be pinned, grouped, or archived to keep the sidebar tidy.
 
@@ -98,15 +98,15 @@ Wide tables and equations offer expansion when they overflow; expanded tables ke
 ### Excel workbooks
 
 <p align="center">
-  <img src="docs/screenshots/excel-workbook.png" alt="An Excel workbook open in Aladdeen with a formula bar and toolbar" width="900">
+  <img src="docs/screenshots/excel-workbook.png" alt="An Excel workbook open in LiResearch with a formula bar and toolbar" width="900">
 </p>
 
-Edit .xlsx files with formulas, formatting, multiple sheets, sorting, filters, conditional formatting, data validation, and find & replace. Workbooks that use features Aladdeen can't fully reproduce are protected: you're asked to save a copy, or the file opens read-only, so nothing is silently lost.
+Edit .xlsx files with formulas, formatting, multiple sheets, sorting, filters, conditional formatting, data validation, and find & replace. Workbooks that use features LiResearch can't fully reproduce are protected: you're asked to save a copy, or the file opens read-only, so nothing is silently lost.
 
 ### PowerPoint presentations
 
 <p align="center">
-  <img src="docs/screenshots/powerpoint-editor.png" alt="A PowerPoint presentation open in Aladdeen with the slide list and editing toolbar" width="900">
+  <img src="docs/screenshots/powerpoint-editor.png" alt="A PowerPoint presentation open in LiResearch with the slide list and editing toolbar" width="900">
 </p>
 
 Edit slides, text, layouts, and speaker notes, then present full screen. Parts of a presentation you didn't touch are saved back exactly as they were.
@@ -132,8 +132,8 @@ Edit HTML source with a live preview next to it. The preview runs with scripts, 
 ## Saving and your files
 
 - Changes are saved when you press `⌘S` or click **Save**. The status bar shows **Unsaved** until you do.
-- When you close a document or quit, Aladdeen saves your open changes first so nothing is lost.
-- If a file is changed by another app while it's open, Aladdeen notices. If you haven't edited it, the document simply reloads; if you have, you choose which version to keep, or save your edits as a separate copy.
+- When you close a document or quit, LiResearch saves your open changes first so nothing is lost.
+- If a file is changed by another app while it's open, LiResearch notices. If you haven't edited it, the document simply reloads; if you have, you choose which version to keep, or save your edits as a separate copy.
 - Renaming, moving to Trash, and revealing in Finder all act on the real files. Trashed files go to your Mac's Trash, so you can restore them.
 - **Remove** in the sidebar only takes a file off the list. The file itself stays on disk.
 
@@ -143,7 +143,7 @@ Edit HTML source with a live preview next to it. The preview runs with scripts, 
   <img src="docs/screenshots/appearance-settings.png" alt="Appearance settings with theme presets" width="800">
 </p>
 
-Choose light, dark, or follow your Mac's setting, and pick from eight themes: Aladdeen, Mono, Catppuccin, Everforest, Solarized, Nord, Rosé Pine, and Gruvbox. Reading settings let you adjust the font, text size, line spacing, and column width for comfortable long-form reading.
+Choose light, dark, or follow your Mac's setting, and pick from eight themes: LiResearch, Mono, Catppuccin, Everforest, Solarized, Nord, Rosé Pine, and Gruvbox. Reading settings let you adjust the font, text size, line spacing, and column width for comfortable long-form reading.
 
 ## Keyboard shortcuts
 
@@ -159,26 +159,26 @@ Choose light, dark, or follow your Mac's setting, and pick from eight themes: Al
 
 ## Privacy
 
-Aladdeen works entirely on your Mac.
+LiResearch works entirely on your Mac.
 
 - There is no account, sign-in, or cloud sync.
 - It doesn't fetch remote images or content and sends no analytics or tracking data.
-- It only remembers which folders and files you've added, your open tabs, and your settings. That information is stored on your Mac in `~/Library/Application Support/aladdeen`. Your documents' contents are never copied there.
+- It only remembers which folders and files you've added, your open tabs, and your settings. That information is stored on your Mac in `~/Library/Application Support/LiResearch`. Your documents' contents are never copied there.
 
 ## Questions
 
-**Is Aladdeen free?**
-Yes, during the current beta. Future versions may be paid. Aladdeen is proprietary software by [Ali Ahad](https://aliahad.com); the beta is free to use, but it is not open source.
+**Is LiResearch free?**
+Yes, during the current beta. Future versions may be paid. LiResearch is proprietary software by [Ali Ahad](https://aliahad.com); the beta is free to use, but it is not open source.
 
 **Does it work on an Intel Mac, Windows, or Linux?**
-No. Aladdeen is built only for Macs with Apple silicon.
+No. LiResearch is built only for Macs with Apple silicon.
 
 **How do I update?**
-Download the newest version and replace the app in your Applications folder. Your environments and settings are kept. Aladdeen doesn't update itself automatically.
+Download the newest version and replace the app in your Applications folder. Your environments and settings are kept. LiResearch doesn't update itself automatically.
 
 **How do I uninstall it?**
-Drag Aladdeen from Applications to the Trash. To also remove its list of folders and settings, delete `~/Library/Application Support/aladdeen`. Your documents are not affected either way.
+Drag LiResearch from Applications to the Trash. To also remove its list of folders and settings, delete `~/Library/Application Support/LiResearch`. Your documents are not affected either way.
 
 ---
 
-Building Aladdeen from source? See [DEVELOPMENT.md](DEVELOPMENT.md). Open-source components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Building LiResearch from source? See [DEVELOPMENT.md](DEVELOPMENT.md). Open-source components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

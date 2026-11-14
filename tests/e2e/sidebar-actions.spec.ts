@@ -5,7 +5,7 @@ import { _electron as electron, expect, test } from '@playwright/test'
 
 test('keeps sidebar actions compact and routes open/create actions to the right destination', async () => {
   test.setTimeout(90_000)
-  const root = await mkdtemp(join(tmpdir(), 'aladdeen-sidebar-actions-'))
+  const root = await mkdtemp(join(tmpdir(), 'liresearch-sidebar-actions-'))
   const project = join(root, 'Research')
   const looseFile = join(root, 'reference.md')
   await mkdir(join(project, 'sources'), { recursive: true })

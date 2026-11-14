@@ -21,8 +21,8 @@ afterEach(async () => {
 })
 
 async function workspaceWithProject(kinds: Array<'markdown' | 'docx' | 'xlsx'> = ['markdown']) {
-  const profile = await mkdtemp(join(tmpdir(), 'aladdeen-audit-profile-'))
-  const projectPath = await mkdtemp(join(tmpdir(), 'aladdeen-audit-project-'))
+  const profile = await mkdtemp(join(tmpdir(), 'liresearch-audit-profile-'))
+  const projectPath = await mkdtemp(join(tmpdir(), 'liresearch-audit-project-'))
   created.push(profile, projectPath)
   const database = new AppDatabase(profile)
   const environment = database.createEnvironment('Audit')

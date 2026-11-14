@@ -62,7 +62,7 @@ export function ProjectSettingsDialog({ project, onOpenChange }: ProjectSettings
     setPinned(project.pinned)
     setArchived(project.archived)
     setRemoveConfirmOpen(false)
-    void window.aladdeen.projects.inspectScope(project.id).then((result) => {
+    void window.liresearch.projects.inspectScope(project.id).then((result) => {
       if (cancelled) return
       if (result.ok) setPreview(result.value)
       else {
@@ -134,7 +134,7 @@ export function ProjectSettingsDialog({ project, onOpenChange }: ProjectSettings
 
                 <section className="project-settings-scope" aria-labelledby="project-indexing-scope">
                   <h3 id="project-indexing-scope">Indexing scope</h3>
-                  <p>Choose whether Aladdeen discovers every enabled format or only selected locations.</p>
+                  <p>Choose whether LiResearch discovers every enabled format or only selected locations.</p>
                   <div className="scope-mode-grid">
                     <label className={mode === 'all' ? 'is-selected' : ''}>
                       <input type="radio" name="project-scope" checked={mode === 'all'} onChange={() => setMode('all')} />
@@ -201,7 +201,7 @@ export function ProjectSettingsDialog({ project, onOpenChange }: ProjectSettings
                         <Trash2 size={15} />
                         <span>
                           <strong>Remove from Environment</strong>
-                          <small>Remove Aladdeen’s reference only. Files remain untouched on disk.</small>
+                          <small>Remove LiResearch’s reference only. Files remain untouched on disk.</small>
                         </span>
                         <button type="button" className={buttonClasses({ variant: 'secondary' })} onClick={() => setRemoveConfirmOpen(true)}>
                           Remove…

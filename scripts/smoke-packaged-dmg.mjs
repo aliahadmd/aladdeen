@@ -12,7 +12,7 @@ const dmgPath = join(
   repositoryRoot,
   'release',
   packageMetadata.version,
-  `Aladdeen-${packageMetadata.version}-arm64.dmg`
+  `LiResearch-${packageMetadata.version}-arm64.dmg`
 )
 
 let device
@@ -33,7 +33,7 @@ try {
     cwd: repositoryRoot,
     env: {
       ...process.env,
-      ALADDEEN_PACKAGED_APP_PATH: join(mountPoint, 'Aladdeen.app')
+      LIRESEARCH_PACKAGED_APP_PATH: join(mountPoint, 'LiResearch.app')
     },
     maxBuffer: 10 * 1024 * 1024
   })

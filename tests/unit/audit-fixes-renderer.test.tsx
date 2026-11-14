@@ -6,14 +6,14 @@ import {
 } from '@renderer/document-adapters/runtime'
 import { prepareHtmlPreview } from '@renderer/document-adapters/html-preview'
 import { useAppStore } from '@renderer/store/app-store'
-import type { AladdeenApi, BinaryDocumentSnapshot, FileRevision, OpenDocument } from '@shared/contracts'
+import type { LiResearchApi, BinaryDocumentSnapshot, FileRevision, OpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const fileId = '11111111-1111-4111-8111-111111111111'
 const environmentId = '22222222-2222-4222-8222-222222222222'
 const session = {
   id: '33333333-3333-4333-8333-333333333333',
-  url: 'aladdeen-document://session/33333333-3333-4333-8333-333333333333',
+  url: 'liresearch-document://session/33333333-3333-4333-8333-333333333333',
   byteLength: 128
 }
 
@@ -57,9 +57,9 @@ describe('binary conflict recovery', () => {
   it('saves the edits as a copy and reloads the original with a fresh editor', async () => {
     const saveBinary = vi.fn().mockResolvedValue({ ok: true, value: revision(9) })
     const read = vi.fn().mockResolvedValue({ ok: true, value: snapshot(2) })
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { saveBinary, read } } as unknown as AladdeenApi
+      value: { document: { saveBinary, read } } as unknown as LiResearchApi
     })
     const completeSave = vi.fn()
     const cleanup = vi.fn()
@@ -97,7 +97,7 @@ describe('HTML preview isolation', () => {
     )
     const document = new DOMParser().parseFromString(html, 'text/html')
     expect(document.querySelector('area[href], a[href]')).toBeNull()
-    expect(document.querySelector('area')?.dataset.aladdeenBlockedLink).toBe('https://example.com/area')
+    expect(document.querySelector('area')?.dataset.liresearchBlockedLink).toBe('https://example.com/area')
   })
 
   it('rewrites percent-encoded local images to decoded asset paths', () => {

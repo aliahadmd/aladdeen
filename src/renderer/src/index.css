@@ -27,10 +27,10 @@
 }
 
 /* Base palettes. The attribute variants exist so theme-preset preview cards
-   (any element carrying data-theme-preset='aladdeen') get the same tokens as
+   (any element carrying data-theme-preset='liresearch') get the same tokens as
    the app root instead of inheriting whatever preset is active. */
 :root,
-[data-theme-preset='aladdeen'] {
+[data-theme-preset='liresearch'] {
   color-scheme: light;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -89,7 +89,7 @@
 }
 
 :root.dark,
-[data-theme-preset='aladdeen'].dark {
+[data-theme-preset='liresearch'].dark {
   color-scheme: dark;
   --bg: #17171a;
   --surface: #1d1d21;
@@ -1852,7 +1852,7 @@ body.is-resizing-sidebar * {
   position: relative;
 }
 
-.aladdeen-pdf-annotation {
+.liresearch-pdf-annotation {
   position: absolute;
   z-index: 8;
   min-width: 16px;
@@ -1867,14 +1867,14 @@ body.is-resizing-sidebar * {
   pointer-events: none;
 }
 
-.aladdeen-pdf-annotation.is-highlight {
+.liresearch-pdf-annotation.is-highlight {
   width: 120px;
   height: 18px;
   background: rgb(255 218 72 / 38%);
   box-shadow: none;
 }
 
-.aladdeen-pdf-annotation.is-ink {
+.liresearch-pdf-annotation.is-ink {
   width: 62px;
   height: 3px;
   min-height: 3px;
@@ -1884,13 +1884,13 @@ body.is-resizing-sidebar * {
   box-shadow: none;
 }
 
-.aladdeen-pdf-annotation.is-stamp {
+.liresearch-pdf-annotation.is-stamp {
   color: #9d1733;
   background: rgb(255 225 230 / 90%);
   text-transform: uppercase;
 }
 
-.aladdeen-pdf-annotation.is-signature {
+.liresearch-pdf-annotation.is-signature {
   color: #1f315a;
   background: transparent;
   box-shadow: none;
@@ -1898,30 +1898,30 @@ body.is-resizing-sidebar * {
   font-size: 16px;
 }
 
-.aladdeen-docx-host,
-.aladdeen-docx-plugin-host,
-.aladdeen-docx-plugin-host .plugin-host-editor,
-.aladdeen-docx-plugin-host .docx-editor {
+.liresearch-docx-host,
+.liresearch-docx-plugin-host,
+.liresearch-docx-plugin-host .plugin-host-editor,
+.liresearch-docx-plugin-host .docx-editor {
   height: 100%;
   min-height: 0;
   min-width: 0;
 }
 
-.aladdeen-docx-plugin-host {
+.liresearch-docx-plugin-host {
   overflow: hidden !important;
 }
 
-.aladdeen-docx-plugin-host .plugin-host-editor {
+.liresearch-docx-plugin-host .plugin-host-editor {
   overflow: hidden !important;
 }
 
-.aladdeen-docx-plugin-host .docx-editor__scroll-container {
+.liresearch-docx-plugin-host .docx-editor__scroll-container {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 
-.aladdeen-docx-title-action,
-.aladdeen-docx-save-state {
+.liresearch-docx-title-action,
+.liresearch-docx-save-state {
   display: inline-flex;
   min-width: 0;
   height: 28px;
@@ -2013,9 +2013,9 @@ body.is-resizing-sidebar * {
   min-height: 0;
 }
 
-/* The embedded viewer keeps every command surface, but Aladdeen composes it
+/* The embedded viewer keeps every command surface, but LiResearch composes it
    as one compact, task-grouped editor instead of stacking duplicate bars. */
-.aladdeen-pptx-host .pptxv-titlebar {
+.liresearch-pptx-host .pptxv-titlebar {
   position: absolute;
   z-index: 5;
   top: 0;
@@ -2027,14 +2027,14 @@ body.is-resizing-sidebar * {
   padding: 5px 7px;
 }
 
-.aladdeen-pptx-host .pptxv-titlebar-logo,
-.aladdeen-pptx-host .pptxv-titlebar-file,
-.aladdeen-pptx-host .pptxv-titlebar-sep,
-.aladdeen-pptx-host .pptxv-titlebar-spacer {
+.liresearch-pptx-host .pptxv-titlebar-logo,
+.liresearch-pptx-host .pptxv-titlebar-file,
+.liresearch-pptx-host .pptxv-titlebar-sep,
+.liresearch-pptx-host .pptxv-titlebar-spacer {
   display: none !important;
 }
 
-.aladdeen-pptx-host .pptxv-titlebar-search {
+.liresearch-pptx-host .pptxv-titlebar-search {
   left: 70px;
   width: 30px;
   transform: none;
@@ -2042,41 +2042,41 @@ body.is-resizing-sidebar * {
   transition: width 140ms ease, opacity 140ms ease;
 }
 
-.aladdeen-pptx-host .pptxv-titlebar-search::placeholder {
+.liresearch-pptx-host .pptxv-titlebar-search::placeholder {
   color: transparent;
 }
 
-.aladdeen-pptx-host .pptxv-titlebar-search:focus {
+.liresearch-pptx-host .pptxv-titlebar-search:focus {
   z-index: 8;
   width: min(230px, 32vw);
   opacity: 1;
 }
 
-.aladdeen-pptx-host .pptxv-titlebar-search:focus::placeholder {
+.liresearch-pptx-host .pptxv-titlebar-search:focus::placeholder {
   color: var(--pptx-muted-foreground);
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-primary {
+.liresearch-pptx-host .pptxv-ribbon-primary {
   min-height: 34px;
   padding-left: 112px;
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-tabs {
+.liresearch-pptx-host .pptxv-ribbon-tabs {
   scrollbar-width: none;
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-tabs::-webkit-scrollbar {
+.liresearch-pptx-host .pptxv-ribbon-tabs::-webkit-scrollbar {
   display: none;
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-tab {
+.liresearch-pptx-host .pptxv-ribbon-tab {
   min-height: 30px;
   padding: 5px 10px;
   font-size: 11px;
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-tab:nth-child(4),
-.aladdeen-pptx-host .pptxv-ribbon-tab:nth-child(7) {
+.liresearch-pptx-host .pptxv-ribbon-tab:nth-child(4),
+.liresearch-pptx-host .pptxv-ribbon-tab:nth-child(7) {
   margin-left: 7px;
   border-left: 1px solid var(--pptx-border);
 }
@@ -2085,7 +2085,7 @@ body.is-resizing-sidebar * {
    scrollbar, which leaves whole command groups (Animations' Exit/Preview,
    View's guides, most of Home at laptop widths) invisible and unreachable.
    Wrap groups onto extra rows instead, like the viewer's own Insert tab. */
-.aladdeen-pptx-host .pptxv-ribbon-tab-content {
+.liresearch-pptx-host .pptxv-ribbon-tab-content {
   min-height: 68px;
   flex-wrap: wrap;
   row-gap: 2px;
@@ -2094,22 +2094,22 @@ body.is-resizing-sidebar * {
 /* pptx-viewer 1.7.0 emits several secondary ribbon tabs without the group
    layout classes used by Home/Insert. Restore readable intrinsic button
    widths and explicit gallery layouts without changing the viewer DOM. */
-.aladdeen-pptx-host .pptxv-ribbon-tab-content:is(
-  [data-aladdeen-ribbon-tab='transitions'],
-  [data-aladdeen-ribbon-tab='slide-show'],
-  [data-aladdeen-ribbon-tab='review'],
-  [data-aladdeen-ribbon-tab='view']
+.liresearch-pptx-host .pptxv-ribbon-tab-content:is(
+  [data-liresearch-ribbon-tab='transitions'],
+  [data-liresearch-ribbon-tab='slide-show'],
+  [data-liresearch-ribbon-tab='review'],
+  [data-liresearch-ribbon-tab='view']
 ) {
   align-items: center;
   gap: 4px;
   padding: 6px 8px;
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-tab-content:is(
-  [data-aladdeen-ribbon-tab='design'],
-  [data-aladdeen-ribbon-tab='slide-show'],
-  [data-aladdeen-ribbon-tab='review'],
-  [data-aladdeen-ribbon-tab='view']
+.liresearch-pptx-host .pptxv-ribbon-tab-content:is(
+  [data-liresearch-ribbon-tab='design'],
+  [data-liresearch-ribbon-tab='slide-show'],
+  [data-liresearch-ribbon-tab='review'],
+  [data-liresearch-ribbon-tab='view']
 ) > .pptxv-btn:not(:has(> svg)) {
   width: auto;
   min-width: 48px;
@@ -2120,15 +2120,15 @@ body.is-resizing-sidebar * {
   white-space: nowrap;
 }
 
-.aladdeen-pptx-host .pptxv-ribbon-tab-content:is(
-  [data-aladdeen-ribbon-tab='slide-show'],
-  [data-aladdeen-ribbon-tab='review'],
-  [data-aladdeen-ribbon-tab='view']
+.liresearch-pptx-host .pptxv-ribbon-tab-content:is(
+  [data-liresearch-ribbon-tab='slide-show'],
+  [data-liresearch-ribbon-tab='review'],
+  [data-liresearch-ribbon-tab='view']
 ) > .pptxv-btn:has(> svg) {
   flex: none;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-gallery {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='transitions'] .pptxv-transition-gallery {
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
@@ -2140,7 +2140,7 @@ body.is-resizing-sidebar * {
   padding-right: 8px;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-gallery .pptxv-btn {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='transitions'] .pptxv-transition-gallery .pptxv-btn {
   width: auto;
   min-width: 44px;
   height: 36px;
@@ -2149,12 +2149,12 @@ body.is-resizing-sidebar * {
   white-space: nowrap;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-field {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='transitions'] .pptxv-field {
   height: 36px;
   flex: none;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='transitions'] .pptxv-transition-apply-all {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='transitions'] .pptxv-transition-apply-all {
   display: flex;
   height: 36px;
   flex: none;
@@ -2166,11 +2166,11 @@ body.is-resizing-sidebar * {
   white-space: nowrap;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='animations'] {
   align-items: stretch;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] > .pptxv-rgroup {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='animations'] > .pptxv-rgroup {
   min-width: 0;
   max-width: 100%;
   flex-direction: column-reverse;
@@ -2178,7 +2178,7 @@ body.is-resizing-sidebar * {
   padding-block: 4px;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] .pptxv-animation-gallery {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='animations'] .pptxv-animation-gallery {
   display: flex;
   flex: 0 1 auto;
   min-width: 0;
@@ -2188,7 +2188,7 @@ body.is-resizing-sidebar * {
   gap: 2px;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] .pptxv-animation-gallery .pptxv-btn {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='animations'] .pptxv-animation-gallery .pptxv-btn {
   width: auto;
   min-width: 48px;
   height: 32px;
@@ -2197,7 +2197,7 @@ body.is-resizing-sidebar * {
   white-space: nowrap;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='animations'] > .pptxv-btn {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='animations'] > .pptxv-btn {
   width: auto;
   height: 36px;
   flex: none;
@@ -2208,24 +2208,24 @@ body.is-resizing-sidebar * {
   white-space: nowrap;
 }
 
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(4),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(6),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(7),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='review'] > .pptxv-btn:nth-child(2),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='review'] > .pptxv-btn:nth-child(4),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(4),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(7),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(11),
-.aladdeen-pptx-host [data-aladdeen-ribbon-tab='view'] > .pptxv-btn:nth-child(17) {
+.liresearch-pptx-host [data-liresearch-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(4),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(6),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='slide-show'] > .pptxv-btn:nth-child(7),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='review'] > .pptxv-btn:nth-child(2),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='review'] > .pptxv-btn:nth-child(4),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='view'] > .pptxv-btn:nth-child(4),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='view'] > .pptxv-btn:nth-child(7),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='view'] > .pptxv-btn:nth-child(11),
+.liresearch-pptx-host [data-liresearch-ribbon-tab='view'] > .pptxv-btn:nth-child(17) {
   margin-left: 7px;
   box-shadow: -6px 0 0 -5px var(--pptx-border);
 }
 
-.aladdeen-pptx-host .pptxv-body {
+.liresearch-pptx-host .pptxv-body {
   position: relative;
 }
 
-.aladdeen-pptx-host .pptxv-inspector {
+.liresearch-pptx-host .pptxv-inspector {
   position: absolute;
   z-index: 30;
   inset: 0 0 0 auto;
@@ -2235,7 +2235,7 @@ body.is-resizing-sidebar * {
   box-shadow: -12px 0 30px rgb(0 0 0 / 18%);
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section {
+.liresearch-pptx-host .pptxv-inspector-section {
   overflow: hidden;
   margin-bottom: 8px;
   border: 1px solid color-mix(in srgb, var(--pptx-border) 75%, transparent);
@@ -2244,7 +2244,7 @@ body.is-resizing-sidebar * {
   padding: 9px;
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section-title {
+.liresearch-pptx-host .pptxv-inspector-section-title {
   display: flex;
   min-height: 22px;
   align-items: center;
@@ -2256,35 +2256,35 @@ body.is-resizing-sidebar * {
   user-select: none;
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section-title::after {
+.liresearch-pptx-host .pptxv-inspector-section-title::after {
   content: '−';
   color: var(--pptx-muted-foreground);
   font-size: 14px;
   font-weight: 400;
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section-title:hover {
+.liresearch-pptx-host .pptxv-inspector-section-title:hover {
   background: var(--pptx-accent);
   color: var(--pptx-accent-foreground);
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed {
+.liresearch-pptx-host .pptxv-inspector-section.is-collapsed {
   padding-bottom: 5px;
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed > :not(.pptxv-inspector-section-title) {
+.liresearch-pptx-host .pptxv-inspector-section.is-collapsed > :not(.pptxv-inspector-section-title) {
   display: none !important;
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed .pptxv-inspector-section-title {
+.liresearch-pptx-host .pptxv-inspector-section.is-collapsed .pptxv-inspector-section-title {
   margin-bottom: -1px;
 }
 
-.aladdeen-pptx-host .pptxv-inspector-section.is-collapsed .pptxv-inspector-section-title::after {
+.liresearch-pptx-host .pptxv-inspector-section.is-collapsed .pptxv-inspector-section-title::after {
   content: '+';
 }
 
-.aladdeen-pptx-host :is(
+.liresearch-pptx-host :is(
   .pptxv-inspector-shape-effects,
   .pptxv-inspector-text-effects,
   .pptxv-inspector-animation,
@@ -2297,7 +2297,7 @@ body.is-resizing-sidebar * {
   gap: 8px;
 }
 
-.aladdeen-pptx-host :is(
+.liresearch-pptx-host :is(
   .pptxv-inspector-shape-effects,
   .pptxv-inspector-text-effects,
   .pptxv-inspector-animation,
@@ -2312,7 +2312,7 @@ body.is-resizing-sidebar * {
   font-size: 10px;
 }
 
-.aladdeen-pptx-host :is(
+.liresearch-pptx-host :is(
   .pptxv-inspector-shape-effects,
   .pptxv-inspector-text-effects,
   .pptxv-inspector-animation,
@@ -2325,7 +2325,7 @@ body.is-resizing-sidebar * {
 
 /* pptx-viewer 1.7.0 supplies scaled coordinates for inline text editing but
    omits absolute positioning from its static stylesheet. */
-.aladdeen-pptx-host .pptxv-inline-editor:not(.pptxv-table-cell-editor) {
+.liresearch-pptx-host .pptxv-inline-editor:not(.pptxv-table-cell-editor) {
   position: absolute;
   z-index: 9;
   box-sizing: border-box;
@@ -2338,7 +2338,7 @@ body.is-resizing-sidebar * {
   pointer-events: auto;
 }
 
-.aladdeen-pptx-host .pptxv-element.is-aladdeen-inline-editing .pptxv-text {
+.liresearch-pptx-host .pptxv-element.is-liresearch-inline-editing .pptxv-text {
   visibility: hidden;
 }
 
@@ -2347,21 +2347,21 @@ body.is-resizing-sidebar * {
   display: none !important;
 }
 
-.aladdeen-pptx-host .pptxv-ai-toggle,
-.aladdeen-pptx-host .pptxv-ai-settings,
-.aladdeen-pptx-host .pptxv-titlebar-autosave,
-.aladdeen-pptx-host .pptxv-titlebar-status,
-.aladdeen-pptx-host .pptxv-qat [aria-label="Save"],
-.aladdeen-pptx-host .pptxv-mobile-toolbar [aria-label="Save"],
-.aladdeen-pptx-host [aria-label="Settings & Shortcuts"],
-.aladdeen-pptx-host [data-pptx-collaboration],
-.aladdeen-pptx-host [data-pptx-share] {
+.liresearch-pptx-host .pptxv-ai-toggle,
+.liresearch-pptx-host .pptxv-ai-settings,
+.liresearch-pptx-host .pptxv-titlebar-autosave,
+.liresearch-pptx-host .pptxv-titlebar-status,
+.liresearch-pptx-host .pptxv-qat [aria-label="Save"],
+.liresearch-pptx-host .pptxv-mobile-toolbar [aria-label="Save"],
+.liresearch-pptx-host [aria-label="Settings & Shortcuts"],
+.liresearch-pptx-host [data-pptx-collaboration],
+.liresearch-pptx-host [data-pptx-share] {
   display: none !important;
 }
 
 /* Autosave must never block interaction: a passive pill instead of the
    full-viewport progress overlay (which is reserved for the initial load). */
-.aladdeen-pptx-host .pptx-saving-indicator {
+.liresearch-pptx-host .pptx-saving-indicator {
   position: absolute;
   z-index: 20;
   right: 12px;
@@ -2426,7 +2426,7 @@ body.is-resizing-sidebar * {
   background: var(--surface-hover);
 }
 
-.aladdeen-docx-title-action {
+.liresearch-docx-title-action {
   border: 1px solid var(--border);
   padding: 0 9px;
   color: var(--text-muted);
@@ -2434,27 +2434,27 @@ body.is-resizing-sidebar * {
   cursor: pointer;
 }
 
-.aladdeen-docx-title-action:hover {
+.liresearch-docx-title-action:hover {
   color: var(--text);
   background: var(--surface-hover);
 }
 
-.aladdeen-docx-title-action:focus-visible {
+.liresearch-docx-title-action:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.aladdeen-docx-save-state {
+.liresearch-docx-save-state {
   padding: 0 4px;
 }
 
 @media (max-width: 700px) {
-  .aladdeen-docx-save-state span,
-  .aladdeen-docx-title-action span {
+  .liresearch-docx-save-state span,
+  .liresearch-docx-title-action span {
     display: none;
   }
 
-  .aladdeen-docx-title-action {
+  .liresearch-docx-title-action {
     width: 28px;
     padding: 0;
     justify-content: center;
@@ -2665,7 +2665,7 @@ body.is-resizing-sidebar * {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .markdown-body.is-source-navigation-enabled [data-aladdeen-source-exact='true']:hover {
+  .markdown-body.is-source-navigation-enabled [data-liresearch-source-exact='true']:hover {
     border-radius: 3px;
     background: color-mix(in oklab, var(--accent-soft) 45%, transparent);
     cursor: text;

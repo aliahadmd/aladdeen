@@ -46,7 +46,7 @@ const SETTINGS_CATEGORIES: SettingsCategoryDefinition[] = [
   {
     id: 'appearance',
     label: 'Appearance',
-    description: 'Choose how Aladdeen looks on this device.',
+    description: 'Choose how LiResearch looks on this device.',
     icon: Palette
   },
   {
@@ -183,7 +183,7 @@ export function SettingsDialog({ open, onOpenChange, onShowTutorial }: SettingsD
         >
           <Dialog.Title className="sr-only">Settings</Dialog.Title>
           <Dialog.Description className="sr-only">
-            Personalize Aladdeen without changing your documents.
+            Personalize LiResearch without changing your documents.
           </Dialog.Description>
 
           <aside className="flex min-h-0 flex-col border-r border-border bg-surface max-[720px]:border-r-0 max-[720px]:border-b">
@@ -615,9 +615,9 @@ function AboutSettings({ onShowTutorial }: { onShowTutorial?(): void }): React.J
   return (
     <div className="py-2">
       <div className="flex items-center gap-3 border-b border-border pb-5">
-        <BrandMark className="h-10 w-10 shrink-0" title="Aladdeen" />
+        <BrandMark className="h-10 w-10 shrink-0" title="LiResearch" />
         <div className="min-w-0">
-          <h3 className="m-0 text-[15px] font-[680] text-foreground">Aladdeen Research</h3>
+          <h3 className="m-0 text-[15px] font-[680] text-foreground">LiResearch</h3>
           <p className="mt-1 mb-0 text-[12px] text-foreground-muted">Version {packageMetadata.version}</p>
         </div>
       </div>
@@ -626,20 +626,20 @@ function AboutSettings({ onShowTutorial }: { onShowTutorial?(): void }): React.J
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">A private research workspace</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Aladdeen Research brings Markdown, HTML, Word, PDF, Excel, and PowerPoint documents into one offline-first workspace for reading, organizing, searching, writing, and presenting on M-series Apple silicon.
+            LiResearch brings Markdown, HTML, Word, PDF, Excel, and PowerPoint documents into one offline-first workspace for reading, organizing, searching, writing, and presenting on M-series Apple silicon.
           </p>
         </section>
         <section className="py-5">
           <h3 className="m-0 text-[13px] font-[620] text-foreground">Your files stay yours</h3>
           <p className="mt-2 mb-0 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-            Documents remain at their original disk locations. Aladdeen stores workspace references and preferences locally, without copying document contents into its settings database.
+            Documents remain at their original disk locations. LiResearch stores workspace references and preferences locally, without copying document contents into its settings database.
           </p>
         </section>
         {onShowTutorial && (
           <section className="py-5">
             <h3 className="m-0 text-[13px] font-[620] text-foreground">Getting started</h3>
             <p className="mt-2 mb-3 max-w-[520px] text-[12px] leading-[1.65] text-foreground-soft">
-              Review how Aladdeen organizes local research and works with each document format.
+              Review how LiResearch organizes local research and works with each document format.
             </p>
             <button
               className="inline-flex h-9 items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-[12px] font-[620] text-foreground transition-colors hover:bg-surface-hover"
@@ -664,7 +664,7 @@ function AboutSettings({ onShowTutorial }: { onShowTutorial?(): void }): React.J
                   className="group flex min-h-12 w-full items-center gap-3 border-0 bg-transparent px-1 text-left transition-colors hover:bg-surface-hover"
                   key={link.label}
                   type="button"
-                  onClick={() => void window.aladdeen.system.openExternal(link.target)}
+                  onClick={() => void window.liresearch.system.openExternal(link.target)}
                   aria-label={`${link.label}: ${link.value}. Opens externally`}
                 >
                   <Icon className="shrink-0 text-foreground-muted" size={16} strokeWidth={1.9} />

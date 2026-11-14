@@ -147,7 +147,7 @@ export class GlobalSearchService {
   private launch(request: SearchWorkerRequest): void {
     const session = this.active
     if (!session || session.id !== request.sessionId) return
-    const worker = createSearchWorker({ name: `aladdeen-search-${request.sessionId}` })
+    const worker = createSearchWorker({ name: `liresearch-search-${request.sessionId}` })
     session.worker = worker
     worker.on('message', (event: SearchWorkerEvent) => {
       if (this.active?.id !== request.sessionId || event.sessionId !== request.sessionId) return

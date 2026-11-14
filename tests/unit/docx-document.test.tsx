@@ -96,7 +96,7 @@ function docxDocument(): OpenDocument {
     },
     session: {
       id: '33333333-3333-4333-8333-333333333333',
-      url: 'aladdeen-document://session/33333333-3333-4333-8333-333333333333',
+      url: 'liresearch-document://session/33333333-3333-4333-8333-333333333333',
       byteLength: 32
     },
     status: 'saved',
@@ -124,7 +124,7 @@ describe('Eigenpal DOCX adapter', () => {
       settings: {
         theme: 'dark',
         accent: 'indigo',
-        themePreset: 'aladdeen',
+        themePreset: 'liresearch',
         sidebarWidth: 320,
         sidebarCollapsed: false,
         completedOnboardingVersion: 1,
@@ -143,7 +143,7 @@ describe('Eigenpal DOCX adapter', () => {
     render(<DocxDocument document={docxDocument()} />)
 
     expect(await screen.findByTestId('eigenpal-editor')).toHaveAttribute('data-theme', 'dark')
-    expect(screen.getByLabelText('Aladdeen')).toBeInTheDocument()
+    expect(screen.getByLabelText('LiResearch')).toBeInTheDocument()
     expect(screen.getByText('Save As')).toBeInTheDocument()
     expect(useAppStore.getState().documents[0]).toMatchObject({
       binaryDirty: false,

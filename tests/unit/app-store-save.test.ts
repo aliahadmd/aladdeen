@@ -4,7 +4,7 @@ import {
   registerDocumentRuntime
 } from '@renderer/document-adapters/runtime'
 import { useAppStore } from '@renderer/store/app-store'
-import type { AladdeenApi, FileRevision, OpenDocument, Result } from '@shared/contracts'
+import type { LiResearchApi, FileRevision, OpenDocument, Result } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const fileId = '11111111-1111-4111-8111-111111111111'
@@ -51,7 +51,7 @@ function binaryDocument(adapterRevision = 1, kind: 'docx' | 'xlsx' | 'pptx' = 'd
     capabilities: DOCUMENT_CAPABILITIES[kind],
     session: {
       id: '33333333-3333-4333-8333-333333333333',
-      url: 'aladdeen-document://session/33333333-3333-4333-8333-333333333333',
+      url: 'liresearch-document://session/33333333-3333-4333-8333-333333333333',
       byteLength: 128
     },
     binaryDirty: true,
@@ -75,9 +75,9 @@ describe('manual save behavior', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save } } as unknown as AladdeenApi
+      value: { document: { save } } as unknown as LiResearchApi
     })
     save.mockResolvedValue({ ok: true, value: revision(2) })
     useAppStore.setState({
@@ -112,9 +112,9 @@ describe('document save serialization', () => {
   const save = vi.fn()
 
   beforeEach(() => {
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save } } as unknown as AladdeenApi
+      value: { document: { save } } as unknown as LiResearchApi
     })
     useAppStore.setState({
       documents: [document('first edit', 'original')],
@@ -168,9 +168,9 @@ describe('document save serialization', () => {
       ok: true,
       value: revision(2)
     } satisfies Result<FileRevision>)
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+      value: { document: { save, saveBinary } } as unknown as LiResearchApi
     })
     useAppStore.setState({
       documents: [binaryDocument()],
@@ -208,9 +208,9 @@ describe('document save serialization', () => {
         ok: false,
         error: { code: 'PERMISSION_DENIED', message: 'Read only' }
       } satisfies Result<FileRevision>)
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+      value: { document: { save, saveBinary } } as unknown as LiResearchApi
     })
     useAppStore.setState({ documents: [binaryDocument()], activeFileId: fileId })
     registerDocumentRuntime(fileId, {
@@ -231,9 +231,9 @@ describe('document save serialization', () => {
     const nextFileId = '55555555-5555-4555-8555-555555555555'
     const pendingSave = deferred<Result<FileRevision>>()
     const saveBinary = vi.fn().mockReturnValue(pendingSave.promise)
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+      value: { document: { save, saveBinary } } as unknown as LiResearchApi
     })
     useAppStore.setState({
       documents: [binaryDocument(1, kind), { ...document('next', 'next'), id: nextFileId }],
@@ -256,9 +256,9 @@ describe('document save serialization', () => {
   it('does not serialize or Save As a read-only binary editor', async () => {
     const serialize = vi.fn(async () => new ArrayBuffer(128))
     const saveBinary = vi.fn()
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+      value: { document: { save, saveBinary } } as unknown as LiResearchApi
     })
     useAppStore.setState({ documents: [binaryDocument(1, 'pptx')], activeFileId: fileId })
     registerDocumentRuntime(fileId, {
@@ -283,9 +283,9 @@ describe('document save serialization', () => {
       ok: false,
       error: { code: 'CANCELLED', message: 'Save As was cancelled.' }
     } satisfies Result<FileRevision>)
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save, saveBinary } } as unknown as AladdeenApi
+      value: { document: { save, saveBinary } } as unknown as LiResearchApi
     })
     useAppStore.setState({
       documents: [binaryDocument(1, 'xlsx'), { ...document('next', 'next'), id: nextFileId }],
@@ -306,9 +306,9 @@ describe('document save serialization', () => {
   it('does not replace a local edit made while an external reload is in flight', async () => {
     const diskRead = deferred<Result<ReturnType<typeof document>>>()
     const read = vi.fn().mockReturnValue(diskRead.promise)
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { document: { save, read } } as unknown as AladdeenApi
+      value: { document: { save, read } } as unknown as LiResearchApi
     })
     useAppStore.setState({
       documents: [document('on disk', 'on disk')],

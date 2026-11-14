@@ -1,13 +1,13 @@
 import { join } from 'node:path'
 
-const DEVELOPMENT_USER_DATA_DIRECTORY = 'aladdeen-dev'
-// Profile directory of the app's previous product name; its database is
-// migrated on first launch (see restorePreviousDatabase).
-const PREVIOUS_APPLICATION_DIRECTORY = ['Fl', 'uid', 'MD'].join('')
+const DEVELOPMENT_USER_DATA_DIRECTORY = 'liresearch-dev'
+// Profile directories of the app's previous product names, ordered newest to
+// oldest; their databases are migrated on first launch (see restorePreviousDatabase).
+const PREVIOUS_APPLICATION_DIRECTORIES = ['Aladdeen', ['Fl', 'uid', 'MD'].join('')]
 
 export interface UserDataPolicy {
   userDataPath?: string
-  previousUserDataPath?: string
+  previousUserDataPaths?: string[]
 }
 
 export function resolveUserDataPolicy(input: {
@@ -18,7 +18,9 @@ export function resolveUserDataPolicy(input: {
   if (input.hasExplicitUserDataPath) return {}
   if (input.isPackaged) {
     return {
-      previousUserDataPath: join(input.appDataPath, PREVIOUS_APPLICATION_DIRECTORY)
+      previousUserDataPaths: PREVIOUS_APPLICATION_DIRECTORIES.map((directory) =>
+        join(input.appDataPath, directory)
+      )
     }
   }
   return {

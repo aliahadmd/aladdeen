@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { AladdeenApi, TextOpenDocument } from '@shared/contracts'
+import type { LiResearchApi, TextOpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 import { MarkdownPreview } from '@renderer/components/MarkdownPreview'
 import { MarkdownImage } from '@renderer/components/MarkdownImage'
@@ -27,9 +27,9 @@ const document: TextOpenDocument = {
 
 describe('Markdown preview', () => {
   it('renders GFM, rewrites local assets, and blocks remote images and raw HTML', () => {
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { system: { openExternal: vi.fn() } } as unknown as AladdeenApi
+      value: { system: { openExternal: vi.fn() } } as unknown as LiResearchApi
     })
     const { container } = render(<MarkdownPreview document={document} />)
 
@@ -38,16 +38,16 @@ describe('Markdown preview', () => {
     expect(screen.getByRole('table')).toBeInTheDocument()
     expect(screen.getByAltText('Local')).toHaveAttribute(
       'src',
-      'aladdeen-asset://document/11111111-1111-4111-8111-111111111111?path=..%2Fimages%2Fcover.png'
+      'liresearch-asset://document/11111111-1111-4111-8111-111111111111?path=..%2Fimages%2Fcover.png'
     )
     expect(screen.getByText('Remote')).toBeInTheDocument()
     expect(container.querySelector('script')).toBeNull()
   })
 
   it('gives every table a keyboard-scrollable container so wide tables scroll instead of collapsing', () => {
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
-      value: { system: { openExternal: vi.fn() } } as unknown as AladdeenApi
+      value: { system: { openExternal: vi.fn() } } as unknown as LiResearchApi
     })
     const { container } = render(<MarkdownPreview document={document} />)
 
@@ -72,7 +72,7 @@ describe('Markdown preview', () => {
     view.rerender(<MarkdownImage documentId="second-document" src="./available.png" alt="Second" />)
     expect(screen.getByAltText('Second')).toHaveAttribute(
       'src',
-      'aladdeen-asset://document/second-document?path=.%2Favailable.png'
+      'liresearch-asset://document/second-document?path=.%2Favailable.png'
     )
   })
 

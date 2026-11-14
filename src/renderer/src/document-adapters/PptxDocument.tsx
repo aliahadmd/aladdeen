@@ -174,8 +174,8 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         inlineEditorRetries = 0
         inlineSourceStyle?.remove()
         inlineSourceStyle = undefined
-        editorHost.querySelectorAll('.is-aladdeen-inline-editing').forEach((element) => {
-          element.classList.remove('is-aladdeen-inline-editing')
+        editorHost.querySelectorAll('.is-liresearch-inline-editing').forEach((element) => {
+          element.classList.remove('is-liresearch-inline-editing')
         })
         return
       }
@@ -214,10 +214,10 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         return
       }
       inlineEditorRetries = 0
-      editorHost.querySelectorAll('.is-aladdeen-inline-editing').forEach((element) => {
-        if (element !== selected) element.classList.remove('is-aladdeen-inline-editing')
+      editorHost.querySelectorAll('.is-liresearch-inline-editing').forEach((element) => {
+        if (element !== selected) element.classList.remove('is-liresearch-inline-editing')
       })
-      selected.classList.add('is-aladdeen-inline-editing')
+      selected.classList.add('is-liresearch-inline-editing')
       const elementId = selected.dataset.elementId
       if (elementId) {
         const sourceStyle = inlineSourceStyle ?? editorHost.ownerDocument.createElement('style')
@@ -226,7 +226,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         if (sourceStyle.textContent !== sourceRule) sourceStyle.textContent = sourceRule
         if (!sourceStyle.isConnected) editorHost.append(sourceStyle)
       }
-      if (inlineEditor.dataset.aladdeenEnhanced === 'true') return
+      if (inlineEditor.dataset.liresearchEnhanced === 'true') return
       const style = window.getComputedStyle(renderedText)
       for (const property of [
         'color',
@@ -241,7 +241,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       ]) {
         inlineEditor.style.setProperty(property, style.getPropertyValue(property))
       }
-      inlineEditor.dataset.aladdeenEnhanced = 'true'
+      inlineEditor.dataset.liresearchEnhanced = 'true'
     }
     const queueInlineEditorSync = (): void => {
       inlineEditorRetries = 0
@@ -260,7 +260,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
       const editorHost = host.current
       if (!editorHost) return
       for (const section of editorHost.querySelectorAll<HTMLElement>('.pptxv-inspector-section')) {
-        if (section.dataset.aladdeenEnhanced === 'true') continue
+        if (section.dataset.liresearchEnhanced === 'true') continue
         const title = section.querySelector<HTMLElement>(':scope > .pptxv-inspector-section-title')
         if (!title) continue
         const key = (title.textContent ?? '').trim().toUpperCase()
@@ -281,7 +281,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
           event.preventDefault()
           applyExpandedState(section.classList.contains('is-collapsed'))
         })
-        section.dataset.aladdeenEnhanced = 'true'
+        section.dataset.liresearchEnhanced = 'true'
         applyExpandedState(expandedInspectorSections.has(key))
       }
     }
@@ -293,7 +293,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
         '.pptxv-ribbon-tab-content:not([hidden])'
       )
       const tabKey = ribbonTabKey(activeTab)
-      if (activeContent && tabKey) activeContent.dataset.aladdeenRibbonTab = tabKey
+      if (activeContent && tabKey) activeContent.dataset.liresearchRibbonTab = tabKey
     }
     const synchronizeViewerChrome = (): void => {
       removeDisallowedControls()
@@ -505,7 +505,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
 
   if (document.documentKind !== 'pptx') return <div />
   return (
-    <div className="aladdeen-pptx-host relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface-elevated">
+    <div className="liresearch-pptx-host relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface-elevated">
       <div className="pptx-mode-bar flex h-[39px] shrink-0 items-center gap-1 border-b border-border bg-surface px-3">
         <ModeButton active={mode === 'preview'} icon={<Eye size={13} />} onClick={() => setMode('preview')}>
           Preview
@@ -515,7 +515,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
           icon={<Pencil size={13} />}
           onClick={() => setMode('edit')}
           disabled={!canEdit}
-          title={canEdit ? 'Edit slides, text, and notes' : 'This presentation is read-only in Aladdeen'}
+          title={canEdit ? 'Edit slides, text, and notes' : 'This presentation is read-only in LiResearch'}
         >
           Edit
         </ModeButton>
@@ -530,7 +530,7 @@ export function PptxDocument({ document }: DocumentAdapterProps): React.JSX.Elem
           {compatibility.level === 'read-only' ? <ShieldAlert size={15} /> : <AlertTriangle size={15} />}
           <span>
             {compatibility.level === 'read-only'
-              ? `Read-only: Aladdeen cannot safely rewrite ${compatibility.reasons.join(', ')}.`
+              ? `Read-only: LiResearch cannot safely rewrite ${compatibility.reasons.join(', ')}.`
               : requiresSaveAs
                 ? `Compatibility copy required to preserve ${compatibility.reasons.join(', ')}.`
                 : `Compatibility features preserved in this editable copy: ${compatibility.reasons.join(', ')}.`}

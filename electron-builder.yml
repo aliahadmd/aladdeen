@@ -1,5 +1,5 @@
-appId: com.aladdeen.app
-productName: Aladdeen
+appId: com.liresearch.app
+productName: LiResearch
 asar: true
 directories:
   buildResources: build

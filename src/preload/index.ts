@@ -4,11 +4,11 @@ import {
   type CloseRequest,
   type EnvironmentEvent,
   type GlobalSearchEvent,
-  type AladdeenApi,
+  type LiResearchApi,
   type OpenFileRequest
 } from '@shared/contracts'
 
-const api: AladdeenApi = {
+const api: LiResearchApi = {
   app: {
     bootstrap: () => ipcRenderer.invoke(IPC.bootstrap)
   },
@@ -135,4 +135,4 @@ const api: AladdeenApi = {
   }
 }
 
-contextBridge.exposeInMainWorld('aladdeen', api)
+contextBridge.exposeInMainWorld('liresearch', api)

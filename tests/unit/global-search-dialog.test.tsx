@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalSearchDialog } from '@renderer/components/GlobalSearchDialog'
 import { useAppStore } from '@renderer/store/app-store'
-import type { AladdeenApi, GlobalSearchEvent, OpenDocument } from '@shared/contracts'
+import type { LiResearchApi, GlobalSearchEvent, OpenDocument } from '@shared/contracts'
 import { DOCUMENT_CAPABILITIES } from '@shared/documents'
 
 const environmentId = '11111111-1111-4111-8111-111111111111'
@@ -45,7 +45,7 @@ describe('global content search dialog', () => {
       configurable: true,
       value: vi.fn()
     })
-    Object.defineProperty(window, 'aladdeen', {
+    Object.defineProperty(window, 'liresearch', {
       configurable: true,
       value: {
         search: {
@@ -58,7 +58,7 @@ describe('global content search dialog', () => {
           onOpenRequest: () => () => undefined
         },
         environments: { persistState }
-      } as unknown as AladdeenApi
+      } as unknown as LiResearchApi
     })
     useAppStore.setState({
       environment: {

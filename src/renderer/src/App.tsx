@@ -64,48 +64,48 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     void initialize()
-    const offEvent = window.aladdeen.document.onEvent((event) => void handleEnvironmentEvent(event))
-    const offOpenFileRequest = window.aladdeen.document.onOpenFileRequest((request) => void acceptSystemOpenFile(request))
+    const offEvent = window.liresearch.document.onEvent((event) => void handleEnvironmentEvent(event))
+    const offOpenFileRequest = window.liresearch.document.onOpenFileRequest((request) => void acceptSystemOpenFile(request))
     return () => {
       offEvent()
       offOpenFileRequest()
     }
   }, [acceptSystemOpenFile, handleEnvironmentEvent, initialize])
 
-  useEffect(() => window.aladdeen.document.onOpenDocumentRequest(() => {
+  useEffect(() => window.liresearch.document.onOpenDocumentRequest(() => {
     if (document.querySelector('[data-preview-expanded]')) return
     void openFile()
   }), [openFile])
 
-  useEffect(() => window.aladdeen.document.onCreateDocumentRequest((kind) => {
+  useEffect(() => window.liresearch.document.onCreateDocumentRequest((kind) => {
     if (document.querySelector('[data-preview-expanded]')) return
     void createFile(undefined, kind)
   }), [createFile])
 
-  useEffect(() => window.aladdeen.lifecycle.onPrepareClose((request) => {
+  useEffect(() => window.liresearch.lifecycle.onPrepareClose((request) => {
     setDocumentTransitioning(true)
     void (async () => {
       let saved = false
       try {
         saved = await flushDocuments()
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Aladdeen could not finish saving the open documents.')
+        toast.error(error instanceof Error ? error.message : 'LiResearch could not finish saving the open documents.')
       }
       if (!saved) {
         setDocumentTransitioning(false)
-        toast.error('Aladdeen kept the window open because one or more documents could not be saved.')
+        toast.error('LiResearch kept the window open because one or more documents could not be saved.')
         setCloseRequest(request)
       } else {
         setCloseRequest(null)
       }
       try {
-        await window.aladdeen.lifecycle.completeClose({
+        await window.liresearch.lifecycle.completeClose({
           requestId: request.id,
           outcome: saved ? 'ready' : 'blocked'
         })
       } catch (error) {
         setDocumentTransitioning(false)
-        toast.error(error instanceof Error ? error.message : 'Aladdeen could not complete the close request.')
+        toast.error(error instanceof Error ? error.message : 'LiResearch could not complete the close request.')
       }
     })()
   }), [flushDocuments, setDocumentTransitioning])
@@ -115,7 +115,7 @@ export default function App(): React.JSX.Element {
     const requestId = closeRequest.id
     if (outcome !== 'blocked') setCloseRequest(null)
     if (outcome !== 'ready') setDocumentTransitioning(false)
-    await window.aladdeen.lifecycle.completeClose({ requestId, outcome })
+    await window.liresearch.lifecycle.completeClose({ requestId, outcome })
   }
 
   const retryClose = async (): Promise<void> => {
@@ -241,7 +241,7 @@ export default function App(): React.JSX.Element {
       <div className="flex h-full items-center justify-center gap-[13px] bg-background text-foreground-muted">
         <BrandMark
           className="block h-[38px] w-[38px] shrink-0 drop-shadow-[0_3px_7px_rgb(0_0_0/.16)]"
-          title="Aladdeen"
+          title="LiResearch"
         />
         {bootStatus === 'booting' ? (
           <LoaderCircle className="spinner" size={18} />
@@ -277,7 +277,7 @@ export default function App(): React.JSX.Element {
   const closeTutorialReplay = (): void => {
     setTutorialReplayOpen(false)
     requestAnimationFrame(() => {
-      const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-aladdeen-settings-trigger]'))
+      const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-liresearch-settings-trigger]'))
       triggers.find((trigger) => trigger.getClientRects().length > 0)?.focus()
     })
   }

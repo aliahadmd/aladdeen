@@ -29,28 +29,37 @@ import {
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
   accent: 'indigo',
-  themePreset: 'aladdeen',
+  themePreset: 'liresearch',
   sidebarWidth: 320,
   sidebarCollapsed: false,
   completedOnboardingVersion: 0,
   ...DEFAULT_READING_SETTINGS
 }
 
-const DATABASE_FILENAME = 'aladdeen.sqlite'
-// Database filename used under the app's previous product name.
-const PREVIOUS_DATABASE_FILENAME = ['fl', 'uid', 'md.sqlite'].join('')
+const DATABASE_FILENAME = 'liresearch.sqlite'
+// Database filenames used under the app's previous product names, newest first.
+const PREVIOUS_DATABASE_FILENAMES = ['aladdeen.sqlite', ['fl', 'uid', 'md.sqlite'].join('')]
 // Versions 7, 11, and 12 were briefly used by removed features (Research Notes
 // and the coding agent). Keep those migration numbers reserved and migrate the
 // leftover metadata away instead of treating a user's existing profile as a
 // database from an unknown future release.
-const CURRENT_DATABASE_VERSION = 13
+const CURRENT_DATABASE_VERSION = 14
 
-function restorePreviousDatabase(destination: string, userDataPath: string, previousUserDataPath?: string): void {
+function restorePreviousDatabase(
+  destination: string,
+  userDataPath: string,
+  previousUserDataPaths?: string | string[]
+): void {
   if (existsSync(destination)) return
-  const candidates = [
-    join(userDataPath, PREVIOUS_DATABASE_FILENAME),
-    previousUserDataPath ? join(previousUserDataPath, PREVIOUS_DATABASE_FILENAME) : undefined
-  ]
+  const priorDirectories = Array.isArray(previousUserDataPaths)
+    ? previousUserDataPaths
+    : previousUserDataPaths
+      ? [previousUserDataPaths]
+      : []
+  const candidates = PREVIOUS_DATABASE_FILENAMES.flatMap((filename) => [
+    join(userDataPath, filename),
+    ...priorDirectories.map((directory) => join(directory, filename))
+  ])
   for (const candidate of candidates) {
     if (!candidate || candidate === destination || !existsSync(candidate)) continue
     copyFileSync(candidate, destination)
@@ -120,10 +129,10 @@ export interface EnvironmentStateRecord {
 export class AppDatabase {
   private readonly db: DatabaseSync
 
-  constructor(userDataPath: string, previousUserDataPath?: string) {
+  constructor(userDataPath: string, previousUserDataPaths?: string | string[]) {
     const databasePath = join(userDataPath, DATABASE_FILENAME)
     mkdirSync(dirname(databasePath), { recursive: true })
-    restorePreviousDatabase(databasePath, userDataPath, previousUserDataPath)
+    restorePreviousDatabase(databasePath, userDataPath, previousUserDataPaths)
     this.db = new DatabaseSync(databasePath)
     try {
       this.assertSupportedVersion()
@@ -140,7 +149,7 @@ export class AppDatabase {
     if (row.user_version > CURRENT_DATABASE_VERSION) {
       throw new DesktopError(
         'INVALID_FILE',
-        `This Aladdeen database was created by a newer application version (schema ${row.user_version}).`
+        `This LiResearch database was created by a newer application version (schema ${row.user_version}).`
       )
     }
   }
@@ -460,6 +469,17 @@ export class AppDatabase {
       `)
     }
 
+    if (row.user_version < 14) {
+      this.db.exec(`
+        BEGIN;
+        UPDATE app_settings
+        SET value = 'liresearch'
+        WHERE key = 'theme_preset' AND value = 'aladdeen';
+        PRAGMA user_version = 14;
+        COMMIT;
+      `)
+    }
+
     this.repairLegacyWorkspaceHistory()
   }
 
@@ -553,8 +573,11 @@ export class AppDatabase {
     for (const row of rows) {
       if (row.key === 'theme' && ['light', 'dark', 'system'].includes(row.value)) settings.theme = row.value as AppSettings['theme']
       if (row.key === 'accent' && ['indigo', 'blue', 'emerald', 'amber', 'rose'].includes(row.value)) settings.accent = row.value as AppSettings['accent']
-      if (row.key === 'theme_preset' && (THEME_PRESETS as readonly string[]).includes(row.value)) {
-        settings.themePreset = row.value as AppSettings['themePreset']
+      if (row.key === 'theme_preset') {
+        const normalized = row.value === 'aladdeen' ? 'liresearch' : row.value
+        if ((THEME_PRESETS as readonly string[]).includes(normalized)) {
+          settings.themePreset = normalized as AppSettings['themePreset']
+        }
       }
       if (row.key === 'sidebar_width') {
         const width = Number(row.value)

@@ -12,7 +12,7 @@ type XlsxWorkerPayload =
 export class XlsxWorkerClient {
   private readonly worker = new Worker(
     new URL('./xlsx-codec.worker.ts', import.meta.url),
-    { type: 'module', name: 'aladdeen-xlsx-codec' }
+    { type: 'module', name: 'liresearch-xlsx-codec' }
   )
   private nextId = 0
   private readonly pending = new Map<number, {

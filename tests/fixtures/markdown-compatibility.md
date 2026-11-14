@@ -1,13 +1,13 @@
 ---
-title: "Aladdeen Compatibility"
-author: "Aladdeen"
+title: "LiResearch Compatibility"
+author: "LiResearch"
 date: 2026-07-24
 tags: [offline, markdown]
 version: "1.0"
 draft: false
 ---
 
-# Aladdeen Compatibility
+# LiResearch Compatibility
 
 [TOC]
 

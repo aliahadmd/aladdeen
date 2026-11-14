@@ -25,7 +25,7 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
   const sanitized = DOMPurify.sanitize(annotated, {
     WHOLE_DOCUMENT: true,
     ADD_TAGS: ['link'],
-    ADD_ATTR: ['data-aladdeen-source-start', 'data-aladdeen-source-end'],
+    ADD_ATTR: ['data-liresearch-source-start', 'data-liresearch-source-end'],
     FORBID_TAGS: BLOCKED_TAGS,
     FORBID_ATTR: ['srcset', 'target', 'download']
   })
@@ -37,7 +37,7 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
     }
   }
   for (const anchor of document.querySelectorAll<HTMLAnchorElement | HTMLAreaElement>('a[href], area[href]')) {
-    anchor.dataset.aladdeenBlockedLink = anchor.href
+    anchor.dataset.liresearchBlockedLink = anchor.href
     anchor.removeAttribute('href')
   }
   for (const link of document.querySelectorAll<HTMLLinkElement>('link')) {
@@ -51,10 +51,10 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
     if (safe) element.setAttribute(attribute, safe)
     else element.removeAttribute(attribute)
   }
-  document.documentElement.setAttribute('data-aladdeen-html-preview', '')
+  document.documentElement.setAttribute('data-liresearch-html-preview', '')
   const policy = document.createElement('meta')
   policy.httpEquiv = 'Content-Security-Policy'
-  policy.content = "default-src 'none'; img-src data: aladdeen-asset:; style-src 'unsafe-inline' aladdeen-asset:; font-src data: aladdeen-asset:; media-src aladdeen-asset:; form-action 'none'"
+  policy.content = "default-src 'none'; img-src data: liresearch-asset:; style-src 'unsafe-inline' liresearch-asset:; font-src data: liresearch-asset:; media-src liresearch-asset:; form-action 'none'"
   document.head.prepend(policy)
   const style = document.createElement('style')
   style.textContent = `
@@ -71,7 +71,7 @@ export function prepareHtmlPreview(source: string, fileId: string): string {
     pre { overflow: auto; padding: 14px; border-radius: 8px; background: color-mix(in srgb, CanvasText 7%, Canvas); }
     table { display: block; max-width: 100%; overflow: auto; border-collapse: collapse; }
     th, td { border: 1px solid color-mix(in srgb, CanvasText 20%, Canvas); padding: 6px 9px; }
-    a[data-aladdeen-blocked-link] { color: LinkText; text-decoration: underline; cursor: not-allowed; }
+    a[data-liresearch-blocked-link] { color: LinkText; text-decoration: underline; cursor: not-allowed; }
   `
   document.head.append(style)
   return `<!doctype html>\n${document.documentElement.outerHTML}`
@@ -108,11 +108,11 @@ export function validateHtmlSource(source: string): ParserError[] {
 function annotate(node: Parse5Node): void {
   if (node.tagName && node.sourceCodeLocation) {
     node.attrs = (node.attrs ?? []).filter((attribute) => (
-      !attribute.name.toLowerCase().startsWith('data-aladdeen-')
+      !attribute.name.toLowerCase().startsWith('data-liresearch-')
     ))
     node.attrs.push(
-      { name: 'data-aladdeen-source-start', value: String(node.sourceCodeLocation.startOffset) },
-      { name: 'data-aladdeen-source-end', value: String(node.sourceCodeLocation.endOffset) }
+      { name: 'data-liresearch-source-start', value: String(node.sourceCodeLocation.startOffset) },
+      { name: 'data-liresearch-source-end', value: String(node.sourceCodeLocation.endOffset) }
     )
   }
   for (const child of node.childNodes ?? []) annotate(child)

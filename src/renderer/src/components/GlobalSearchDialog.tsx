@@ -67,7 +67,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
     requestId.current += 1
     const sessionId = activeSession.current
     activeSession.current = null
-    if (sessionId) void window.aladdeen.search.cancel(sessionId)
+    if (sessionId) void window.liresearch.search.cancel(sessionId)
   }, [])
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
         if (environment) setOpen(true)
       }
     }
-    const offOpenRequest = window.aladdeen.search.onOpenRequest(() => {
+    const offOpenRequest = window.liresearch.search.onOpenRequest(() => {
       if (document.querySelector('[data-preview-expanded]')) return
       if (environment) setOpen(true)
     })
@@ -90,7 +90,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
   }, [environment, setOpen])
 
   useEffect(() => {
-    const offEvent = window.aladdeen.search.onEvent((event: GlobalSearchEvent) => {
+    const offEvent = window.liresearch.search.onEvent((event: GlobalSearchEvent) => {
       if (event.sessionId !== activeSession.current) return
       if (event.type === 'batch') {
         setResults((current) => [...current, ...event.matches])
@@ -145,7 +145,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
     const searchKey = createSearchKey(normalizedQuery, matchCase, wholeWord, scope)
     const priorSession = activeSession.current
     activeSession.current = null
-    if (priorSession) await window.aladdeen.search.cancel(priorSession)
+    if (priorSession) await window.liresearch.search.cancel(priorSession)
     setResults([])
     setSummary(null)
     setProgress({ scannedFiles: 0, totalFiles: 0, skippedFiles: 0 })
@@ -182,7 +182,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
         : { fileId: document.id, kind: 'text' as const, content }
     }))).filter((override): override is SearchBufferOverride => override !== null)
 
-    const result = await window.aladdeen.search.start({
+    const result = await window.liresearch.search.start({
       query: normalizedQuery,
       matchCase,
       wholeWord,
@@ -190,7 +190,7 @@ export function GlobalSearchDialog(): React.JSX.Element {
       bufferOverrides
     })
     if (currentRequest !== requestId.current) {
-      if (result.ok) void window.aladdeen.search.cancel(result.value.sessionId)
+      if (result.ok) void window.liresearch.search.cancel(result.value.sessionId)
       return
     }
     if (!result.ok) {

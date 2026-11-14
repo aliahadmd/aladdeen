@@ -101,7 +101,7 @@ for (const required of [
   if (!adapterSource.includes(required)) fail(`presentation runtime policy is missing ${required}.`)
 }
 
-const created = await PptxHandler.create({ title: 'Aladdeen qualification', initialSlideCount: 1 })
+const created = await PptxHandler.create({ title: 'LiResearch qualification', initialSlideCount: 1 })
 let initialBytes
 try {
   created.data.slides[0].elements.push(
@@ -112,9 +112,9 @@ try {
   created.handler.dispose()
 }
 
-const unknownPayload = new TextEncoder().encode('aladdeen-pptx-unknown-part-v1')
+const unknownPayload = new TextEncoder().encode('liresearch-pptx-unknown-part-v1')
 const injectedArchive = unzipSync(initialBytes)
-injectedArchive['customXml/aladdeen-qualification.bin'] = unknownPayload
+injectedArchive['customXml/liresearch-qualification.bin'] = unknownPayload
 const injectedBytes = zipSync(injectedArchive)
 const reopened = new PptxHandler()
 try {
@@ -127,7 +127,7 @@ try {
   textElement.text = 'Qualification edited'
   const saved = await reopened.save(data.slides)
   const savedArchive = unzipSync(saved)
-  const retained = savedArchive['customXml/aladdeen-qualification.bin']
+  const retained = savedArchive['customXml/liresearch-qualification.bin']
   if (!retained || !Buffer.from(retained).equals(Buffer.from(unknownPayload))) {
     fail('an untouched unknown OOXML part was not preserved byte-for-byte.')
   }

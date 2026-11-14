@@ -11,21 +11,21 @@ import { PDFDocument, StandardFonts } from 'pdf-lib'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const packageMetadata = JSON.parse(await readFile(join(repositoryRoot, 'package.json'), 'utf8'))
-const appPath = process.env.ALADDEEN_PACKAGED_APP_PATH
-  ? resolve(process.env.ALADDEEN_PACKAGED_APP_PATH)
+const appPath = process.env.LIRESEARCH_PACKAGED_APP_PATH
+  ? resolve(process.env.LIRESEARCH_PACKAGED_APP_PATH)
   : join(
       repositoryRoot,
       'release',
       packageMetadata.version,
       'mac-arm64',
-      'Aladdeen.app'
+      'LiResearch.app'
     )
 const contentsPath = join(appPath, 'Contents')
-const executablePath = join(contentsPath, 'MacOS', 'Aladdeen')
+const executablePath = join(contentsPath, 'MacOS', 'LiResearch')
 
 await access(executablePath)
 
-const auditRoot = await mkdtemp(join(tmpdir(), 'aladdeen-packaged-smoke-'))
+const auditRoot = await mkdtemp(join(tmpdir(), 'liresearch-packaged-smoke-'))
 const userDataPath = join(auditRoot, 'profile')
 const workspacePath = join(auditRoot, 'workspace')
 await Promise.all([mkdir(userDataPath), mkdir(workspacePath)])

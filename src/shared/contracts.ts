@@ -3,7 +3,7 @@ import type { ReadingSettings } from './reading'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type Accent = 'indigo' | 'blue' | 'emerald' | 'amber' | 'rose'
 export const THEME_PRESETS = [
-  'aladdeen',
+  'liresearch',
   'mono',
   'catppuccin',
   'everforest',
@@ -516,7 +516,7 @@ export interface SaveCopyResult {
   path: string
 }
 
-export interface AladdeenApi {
+export interface LiResearchApi {
   app: {
     bootstrap(): Promise<Result<BootstrapData>>
   }

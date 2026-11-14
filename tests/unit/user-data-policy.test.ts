@@ -12,7 +12,7 @@ describe('application user-data policy', () => {
       isPackaged: false,
       hasExplicitUserDataPath: false
     })).toEqual({
-      userDataPath: join(appDataPath, 'aladdeen-dev')
+      userDataPath: join(appDataPath, 'liresearch-dev')
     })
   })
 
@@ -35,7 +35,10 @@ describe('application user-data policy', () => {
       isPackaged: true,
       hasExplicitUserDataPath: false
     })).toEqual({
-      previousUserDataPath: join(appDataPath, 'FluidMD')
+      previousUserDataPaths: [
+        join(appDataPath, 'Aladdeen'),
+        join(appDataPath, 'FluidMD')
+      ]
     })
   })
 })

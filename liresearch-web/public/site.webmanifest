@@ -1,0 +1,16 @@
+{
+	"name": "LiResearch",
+	"short_name": "LiResearch",
+	"description": "A local-first, offline research workspace for Markdown, HTML, Word, PDF, Excel, and PowerPoint.",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#ffffff",
+	"theme_color": "#ffffff",
+	"icons": [
+		{
+			"src": "/icon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml"
+		}
+	]
+}

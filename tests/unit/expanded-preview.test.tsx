@@ -99,7 +99,7 @@ describe('expanded Markdown blocks', () => {
     fireEvent.load(image)
     fireEvent.click(screen.getByRole('button', { name: 'Expand image: Figure' }))
     const dialog = await screen.findByRole('dialog', { name: 'Figure' })
-    expect(within(dialog).getByRole('img', { name: 'Figure' })).toHaveAttribute('src', expect.stringContaining('aladdeen-asset:'))
+    expect(within(dialog).getByRole('img', { name: 'Figure' })).toHaveAttribute('src', expect.stringContaining('liresearch-asset:'))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close expanded preview' }))
     expect(screen.getByRole('link', { name: 'Linked figure' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Expand image: Linked figure' })).toBeNull()

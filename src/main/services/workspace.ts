@@ -105,7 +105,7 @@ export class WorkspaceService {
   private readonly projectWatchers = new Map<string, FSWatcher>()
   private standaloneWatcher: FSWatcher | null = null
   private readonly suppressedWrites = new Map<string, number>()
-  // SHA-256 of the bytes Aladdeen last wrote to each path. A watcher event
+  // SHA-256 of the bytes LiResearch last wrote to each path. A watcher event
   // whose file still hashes to this value is our own write even when it
   // arrives after the short timing window (slow or network volumes).
   private readonly internalWriteHashes = new Map<string, string>()
@@ -408,7 +408,7 @@ export class WorkspaceService {
     const fileStats = await stat(canonical)
     const documentKind = documentKindFromName(canonical)
     if (!fileStats.isFile() || !documentKind) {
-      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, PDF, XLSX, and PPTX documents.')
+      throw new DesktopError('INVALID_FILE', 'LiResearch opens Markdown, HTML, DOCX, PDF, XLSX, and PPTX documents.')
     }
     this.assertDocumentSize(fileStats.size, documentKind)
     await this.validateDocumentSignature(canonical, documentKind)
@@ -461,7 +461,7 @@ export class WorkspaceService {
     const safePath = await this.resolveTrackedDocumentPath(tracked).catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') {
         this.database.setTrackedFileMissing(tracked.id, true)
-        throw new DesktopError('NOT_FOUND', 'This file was deleted outside Aladdeen. Save a copy to recover your changes.')
+        throw new DesktopError('NOT_FOUND', 'This file was deleted outside LiResearch. Save a copy to recover your changes.')
       }
       throw error
     })
@@ -474,14 +474,14 @@ export class WorkspaceService {
     const currentBuffer = await readFile(safePath)
     this.assertDocumentSize(currentBuffer.byteLength, tracked.documentKind)
     if (!request.force && sha256(currentBuffer) !== request.expectedRevision.sha256) {
-      throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
+      throw new DesktopError('CONFLICT', 'This file changed outside LiResearch. Choose which version to keep.')
     }
     await this.resolveTrackedDocumentPath(tracked)
     if (!request.force) {
       const latestBuffer = await readFile(safePath)
       this.assertDocumentSize(latestBuffer.byteLength, tracked.documentKind)
       if (sha256(latestBuffer) !== request.expectedRevision.sha256) {
-        throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
+        throw new DesktopError('CONFLICT', 'This file changed outside LiResearch. Choose which version to keep.')
       }
     }
     this.suppressInternalWrite(safePath, sha256(nextBuffer))
@@ -586,7 +586,7 @@ export class WorkspaceService {
     }
     if (!destinationPath) {
       if (!request.force && await sha256File(sourcePath) !== request.expectedRevision.sha256) {
-        throw new DesktopError('CONFLICT', 'This file changed outside Aladdeen. Choose which version to keep.')
+        throw new DesktopError('CONFLICT', 'This file changed outside LiResearch. Choose which version to keep.')
       }
       await this.resolveTrackedDocumentPath(tracked)
     }
@@ -912,7 +912,7 @@ export class WorkspaceService {
     const fileStats = await stat(safePath)
     const documentKind = documentKindFromName(safePath)
     if (!fileStats.isFile() || !documentKind) {
-      throw new DesktopError('INVALID_FILE', 'Aladdeen opens Markdown, HTML, DOCX, PDF, XLSX, and PPTX documents.')
+      throw new DesktopError('INVALID_FILE', 'LiResearch opens Markdown, HTML, DOCX, PDF, XLSX, and PPTX documents.')
     }
     this.assertDocumentSize(fileStats.size, documentKind)
     await this.validateDocumentSignature(safePath, documentKind)
@@ -959,7 +959,7 @@ export class WorkspaceService {
       },
       session: {
         id: session,
-        url: `aladdeen-document://session/${encodeURIComponent(session)}`,
+        url: `liresearch-document://session/${encodeURIComponent(session)}`,
         byteLength: fileStats.size,
         signed: documentKind === 'pdf'
           ? await this.pdfAppearsSigned(safePath)
@@ -1015,7 +1015,7 @@ export class WorkspaceService {
         : documentKind === 'xlsx' || documentKind === 'pptx'
           ? '128 MiB'
           : '512 MiB'
-      throw new DesktopError('INVALID_FILE', `This ${documentKind.toUpperCase()} document is larger than Aladdeen’s ${label} limit.`)
+      throw new DesktopError('INVALID_FILE', `This ${documentKind.toUpperCase()} document is larger than LiResearch’s ${label} limit.`)
     }
   }
 
@@ -1198,7 +1198,7 @@ export class WorkspaceService {
     }
     if (documentKind === 'pptx') {
       const { PptxHandler } = await import('pptx-viewer-core')
-      const created = await PptxHandler.create({ title, creator: 'Aladdeen', initialSlideCount: 1 })
+      const created = await PptxHandler.create({ title, creator: 'LiResearch', initialSlideCount: 1 })
       try {
         await writeFile(target, await created.handler.save(created.data.slides), { flag: 'wx' })
       } finally {
