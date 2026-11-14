@@ -9,6 +9,10 @@
     "email": "ali@aliahad.com",
     "url": "https://aliahad.com"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LiLabsAI/LiResearch.git"
+  },
   "packageManager": "pnpm@11.5.0",
   "license": "UNLICENSED",
   "type": "module",

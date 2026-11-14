@@ -45,7 +45,7 @@ export function Footer({ artifact }: { artifact: ReleaseArtifact }): ReactNode {
 							{link.label}
 						</a>
 					))}
-					<a href="https://github.com/aliahadmd/LiResearch/releases" className="text-ink-soft transition-colors hover:text-ink">
+					<a href="https://github.com/LiLabsAI/LiResearch/releases" className="text-ink-soft transition-colors hover:text-ink">
 						Releases
 					</a>
 				</nav>

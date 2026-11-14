@@ -104,7 +104,7 @@ export function Download({ artifact }: { artifact: ReleaseArtifact }): ReactNode
 					</div>
 					<p className="relative mt-4 text-center text-sm text-ink-faint">
 						Also on{" "}
-						<a className="font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink" href="https://github.com/aliahadmd/LiResearch/releases/latest">
+						<a className="font-medium text-ink underline decoration-line-strong underline-offset-4 hover:decoration-ink" href="https://github.com/LiLabsAI/LiResearch/releases/latest">
 							GitHub Releases
 						</a>
 					</p>

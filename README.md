@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://liresearch.aliahad.com"><strong>Download for Mac</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/aliahadmd/LiResearch/releases/latest">Latest release</a>
+  <a href="https://github.com/LiLabsAI/LiResearch/releases/latest">Latest release</a>
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ Research ends up scattered across notes, reports, spreadsheets, slide decks, and
 
 **You need** a Mac with Apple silicon (M1, M2, M3, M4, or newer) running macOS 12 Monterey or later. Intel Macs, Windows, and Linux are not supported.
 
-1. Download the latest `LiResearch-…-arm64.dmg` from [liresearch.aliahad.com](https://liresearch.aliahad.com) or from the [releases page](https://github.com/aliahadmd/LiResearch/releases/latest).
+1. Download the latest `LiResearch-…-arm64.dmg` from [liresearch.aliahad.com](https://liresearch.aliahad.com) or from the [releases page](https://github.com/LiLabsAI/LiResearch/releases/latest).
 2. Open the downloaded file and drag **LiResearch** into your **Applications** folder.
 3. Open LiResearch from Applications.
 
@@ -44,7 +44,7 @@ LiResearch is not yet notarized by Apple, so the first time you open it macOS sh
 
 You only need to do this once. On older versions of macOS you can instead right-click LiResearch in Applications, choose **Open**, and confirm.
 
-Want to make sure your download is genuine? Each [release](https://github.com/aliahadmd/LiResearch/releases) lists the file's exact size and SHA-256 checksum. You can compare it by running `shasum -a 256` on the downloaded file in Terminal.
+Want to make sure your download is genuine? Each [release](https://github.com/LiLabsAI/LiResearch/releases) lists the file's exact size and SHA-256 checksum. You can compare it by running `shasum -a 256` on the downloaded file in Terminal.
 
 ## Getting started
 
